@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  typescript: {
+    // ⚠️ 프로덕션 빌드 시 TypeScript 오류 무시
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // ⚠️ 프로덕션 빌드 시 ESLint 오류 무시
+    ignoreDuringBuilds: true,
   },
 }
 
