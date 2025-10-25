@@ -24,7 +24,8 @@ export default function Home() {
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [setlistTitle, setSetlistTitle] = useState('')
   const [setlistDate, setSetlistDate] = useState(new Date().toISOString().split('T')[0])
-  const [setlistType, setSetlistType] = useState('주일예배')
+  const [setlistType, setSetlistType] = useState('주일집회')
+  const [customSetlistType, setCustomSetlistType] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [folders, setFolders] = useState<any[]>([])
   
@@ -180,16 +181,15 @@ export default function Home() {
   const fetchFolders = async () => {
     try {
       const { data, error } = await supabase
-        .from('folders')
-        .select('*')
-        .eq('user_id', TEMP_USER_ID)
-        .order('type', { ascending: true })
-        .order('order_number', { ascending: true })
+       .from('folders')
+       .select('*')
+       .order('created_at', { ascending: false })
 
       if (error) throw error
       setFolders(data || [])
     } catch (error) {
       console.error('Error fetching folders:', error)
+      setFolders([])
     }
   }
 
@@ -341,6 +341,11 @@ export default function Home() {
       return
     }
 
+    if (setlistType === '직접입력' && !customSetlistType.trim()) {
+      alert('예배 유형을 입력하세요.')
+      return
+    }
+
     try {
       // 1. 콘티 생성
       const { data: setlist, error: setlistError } = await supabase
@@ -350,7 +355,7 @@ export default function Home() {
           folder_id: selectedFolderId || null,
           title: setlistTitle,
           service_date: setlistDate,
-          service_type: setlistType
+          service_type: setlistType === '직접입력' ? customSetlistType : setlistType
         })
         .select()
         .single()
@@ -373,6 +378,7 @@ export default function Home() {
       alert('✅ 콘티가 저장되었습니다!')
       setShowSaveModal(false)
       setSetlistTitle('')
+      setCustomSetlistType('')
       setSelectedSongs([])
       
     } catch (error) {
@@ -788,11 +794,7 @@ export default function Home() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
-                            {song.user_id === TEMP_USER_ID && (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                🎵 내가 추가한 곡
-                              </span>
-                            )}
+                            
                           </div>
                           <p className="text-sm text-gray-600 mt-1">
                             {song.team_name && `${song.team_name} | `}
@@ -852,8 +854,8 @@ export default function Home() {
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                       >
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{index + 1}. {song.song_name}</p>
-                          <p className="text-xs text-gray-600">Key: {song.key || '-'}</p>
+                          <p className="font-bold text-sm text-gray-900">{index + 1}. {song.song_name}</p>
+                          <p className="text-xs text-gray-700 font-medium">Key: {song.key || '-'}</p>
                         </div>
                         <div className="flex gap-1 ml-2">
                           <button
@@ -1250,7 +1252,7 @@ export default function Home() {
                   type="text"
                   value={setlistTitle}
                   onChange={(e) => setSetlistTitle(e.target.value)}
-                  placeholder="예: 2025.10.22 주일예배"
+                  placeholder="예: 1월 첫째 주 콘티 : 아버지의 마음"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 />
               </div>
@@ -1276,15 +1278,28 @@ export default function Home() {
                   onChange={(e) => setSetlistType(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="주일예배">주일예배</option>
-                  <option value="수요예배">수요예배</option>
-                  <option value="금요예배">금요예배</option>
-                  <option value="새벽기도">새벽기도</option>
-                  <option value="청년부">청년부</option>
-                  <option value="중고등부">중고등부</option>
-                  <option value="기타">기타</option>
+                  <option value="주일집회">주일집회</option>
+                  <option value="중보기도회">중보기도회</option>
+                  <option value="기도회">기도회</option>
+                  <option value="직접입력">직접입력</option>
                 </select>
               </div>
+
+              {/* 직접입력 선택 시 나타나는 입력 필드 */}
+            {setlistType === '직접입력' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  예배 유형 입력
+                </label>
+                <input
+                  type="text"
+                  value={customSetlistType}
+                  onChange={(e) => setCustomSetlistType(e.target.value)}
+                  placeholder="예: 또래 기도회"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+            )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1307,7 +1322,12 @@ export default function Home() {
 
             <div className="flex gap-2 mt-6">
               <button
-                onClick={() => setShowSaveModal(false)}
+                onClick={() => {
+                  setShowSaveModal(false)
+                  setSetlistTitle('')
+                  setCustomSetlistType('')
+                  setSelectedFolderId('')
+                }}
                 className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
               >
                 취소
