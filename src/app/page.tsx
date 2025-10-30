@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase, Song } from '@/lib/supabase'
+import { supabase, Song, SECTION_ABBREVIATIONS } from '@/lib/supabase'
+import { parseLyrics } from '@/lib/lyricParser'
 import { Search, Music, FileText, Presentation, FolderOpen, Plus, X, ChevronLeft, ChevronRight, Eye, Upload } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
+import { loadKoreanFont } from '@/lib/fontLoader'  // 👈 이 줄 추가!
 
 export default function Home() {
   // 임시 사용자 ID (실제로는 인증 시스템에서 가져와야 함)
@@ -15,6 +17,24 @@ export default function Home() {
   const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
   const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
   const [loading, setLoading] = useState(true)
+
+  // 송폼 관련 상태
+  const [songForms, setSongForms] = useState<{[songId: string]: string[]}>({})
+  const [showFormModal, setShowFormModal] = useState(false)
+  const [currentFormSong, setCurrentFormSong] = useState<Song | null>(null)
+  const [tempSelectedForm, setTempSelectedForm] = useState<string[]>([])
+  const [customSection, setCustomSection] = useState('')
+
+  // PPT 모달 상태
+  const [showPPTModal, setShowPPTModal] = useState(false)
+
+  // 사용 가능한 송폼 섹션
+  const availableSections = [
+    'Intro', 'Verse1', 'Verse2', 'Verse3', 'Verse4',
+    'PreChorus', 'PreChorus1', 'PreChorus2',
+    'Chorus', 'Chorus1', 'Chorus2',
+    'Interlude', 'Bridge', 'Outro'
+  ]
   
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
@@ -73,12 +93,10 @@ export default function Home() {
   // 키보드 이벤트 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 입력 필드에서는 키보드 단축키 무시
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
         return
       }
 
-      // 미리보기 모달이 열려있을 때
       if (previewSong) {
         if (e.key === 'Escape') {
           setPreviewSong(null)
@@ -92,7 +110,6 @@ export default function Home() {
         return
       }
 
-      // 곡 목록에서 포커스된 곡이 있을 때
       if (focusedSongIndex >= 0 && focusedSongIndex < filteredSongs.length) {
         if (e.key === ' ' || e.key === 'Spacebar') {
           e.preventDefault()
@@ -123,7 +140,6 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [previewSong, focusedSongIndex, filteredSongs])
 
-  // 이전 곡 보기
   const showPreviousSong = () => {
     if (!previewSong) return
     const currentIndex = filteredSongs.findIndex(s => s.id === previewSong.id)
@@ -135,7 +151,6 @@ export default function Home() {
     }
   }
 
-  // 다음 곡 보기
   const showNextSong = () => {
     if (!previewSong) return
     const currentIndex = filteredSongs.findIndex(s => s.id === previewSong.id)
@@ -147,7 +162,6 @@ export default function Home() {
     }
   }
 
-  // Supabase에서 찬양 데이터 가져오기
   const fetchSongs = async () => {
     setLoading(true)
     try {
@@ -158,7 +172,6 @@ export default function Home() {
       
       if (error) throw error
       
-      // 유효한 데이터만 필터링 (곡 제목이 있는 것만)
       const validSongs = (data || []).filter(song => {
         return song.song_name && 
                song.song_name.trim() !== '' &&
@@ -177,7 +190,6 @@ export default function Home() {
     }
   }
 
-  // 폴더 목록 가져오기
   const fetchFolders = async () => {
     try {
       const { data, error } = await supabase
@@ -193,7 +205,6 @@ export default function Home() {
     }
   }
 
-  // 새 곡 추가 함수
   const addNewSong = async () => {
     if (!newSong.song_name.trim()) {
       alert('곡 제목을 입력하세요.')
@@ -206,11 +217,8 @@ export default function Home() {
       let fileUrl = ''
       let fileType = ''
 
-      // 파일 업로드가 있는 경우
       if (uploadingFile) {
         const fileExt = uploadingFile.name.split('.').pop()?.toLowerCase() || 'pdf'
-        
-        // 안전한 파일명 생성 (한글, 특수문자, 공백 제거)
         const timestamp = Date.now()
         const randomStr = Math.random().toString(36).substring(2, 8)
         const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
@@ -218,7 +226,6 @@ export default function Home() {
 
         console.log('📤 파일 업로드 시작:', filePath)
 
-        // Supabase Storage에 업로드
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('song-sheets')
           .upload(filePath, uploadingFile, {
@@ -234,7 +241,6 @@ export default function Home() {
 
         console.log('✅ 파일 업로드 성공:', uploadData)
 
-        // Public URL 가져오기
         const { data: urlData } = supabase.storage
           .from('song-sheets')
           .getPublicUrl(filePath)
@@ -245,7 +251,6 @@ export default function Home() {
         console.log('🔗 Public URL:', fileUrl)
       }
 
-      // 데이터베이스에 곡 정보 저장
       console.log('💾 DB에 곡 정보 저장 중...')
       
       const songData = {
@@ -281,7 +286,6 @@ export default function Home() {
 
       alert('✅ 곡이 추가되었습니다!')
       
-      // 모달 닫고 초기화
       setShowAddSongModal(false)
       setNewSong({
         song_name: '',
@@ -296,7 +300,6 @@ export default function Home() {
       })
       setUploadingFile(null)
       
-      // 곡 목록 새로고침
       fetchSongs()
 
     } catch (error: any) {
@@ -307,18 +310,15 @@ export default function Home() {
     }
   }
 
-  // 파일 선택 핸들러
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // 파일 크기 체크 (10MB)
     if (file.size > 10 * 1024 * 1024) {
       alert('파일 크기는 10MB 이하여야 합니다.')
       return
     }
 
-    // 파일 형식 체크
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
     if (!allowedTypes.includes(file.type)) {
       alert('PDF, JPG, PNG 파일만 업로드 가능합니다.')
@@ -329,7 +329,6 @@ export default function Home() {
     setUploadingFile(file)
   }
 
-  // 콘티 저장 함수
   const saveSetlist = async () => {
     if (!setlistTitle.trim()) {
       alert('콘티 제목을 입력하세요.')
@@ -347,7 +346,6 @@ export default function Home() {
     }
 
     try {
-      // 1. 콘티 생성
       const { data: setlist, error: setlistError } = await supabase
         .from('setlists')
         .insert({
@@ -362,16 +360,16 @@ export default function Home() {
 
       if (setlistError) throw setlistError
 
-      // 2. 선택한 곡들을 콘티에 추가
       const setlistSongs = selectedSongs.map((song, index) => ({
         setlist_id: setlist.id,
         song_id: song.id,
-        order_number: index + 1
+        order_number: index + 1,
+        selected_form: songForms[song.id] || null
       }))
 
       const { error: songsError } = await supabase
         .from('setlist_songs')
-        .insert(setlistSongs)
+        .insert(setlistSongs as any)
 
       if (songsError) throw songsError
 
@@ -380,6 +378,7 @@ export default function Home() {
       setSetlistTitle('')
       setCustomSetlistType('')
       setSelectedSongs([])
+      setSongForms({})
       
     } catch (error) {
       console.error('Error saving setlist:', error)
@@ -387,7 +386,6 @@ export default function Home() {
     }
   }
 
-  // 필터 적용
   useEffect(() => {
     let result = [...songs]
 
@@ -420,7 +418,6 @@ export default function Home() {
     setFocusedSongIndex(-1)
   }, [filters, songs])
 
-  // 곡 선택/해제
   const toggleSongSelection = (song: Song) => {
     if (selectedSongs.find(s => s.id === song.id)) {
       setSelectedSongs(selectedSongs.filter(s => s.id !== song.id))
@@ -429,7 +426,6 @@ export default function Home() {
     }
   }
 
-  // 선택한 곡 순서 변경
   const moveSong = (index: number, direction: 'up' | 'down') => {
     const newSelected = [...selectedSongs]
     if (direction === 'up' && index > 0) {
@@ -440,152 +436,337 @@ export default function Home() {
     setSelectedSongs(newSelected)
   }
 
-  // PDF 생성 함수
-  const generatePDF = async () => {
-    if (selectedSongs.length === 0) {
-      alert('찬양을 선택해주세요.')
-      return
-    }
+  // ===== 송폼 관련 함수들 =====
+  const openFormModal = (song: Song) => {
+    setCurrentFormSong(song)
+    const existingForm = songForms[song.id] || []
+    setTempSelectedForm(existingForm)
+    setShowFormModal(true)
+  }
 
-    try {
-      const pdfLib = await import('pdf-lib')
-      const PDFDocument = pdfLib.PDFDocument
-      const jsPDFModule = await import('jspdf')
-      const jsPDF = jsPDFModule.default
-      const html2canvas = (await import('html2canvas')).default
+  const addSection = (section: string) => {
+    const abbr = SECTION_ABBREVIATIONS[section] || section
+    setTempSelectedForm(prev => [...prev, abbr])
+  }
 
-      const mergedPdf = await PDFDocument.create()
-
-      // 표지 페이지 생성
-      const coverDiv = document.createElement('div')
-      coverDiv.style.cssText = `
-        width: 210mm;
-        height: 297mm;
-        padding: 60px;
-        background-color: #ffffff;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        box-sizing: border-box;
-      `
-
-      coverDiv.innerHTML = `
-        <div style="text-align: center;">
-          <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
-            찬양 콘티
-          </h1>
-          <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
-            ${new Date().toLocaleDateString('ko-KR')}
-          </p>
-        </div>
-        
-        <div style="margin-top: 80px;">
-          <h2 style="font-size: 32px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 3px solid #3b82f6; padding-bottom: 10px;">
-            선택한 찬양 목록
-          </h2>
-          <div style="font-size: 24px; line-height: 2.5; color: #1a202c;">
-            ${selectedSongs.map((song, index) => `
-              <div style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
-                <span style="font-weight: 600; color: #3b82f6; margin-right: 15px;">
-                  ${index + 1}.
-                </span>
-                <span style="font-weight: 500;">
-                  ${song.song_name}
-                </span>
-                <span style="color: #718096; margin-left: 10px;">
-                  (${song.key || '-'})
-                </span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        
-        <div style="position: absolute; bottom: 60px; left: 60px; right: 60px; text-align: center; color: #a0aec0; font-size: 18px;">
-          총 ${selectedSongs.length}곡 선택됨
-        </div>
-      `
-
-      coverDiv.style.position = 'fixed'
-      coverDiv.style.left = '-9999px'
-      document.body.appendChild(coverDiv)
-
-      const canvas = await html2canvas(coverDiv, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true
-      })
-
-      document.body.removeChild(coverDiv)
-
-      const coverPdf = new jsPDF('p', 'mm', 'a4')
-      const imgData = canvas.toDataURL('image/png')
-      coverPdf.addImage(imgData, 'PNG', 0, 0, 210, 297)
-
-      const coverPdfBytes = coverPdf.output('arraybuffer')
-      const coverDoc = await PDFDocument.load(coverPdfBytes)
-      const coverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices())
-      coverPages.forEach(page => mergedPdf.addPage(page))
-
-      // 악보 추가
-      const songsWithSheets = selectedSongs.filter(song => song.file_url && song.file_url.trim() !== '')
-
-      if (songsWithSheets.length === 0) {
-        alert('⚠️ 악보가 업로드된 곡이 없습니다. 표지만 다운로드됩니다.')
-      }
-
-      for (const song of songsWithSheets) {
-        try {
-          const response = await fetch(song.file_url!)
-          if (!response.ok) continue
-
-          const fileType = song.file_type || 'pdf'
-
-          if (fileType === 'pdf') {
-            const arrayBuffer = await response.arrayBuffer()
-            const sheetPdf = await PDFDocument.load(arrayBuffer)
-            const copiedPages = await mergedPdf.copyPages(sheetPdf, sheetPdf.getPageIndices())
-            copiedPages.forEach(page => mergedPdf.addPage(page))
-          } else if (['jpg', 'jpeg', 'png'].includes(fileType)) {
-            const imageBytes = await response.arrayBuffer()
-            let image
-
-            if (fileType === 'png') {
-              image = await mergedPdf.embedPng(imageBytes)
-            } else {
-              image = await mergedPdf.embedJpg(imageBytes)
-            }
-
-            const page = mergedPdf.addPage([image.width, image.height])
-            page.drawImage(image, {
-              x: 0,
-              y: 0,
-              width: image.width,
-              height: image.height,
-            })
-          }
-        } catch (error) {
-          console.error(`${song.song_name} 처리 중 오류:`, error)
-        }
-      }
-
-      // PDF 다운로드
-      const pdfBytes = await mergedPdf.save()
-      const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `찬양콘티_${new Date().toISOString().split('T')[0]}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
-
-      alert(`✅ PDF가 생성되었습니다!`)
-    } catch (error) {
-      console.error('PDF 생성 오류:', error)
-      alert('❌ PDF 생성 중 오류가 발생했습니다.')
+  const addCustomSection = () => {
+    if (customSection.trim()) {
+      setTempSelectedForm(prev => [...prev, customSection.trim()])
+      setCustomSection('')
     }
   }
 
-  // PPT 생성 함수
-  const generatePPT = async () => {
+  const removeSection = (index: number) => {
+    setTempSelectedForm(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const moveSectionUp = (index: number) => {
+    if (index === 0) return
+    const newForm = [...tempSelectedForm]
+    ;[newForm[index - 1], newForm[index]] = [newForm[index], newForm[index - 1]]
+    setTempSelectedForm(newForm)
+  }
+
+  const moveSectionDown = (index: number) => {
+    if (index === tempSelectedForm.length - 1) return
+    const newForm = [...tempSelectedForm]
+    ;[newForm[index], newForm[index + 1]] = [newForm[index + 1], newForm[index]]
+    setTempSelectedForm(newForm)
+  }
+
+  const saveSongForm = () => {
+    if (!currentFormSong) return
+    setSongForms(prev => ({
+      ...prev,
+      [currentFormSong.id]: tempSelectedForm
+    }))
+    setShowFormModal(false)
+    setCurrentFormSong(null)
+  }
+
+  // PDF 생성 함수
+const generatePDF = async () => {
+  if (selectedSongs.length === 0) {
+    alert('찬양을 선택해주세요.')
+    return
+  }
+
+    // 🔥 여기에 추가!
+    console.log('==================== PDF 생성 시작 ====================')
+    console.log('선택된 곡 목록:', selectedSongs.map(s => ({ id: s.id, name: s.song_name })))
+    console.log('현재 songForms 전체:', songForms)
+    console.log('각 곡별 송폼:')
+    selectedSongs.forEach(song => {
+      console.log(`  - ${song.song_name} (${song.id}):`, songForms[song.id] || '❌ 설정 안됨')
+    })
+    console.log('======================================================')
+
+  try {
+    const pdfLib = await import('pdf-lib')
+    const { PDFDocument, rgb } = pdfLib
+    const jsPDFModule = await import('jspdf')
+    const jsPDF = jsPDFModule.default
+    const html2canvas = (await import('html2canvas')).default
+
+    const mergedPdf = await PDFDocument.create()
+
+    // 🔥 fontkit 등록 (Variable Font 지원)
+    const fontkit = await import('@pdf-lib/fontkit')
+    mergedPdf.registerFontkit(fontkit.default)
+    console.log('✅ fontkit 등록 완료')
+
+    // 🔥 한글 폰트 로드
+    console.log('📥 한글 폰트 로딩 시작...')
+    let koreanFont = null
+    try {
+      const fontBytes = await loadKoreanFont()
+      
+      if (fontBytes) {
+        koreanFont = await mergedPdf.embedFont(fontBytes)
+        console.log('✅ 한글 폰트 임베드 성공!')
+      } else {
+        console.warn('⚠️ 한글 폰트를 찾을 수 없습니다. 영문 폰트를 사용합니다.')
+      }
+    } catch (fontError) {
+      console.error('❌ 한글 폰트 로드 실패:', fontError)
+      console.warn('⚠️ 영문 폰트로 대체됩니다.')
+    }
+
+    // 표지 페이지 생성
+    const coverDiv = document.createElement('div')
+    coverDiv.style.cssText = `
+      width: 210mm;
+      height: 297mm;
+      padding: 60px;
+      background-color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      box-sizing: border-box;
+    `
+
+    coverDiv.innerHTML = `
+      <div style="text-align: center;">
+        <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
+          찬양 콘티
+        </h1>
+        <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
+          ${new Date().toLocaleDateString('ko-KR')}
+        </p>
+      </div>
+      
+      <div style="margin-top: 80px;">
+        <h2 style="font-size: 32px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 3px solid #3b82f6; padding-bottom: 10px;">
+          선택한 찬양 목록
+        </h2>
+        <div style="font-size: 24px; line-height: 2.5; color: #1a202c;">
+          ${selectedSongs.map((song, index) => `
+            <div style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+              <span style="font-weight: 600; color: #3b82f6; margin-right: 15px;">
+                ${index + 1}.
+              </span>
+              <span style="font-weight: 500;">
+                ${song.song_name}
+              </span>
+              <span style="color: #718096; margin-left: 10px;">
+                (${song.key || '-'})
+              </span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div style="position: absolute; bottom: 60px; left: 60px; right: 60px; text-align: center; color: #a0aec0; font-size: 18px;">
+        총 ${selectedSongs.length}곡 선택됨
+      </div>
+    `
+
+    coverDiv.style.position = 'fixed'
+    coverDiv.style.left = '-9999px'
+    document.body.appendChild(coverDiv)
+
+    const canvas = await html2canvas(coverDiv, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true
+    })
+
+    document.body.removeChild(coverDiv)
+
+    const coverPdf = new jsPDF('p', 'mm', 'a4')
+    const imgData = canvas.toDataURL('image/png')
+    coverPdf.addImage(imgData, 'PNG', 0, 0, 210, 297)
+
+    const coverPdfBytes = coverPdf.output('arraybuffer')
+    const coverDoc = await PDFDocument.load(coverPdfBytes)
+    const coverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices())
+    coverPages.forEach(page => mergedPdf.addPage(page))
+
+    // 악보 추가
+    const songsWithSheets = selectedSongs.filter(song => song.file_url && song.file_url.trim() !== '')
+
+    if (songsWithSheets.length === 0) {
+      alert('⚠️ 악보가 업로드된 곡이 없습니다. 표지만 다운로드됩니다.')
+    }
+
+    const A4_WIDTH = 595.28
+    const A4_HEIGHT = 841.89
+
+    for (const song of songsWithSheets) {
+      try {
+        const response = await fetch(song.file_url!)
+        if (!response.ok) continue
+
+        const fileType = song.file_type || 'pdf'
+        const currentSongForm = songForms[song.id]
+    
+        console.log('========================================')
+        console.log(`🎵 현재 처리 중인 곡: ${song.song_name}`)
+        console.log(`📋 곡 ID: ${song.id}`)
+        console.log(`📝 저장된 송폼:`, currentSongForm)
+        console.log(`📄 파일 타입: ${fileType}`)
+        console.log('========================================')
+
+        // PDF 파일 처리
+        if (fileType === 'pdf') {
+          const arrayBuffer = await response.arrayBuffer()
+          const sheetPdf = await PDFDocument.load(arrayBuffer)
+          const pageCount = sheetPdf.getPageCount()
+
+          console.log(`📑 PDF 페이지 수: ${pageCount}`)
+
+          for (let i = 0; i < pageCount; i++) {
+            const [embeddedPage] = await mergedPdf.embedPdf(sheetPdf, [i])
+            const { width, height } = embeddedPage
+
+            const scaleX = A4_WIDTH / width
+            const scaleY = A4_HEIGHT / height
+            const scale = Math.min(scaleX, scaleY)
+
+            const scaledWidth = width * scale
+            const scaledHeight = height * scale
+
+            const a4Page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+
+            const x = (A4_WIDTH - scaledWidth) / 2
+            const y = (A4_HEIGHT - scaledHeight) / 2
+
+            a4Page.drawPage(embeddedPage, {
+              x: x,
+              y: y,
+              width: scaledWidth,
+              height: scaledHeight,
+            })
+            console.log(`✅ PDF 악보 그리기 완료 (페이지 ${i + 1})`)
+
+            // 🔥 송폼 오버레이 (첫 페이지에만)
+            if (i === 0 && currentSongForm && currentSongForm.length > 0) {
+              console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name} (페이지 ${i + 1})`)
+  
+            // 송폼 텍스트
+            const formText = currentSongForm.join(' - ')
+            console.log(`   📝 송폼 텍스트: "${formText}"`)
+  
+            try {
+              a4Page.drawText(formText, {
+                x: 30,
+                y: A4_HEIGHT - 25,
+                size: 14,
+                color: rgb(0.23, 0.51, 0.96),
+                font: koreanFont || undefined,
+              })
+              console.log(`✅ PDF 송폼 표시 성공!`)
+            } catch (textError) {
+              console.error('❌ 송폼 텍스트 렌더링 실패:', textError)
+            }
+          }
+
+            
+          }
+        } 
+        // 🔥 이미지 파일 처리
+        else if (['jpg', 'jpeg', 'png'].includes(fileType)) {
+          console.log(`🖼️ 이미지 파일 처리 중: ${song.song_name}`)
+  
+          const imageBytes = await response.arrayBuffer()
+          let image
+
+          if (fileType === 'png') {
+            image = await mergedPdf.embedPng(imageBytes)
+          } else {
+            image = await mergedPdf.embedJpg(imageBytes)
+          }
+
+          const imgWidth = image.width
+          const imgHeight = image.height
+          const scaleX = A4_WIDTH / imgWidth
+          const scaleY = A4_HEIGHT / imgHeight
+          const scale = Math.min(scaleX, scaleY)
+
+          const scaledWidth = imgWidth * scale
+          const scaledHeight = imgHeight * scale
+
+          const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+
+          const x = (A4_WIDTH - scaledWidth) / 2
+          const y = (A4_HEIGHT - scaledHeight) / 2
+
+          // 🔥 1. 먼저 이미지 그리기
+          page.drawImage(image, {
+            x: x,
+            y: y,
+            width: scaledWidth,
+            height: scaledHeight,
+          })
+          console.log(`✅ 이미지 그리기 완료`)
+
+          // 🔥 2. 그 다음 송폼 오버레이 (이미지 위에 덮어씌우기)
+          if (currentSongForm && currentSongForm.length > 0) {
+            console.log(`✅ 이미지 송폼 오버레이 시작: ${song.song_name}`)
+
+            // 송폼 텍스트
+            const formText = currentSongForm.join(' - ')
+            console.log(`   📝 송폼 텍스트: "${formText}"`)
+    
+            try {
+              page.drawText(formText, {
+                x: 30,
+                y: A4_HEIGHT - 35,
+                size: 14,
+                color: rgb(0.23, 0.51, 0.96),
+                font: koreanFont || undefined,
+              })
+              console.log(`✅ 이미지 송폼 표시 성공!`)
+            } catch (textError) {
+              console.error('❌ 송폼 텍스트 렌더링 실패:', textError)
+            }
+          } else {
+            console.warn(`⚠️ ${song.song_name}: 송폼이 설정되지 않음`)
+          }
+        }
+      } catch (error) {
+        console.error(`${song.song_name} 처리 중 오류:`, error)
+      }
+    }
+
+    // PDF 다운로드
+    const pdfBytes = await mergedPdf.save()
+    const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `찬양콘티_${new Date().toISOString().split('T')[0]}.pdf`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    alert(`✅ PDF가 생성되었습니다!`)
+  } catch (error) {
+    console.error('PDF 생성 오류:', error)
+    alert('❌ PDF 생성 중 오류가 발생했습니다.')
+  }
+}
+
+  // ===== PPT 생성 함수 =====
+  const generatePPTWithOptions = async (mode: 'form' | 'original') => {
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
@@ -594,6 +775,7 @@ export default function Home() {
     try {
       const prs = new PptxGenJS()
       
+      // 표지 슬라이드
       const coverSlide = prs.addSlide()
       coverSlide.background = { color: '1F2937' }
       coverSlide.addText('찬양 콘티', {
@@ -616,26 +798,89 @@ export default function Home() {
         align: 'center'
       })
 
+      // 각 곡 처리
       for (const song of selectedSongs) {
-        if (song.file_url) {
-          const slide = prs.addSlide()
-          slide.addImage({
-            path: song.file_url,
-            x: 0,
-            y: 0,
-            w: '100%',
-            h: '100%',
-            sizing: { type: 'contain', w: '100%', h: '100%' }
-          })
+        const songForm = songForms[song.id]
+        
+        // 송폼 모드이고 송폼이 설정된 경우
+        if (mode === 'form' && songForm && songForm.length > 0 && song.song_structure) {
+          for (const abbr of songForm) {
+            const fullName = Object.keys(SECTION_ABBREVIATIONS).find(
+              key => SECTION_ABBREVIATIONS[key] === abbr
+            )
+            
+            if (fullName && song.song_structure[fullName]) {
+              const slide = prs.addSlide()
+              slide.background = { color: 'FFFFFF' }
+              
+              slide.addText(abbr, {
+                x: 0.5,
+                y: 0.3,
+                w: 9,
+                h: 0.5,
+                fontSize: 16,
+                bold: true,
+                color: '6B7280',
+                align: 'left'
+              })
+              
+              slide.addText(song.song_structure[fullName], {
+                x: 1,
+                y: 1.5,
+                w: 8,
+                h: 4,
+                fontSize: 28,
+                color: '111827',
+                align: 'center',
+                valign: 'middle'
+              })
+              
+              slide.addText(song.song_name, {
+                x: 0.5,
+                y: 6.5,
+                w: 9,
+                h: 0.3,
+                fontSize: 14,
+                color: '9CA3AF',
+                align: 'center'
+              })
+            }
+          }
+        } else {
+          // 원본 모드 또는 송폼 미설정: 악보 이미지 사용
+          if (song.file_url) {
+            const slide = prs.addSlide()
+            slide.addImage({
+              path: song.file_url,
+              x: 0,
+              y: 0,
+              w: '100%',
+              h: '100%',
+              sizing: { type: 'contain', w: '100%', h: '100%' }
+            })
+          }
         }
       }
 
       await prs.writeFile({ fileName: `찬양콘티_${new Date().toISOString().split('T')[0]}.pptx` })
       alert('✅ PPT가 생성되었습니다!')
+      setShowPPTModal(false)
       
     } catch (error) {
       console.error('PPT 생성 오류:', error)
       alert('❌ PPT 생성 중 오류가 발생했습니다.')
+    }
+  }
+
+  const startPPTDownload = () => {
+    const hasSongForm = selectedSongs.some(song => 
+      songForms[song.id] && songForms[song.id].length > 0
+    )
+    
+    if (hasSongForm) {
+      setShowPPTModal(true)
+    } else {
+      generatePPTWithOptions('original')
     }
   }
 
@@ -670,7 +915,6 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">🔍 찬양 검색</h2>
           
-          {/* 검색창 */}
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -684,7 +928,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 필터 옵션 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">테마</label>
@@ -743,7 +986,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 단축키 안내 */}
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
               💡 <strong>단축키:</strong> 곡 클릭 후 <kbd className="px-2 py-1 bg-white rounded border">Space</kbd> 악보 미리보기 | 
@@ -794,7 +1036,6 @@ export default function Home() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
-                            
                           </div>
                           <p className="text-sm text-gray-600 mt-1">
                             {song.team_name && `${song.team_name} | `}
@@ -851,34 +1092,47 @@ export default function Home() {
                     {selectedSongs.map((song, index) => (
                       <div
                         key={song.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        className="p-3 bg-gray-50 rounded-lg"
                       >
-                        <div className="flex-1">
-                          <p className="font-bold text-sm text-gray-900">{index + 1}. {song.song_name}</p>
-                          <p className="text-xs text-gray-700 font-medium">Key: {song.key || '-'}</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="font-bold text-sm text-gray-900">{index + 1}. {song.song_name}</p>
+                            <p className="text-xs text-gray-700 font-medium">Key: {song.key || '-'}</p>
+                            {songForms[song.id] && songForms[song.id].length > 0 && (
+                              <p className="text-xs text-blue-600 font-medium mt-1">
+                                송폼: {songForms[song.id].join(' - ')}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <button
+                              onClick={() => moveSong(index, 'up')}
+                              disabled={index === 0}
+                              className="p-1 text-gray-600 hover:bg-gray-200 rounded disabled:opacity-30"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => moveSong(index, 'down')}
+                              disabled={index === selectedSongs.length - 1}
+                              className="p-1 text-gray-600 hover:bg-gray-200 rounded disabled:opacity-30"
+                            >
+                              ▼
+                            </button>
+                            <button
+                              onClick={() => toggleSongSelection(song)}
+                              className="p-1 text-red-600 hover:bg-red-100 rounded"
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-1 ml-2">
-                          <button
-                            onClick={() => moveSong(index, 'up')}
-                            disabled={index === 0}
-                            className="p-1 text-gray-600 hover:bg-gray-200 rounded disabled:opacity-30"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            onClick={() => moveSong(index, 'down')}
-                            disabled={index === selectedSongs.length - 1}
-                            className="p-1 text-gray-600 hover:bg-gray-200 rounded disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
-                          <button
-                            onClick={() => toggleSongSelection(song)}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded"
-                          >
-                            ×
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => openFormModal(song)}
+                          className="w-full px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600"
+                        >
+                          송폼 설정
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -900,7 +1154,7 @@ export default function Home() {
                       PDF 다운로드
                     </button>
                     <button
-                      onClick={generatePPT}
+                      onClick={startPPTDownload}
                       className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center justify-center"
                     >
                       <Presentation className="mr-2" size={18} />
@@ -949,7 +1203,6 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-              {/* 곡 제목 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   곡 제목 <span className="text-red-500">*</span>
@@ -963,7 +1216,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* 팀명 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   팀명 / 아티스트
@@ -977,7 +1229,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* Key, 박자, 템포, BPM */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
@@ -1033,7 +1284,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 테마 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">테마 1</label>
@@ -1064,7 +1314,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* 가사 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   가사 (선택사항)
@@ -1078,7 +1327,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* 악보 파일 업로드 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   악보 파일 (선택사항)
@@ -1117,7 +1365,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 버튼 */}
             <div className="flex gap-2 mt-6 pt-4 border-t">
               <button
                 onClick={() => {
@@ -1166,7 +1413,6 @@ export default function Home() {
       {previewSong && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
-            {/* 모달 헤더 */}
             <div className="flex items-center justify-between p-4 border-b">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{previewSong.song_name}</h2>
@@ -1183,7 +1429,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 악보 내용 */}
             <div className="flex-1 overflow-auto p-4 bg-gray-100">
               {previewSong.file_url ? (
                 previewSong.file_type === 'pdf' ? (
@@ -1207,7 +1452,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* 모달 푸터 (네비게이션) */}
             <div className="flex items-center justify-between p-4 border-t bg-gray-50">
               <button
                 onClick={showPreviousSong}
@@ -1252,7 +1496,7 @@ export default function Home() {
                   type="text"
                   value={setlistTitle}
                   onChange={(e) => setSetlistTitle(e.target.value)}
-                  placeholder="예: 1월 첫째 주 콘티 : 아버지의 마음"
+                  placeholder="예: 아버지의 마음"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 />
               </div>
@@ -1285,21 +1529,20 @@ export default function Home() {
                 </select>
               </div>
 
-              {/* 직접입력 선택 시 나타나는 입력 필드 */}
-            {setlistType === '직접입력' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  예배 유형 입력
-                </label>
-                <input
-                  type="text"
-                  value={customSetlistType}
-                  onChange={(e) => setCustomSetlistType(e.target.value)}
-                  placeholder="예: 또래 기도회"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-            )}
+              {setlistType === '직접입력' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    예배 유형 입력
+                  </label>
+                  <input
+                    type="text"
+                    value={customSetlistType}
+                    onChange={(e) => setCustomSetlistType(e.target.value)}
+                    placeholder="예: 또래 기도회"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1335,6 +1578,176 @@ export default function Home() {
               <button
                 onClick={saveSetlist}
                 className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PPT 옵션 모달 */}
+      {showPPTModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h3 className="text-xl font-bold mb-4">PPT 다운로드 옵션</h3>
+            <p className="text-gray-600 mb-6">
+              어떤 방식으로 PPT를 생성하시겠습니까?
+            </p>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => generatePPTWithOptions('form')}
+                className="w-full p-4 border-2 border-blue-600 rounded-lg hover:bg-blue-50 text-left transition"
+              >
+                <div className="font-bold text-blue-900 mb-1">🎵 송폼 순서대로</div>
+                <div className="text-sm text-gray-600">
+                  설정한 송폼 순서에 따라 가사 슬라이드 생성
+                </div>
+              </button>
+              
+              <button
+                onClick={() => generatePPTWithOptions('original')}
+                className="w-full p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 text-left transition"
+              >
+                <div className="font-bold text-gray-900 mb-1">📄 악보 그대로</div>
+                <div className="text-sm text-gray-600">
+                  업로드된 악보 이미지 그대로 생성
+                </div>
+              </button>
+            </div>
+            
+            <button
+              onClick={() => setShowPPTModal(false)}
+              className="w-full mt-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 송폼 설정 모달 */}
+      {showFormModal && currentFormSong && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+            <h3 className="text-2xl font-bold mb-4">
+              {currentFormSong.song_name} - 송폼 설정
+            </h3>
+
+            <div className="grid grid-cols-2 gap-6">
+              {/* 왼쪽: 사용 가능한 섹션 */}
+              <div>
+                <h4 className="font-bold mb-3 text-lg">사용 가능한 섹션</h4>
+                <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
+                  {availableSections.map(section => {
+                    const abbr = SECTION_ABBREVIATIONS[section]
+                    return (
+                      <button
+                        key={section}
+                        onClick={() => addSection(section)}
+                        className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
+                      >
+                        <span>{section}</span>
+                        <span className="text-sm bg-blue-200 px-2 py-1 rounded">{abbr}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                
+                {/* 직접 입력 */}
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <h5 className="font-bold mb-2">직접 입력</h5>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customSection}
+                      onChange={(e) => setCustomSection(e.target.value)}
+                      placeholder="예: 기도회, 멘트"
+                      className="flex-1 px-3 py-2 border rounded"
+                      onKeyPress={(e) => e.key === 'Enter' && addCustomSection()}
+                    />
+                    <button
+                      onClick={addCustomSection}
+                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                    >
+                      추가
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 오른쪽: 선택된 순서 */}
+              <div>
+                <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
+                <div className="border-2 border-dashed rounded-lg p-4 min-h-[500px] bg-gray-50">
+                  {tempSelectedForm.length === 0 ? (
+                    <p className="text-gray-400 text-center mt-20">
+                      왼쪽에서 섹션을 선택하세요
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {tempSelectedForm.map((abbr, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
+                        >
+                          <span className="font-bold text-green-900 flex-1 text-lg">
+                            {index + 1}. {abbr}
+                          </span>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => moveSectionUp(index)}
+                              disabled={index === 0}
+                              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              onClick={() => moveSectionDown(index)}
+                              disabled={index === tempSelectedForm.length - 1}
+                              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              onClick={() => removeSection(index)}
+                              className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {tempSelectedForm.length > 0 && (
+                  <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+                    <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
+                    <p className="text-blue-800 font-mono">
+                      {tempSelectedForm.join(' - ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 버튼 */}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowFormModal(false)
+                  setCurrentFormSong(null)
+                }}
+                className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveSongForm}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
               >
                 저장
               </button>

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { FolderOpen, Plus, Trash2, ChevronRight, Home, Calendar } from 'lucide-react'
+import { FolderOpen, Plus, Trash2, ChevronRight, Home, Calendar, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SetlistsPage() {
@@ -11,13 +11,12 @@ export default function SetlistsPage() {
   const [folders, setFolders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['all', 'church'])) // 전체 콘티 + 사랑의교회 기본 열림
+  const [newFolderName, setNewFolderName] = useState('')
   
   // 폴더 생성 모달
   const [showFolderModal, setShowFolderModal] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
-  const [newFolderType, setNewFolderType] = useState<'church' | 'department'>('church')
   const [folderColor, setFolderColor] = useState('#3B82F6')
-  const [parentFolderId, setParentFolderId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchSetlists()
@@ -51,7 +50,6 @@ export default function SetlistsPage() {
         .from('folders')
         .select('*')
         .eq('user_id', TEMP_USER_ID)
-        .order('type', { ascending: true })
         .order('order_number', { ascending: true })
 
       if (error) throw error
@@ -75,7 +73,7 @@ export default function SetlistsPage() {
           {
             user_id: TEMP_USER_ID,
             name: newFolderName,
-            type: 'church',  // 항상 church로 고정
+            type: 'church',
             color: folderColor,
             order_number: folders.length
           }
@@ -87,7 +85,6 @@ export default function SetlistsPage() {
       setShowFolderModal(false)
       setNewFolderName('')
       setFolderColor('#3B82F6')
-      setParentFolderId(null)
       fetchFolders()
     } catch (error) {
       console.error('Error creating folder:', error)
@@ -112,6 +109,19 @@ export default function SetlistsPage() {
     }
   }
 
+  // 폴더 열기/닫기 토글
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId)
+      } else {
+        newSet.add(folderId)
+      }
+      return newSet
+    })
+  }
+
   const deleteSetlist = async (setlistId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -133,8 +143,6 @@ export default function SetlistsPage() {
   }
 
   const churchFolders = folders.filter(f => f.type === 'church')
-  const getDepartmentFolders = (parentId: string) => 
-    folders.filter(f => f.type === 'department' && f.parent_id === parentId)
 
   const filteredSetlists = selectedFolderId === null
     ? setlists
@@ -165,17 +173,6 @@ export default function SetlistsPage() {
             </Link>
             <h1 className="text-3xl font-bold text-gray-900">내 콘티 관리</h1>
           </div>
-          <button
-            onClick={() => {
-              setNewFolderType('church')
-              setParentFolderId(null)
-              setShowFolderModal(true)
-            }}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-          >
-            <Plus size={20} />
-            새 폴더 만들기
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -183,112 +180,116 @@ export default function SetlistsPage() {
           <div className="lg:col-span-1 bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-4">폴더</h2>
             
-            {/* 전체 보기 */}
-            <div
-              onClick={() => setSelectedFolderId(null)}
-              className={`p-3 rounded-lg cursor-pointer mb-2 ${
-                selectedFolderId === null
-                  ? 'bg-blue-100 border-2 border-blue-500'
-                  : 'bg-gray-50 hover:bg-gray-100'
-              }`}
-            >
-              <div className="flex items-center">
-                <FolderOpen className="mr-2 text-blue-500" size={20} />
-                <span className="font-bold text-gray-900">전체 콘티</span>
-                <span className="ml-auto text-sm text-gray-700 font-medium">({setlists.length})</span>
-              </div>
-            </div>
-
-            {/* 교회별 폴더 */}
-            {churchFolders.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p>폴더가 없습니다.</p>
-                <p className="text-sm mt-2">새 폴더를 만들어보세요!</p>
-              </div>
-            ) : (
-              churchFolders.map(churchFolder => (
-                <div key={churchFolder.id} className="mb-4">
-                  {/* 교회 폴더 */}
-                  <div
-                    onClick={() => setSelectedFolderId(churchFolder.id)}
-                    className={`p-3 rounded-lg cursor-pointer ${
-                      selectedFolderId === churchFolder.id
-                        ? 'bg-blue-100 border-2 border-blue-500'
-                        : 'bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <FolderOpen className="mr-2" size={20} style={{ color: churchFolder.color }} />
-                        <span className="font-bold text-gray-900">{churchFolder.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-700 font-medium">
-                          ({setlists.filter(s => s.folder_id === churchFolder.id).length})
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setParentFolderId(churchFolder.id)
-                            setNewFolderType('department')
-                            setShowFolderModal(true)
-                          }}
-                          className="p-1 hover:bg-blue-200 rounded"
-                          title="부서 추가"
-                        >
-                          <Plus size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteFolder(churchFolder.id)
-                          }}
-                          className="p-1 hover:bg-red-200 rounded text-red-600"
-                          title="삭제"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 부서 폴더 (하위) */}
-                  {getDepartmentFolders(churchFolder.id).map(deptFolder => (
-                    <div
-                      key={deptFolder.id}
-                      onClick={() => setSelectedFolderId(deptFolder.id)}
-                      className={`ml-6 mt-2 p-2 rounded-lg cursor-pointer ${
-                        selectedFolderId === deptFolder.id
-                          ? 'bg-blue-100 border-2 border-blue-500'
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <ChevronRight className="mr-1" size={16} />
-                          <span className="text-sm font-bold text-gray-900">{deptFolder.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-700 font-medium">
-                            ({setlists.filter(s => s.folder_id === deptFolder.id).length})
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteFolder(deptFolder.id)
-                            }}
-                            className="p-1 hover:bg-red-200 rounded text-red-600"
-                            title="삭제"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            {/* 🔥 전체 콘티 (최상위 - Level 1) */}
+            <div>
+              <button
+                onClick={() => {
+                  setSelectedFolderId(null)
+                  toggleFolder('all')
+                }}
+                className={`w-full text-left p-3 rounded-lg mb-2 transition flex items-center justify-between ${
+                  selectedFolderId === null
+                    ? 'bg-blue-100 border-2 border-blue-500'
+                    : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center">
+                  {expandedFolders.has('all') ? (
+                    <ChevronDown className="mr-2 text-blue-500" size={20} />
+                  ) : (
+                    <ChevronRight className="mr-2 text-blue-500" size={20} />
+                  )}
+                  <FolderOpen className="mr-2 text-blue-500" size={20} />
+                  <span className="font-bold text-gray-900">전체 콘티</span>
                 </div>
-              ))
-            )}
+                <span className="text-sm text-gray-700 font-bold bg-blue-500 text-white px-2 py-1 rounded-full">
+                  {setlists.length}
+                </span>
+              </button>
+
+              {/* 🔥 사랑의교회 폴더 (Level 2) */}
+              {expandedFolders.has('all') && (
+                <div className="ml-4 space-y-2 border-l-2 border-blue-200 pl-2">
+                  <div>
+                    <button
+                      onClick={() => {
+                        toggleFolder('church')
+                      }}
+                      className="w-full text-left p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition flex items-center justify-between"
+                    >
+                      <div className="flex items-center">
+                        {expandedFolders.has('church') ? (
+                          <ChevronDown className="mr-2 text-gray-600" size={18} />
+                        ) : (
+                          <ChevronRight className="mr-2 text-gray-600" size={18} />
+                        )}
+                        <FolderOpen className="mr-2 text-orange-500" size={18} />
+                        <span className="font-bold text-gray-900">사랑의교회</span>
+                      </div>
+                      <span className="text-xs text-gray-700 font-medium bg-gray-200 px-2 py-1 rounded-full">
+                        {churchFolders.length}
+                      </span>
+                    </button>
+
+                    {/* 🔥 하위 폴더들 (Level 3 - 대학1부, 청년부 등) */}
+                    {expandedFolders.has('church') && (
+                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
+                        {churchFolders.length === 0 ? (
+                          <div className="text-center py-3 text-gray-500 text-sm">
+                            <p>폴더가 없습니다.</p>
+                          </div>
+                        ) : (
+                          churchFolders.map(folder => (
+                            <div
+                              key={folder.id}
+                              onClick={() => setSelectedFolderId(folder.id)}
+                              className={`p-2 rounded-lg cursor-pointer ${
+                                selectedFolderId === folder.id
+                                  ? 'bg-blue-50 border-2 border-blue-400'
+                                  : 'bg-gray-50 hover:bg-gray-100'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                  <FolderOpen className="mr-2" size={16} style={{ color: folder.color }} />
+                                  <span className={`text-sm ${selectedFolderId === folder.id ? 'font-bold' : 'font-medium'} text-gray-900`}>
+                                    {folder.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-700 font-medium bg-gray-200 px-2 py-1 rounded-full">
+                                    {setlists.filter(s => s.folder_id === folder.id).length}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      deleteFolder(folder.id)
+                                    }}
+                                    className="p-1 hover:bg-red-100 rounded text-red-600"
+                                    title="삭제"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+
+                        {/* 새 폴더 추가 버튼 */}
+                        <button
+                          onClick={() => setShowFolderModal(true)}
+                          className="w-full p-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition flex items-center justify-center font-medium text-sm"
+                        >
+                          <Plus size={16} className="mr-1" />
+                          새 폴더 추가
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 오른쪽: 콘티 목록 */}
@@ -377,14 +378,6 @@ export default function SetlistsPage() {
               </select>
             </div>
 
-            {parentFolderId && (
-              <div className="mb-4 p-3 bg-blue-50 rounded">
-                <p className="text-sm text-blue-800">
-                  상위 폴더: {folders.find(f => f.id === parentFolderId)?.name}
-                </p>
-              </div>
-            )}
-
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 폴더 이름
@@ -404,7 +397,6 @@ export default function SetlistsPage() {
                 onClick={() => {
                   setShowFolderModal(false)
                   setNewFolderName('')
-                  setParentFolderId(null)
                 }}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
               >
