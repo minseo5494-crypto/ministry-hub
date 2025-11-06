@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
+// 🆕 로깅 함수 import
+import { logActivity } from '@/lib/activityLogger'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function UploadPage() {

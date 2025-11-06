@@ -3,6 +3,56 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+// ===== 새로운 타입 정의 =====
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  created_at?: string;
+  last_login?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  type: 'church_internal' | 'external';
+  church_name?: string;
+  description?: string;
+  invite_code: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TeamMember {
+  id: string;
+  team_id: string;
+  user_id: string;
+  role: 'admin' | 'leader' | 'member';
+  parts?: string[];
+  status: 'pending' | 'active' | 'inactive';
+  joined_at?: string;
+}
+
+// ===== 기존 Song 인터페이스 찾아서 수정 =====
+// Song 인터페이스를 찾아서 아래 필드들을 추가해주세요
+export interface Song {
+  // ... 기존 필드들은 그대로 유지
+  
+  // 새로 추가되는 필드들
+  file_hash?: string;
+  file_size?: number;
+  owner_type?: 'personal' | 'team';
+  owner_id?: string;
+  uploaded_by?: string;
+  source_context?: string;
+  is_part_specific?: boolean;
+  part?: string;
+  version_info?: string;
+  visibility?: 'private' | 'team' | 'public';
+  upload_status?: 'pending' | 'completed' | 'failed';
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // 👇 새로 추가: 송폼 구조 타입
@@ -28,6 +78,8 @@ export interface Song {
   file_type?: string
   created_at?: string
   updated_at?: string
+  season?: string;  
+  themes?: string[];
 }
 
 // Folder 타입 정의 (기존 유지)
