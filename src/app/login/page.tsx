@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn, signInWithGoogle } from '@/lib/auth'
 import { Mail, Lock, AlertCircle, Chrome } from 'lucide-react'
 import Link from 'next/link'
 
-export default function LoginPage() {
+// useSearchParams를 사용하는 컴포넌트를 분리
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
@@ -178,5 +179,21 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// 메인 컴포넌트 - Suspense로 감싸기
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
