@@ -37,6 +37,7 @@ export default function TeamSettingsPage() {
 
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string>('')
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false) // 추가
   const [loading, setLoading] = useState(true)
   const [team, setTeam] = useState<TeamInfo | null>(null)
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -68,6 +69,15 @@ export default function TeamSettingsPage() {
       }
       setUser(currentUser)
 
+      // 시스템 관리자 여부 확인
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', currentUser.id)
+        .single()
+      
+      setIsSystemAdmin(userData?.is_admin || false)
+
       // 사용자 역할 확인
       const { data: memberData } = await supabase
         .from('team_members')
@@ -85,7 +95,8 @@ export default function TeamSettingsPage() {
 
       setUserRole(memberData.role)
 
-      if (memberData.role === 'member') {
+      // 시스템 관리자는 member여도 접근 가능
+      if (memberData.role === 'member' && !userData?.is_admin) {
         alert('설정 페이지는 관리자만 접근할 수 있습니다.')
         router.push(`/my-team/${teamId}`)
         return
@@ -149,7 +160,7 @@ export default function TeamSettingsPage() {
       return
     }
 
-    if (userRole !== 'leader' && userRole !== 'admin') {
+    if (userRole !== 'leader' && userRole !== 'admin' && !isSystemAdmin) {
       alert('권한이 없습니다.')
       return
     }
@@ -179,8 +190,8 @@ export default function TeamSettingsPage() {
   }
 
   const handleRegenerateCode = async () => {
-    if (userRole !== 'leader') {
-      alert('리더만 초대 코드를 재생성할 수 있습니다.')
+    if (userRole !== 'leader' && !isSystemAdmin) {
+      alert('리더 또는 시스템 관리자만 초대 코드를 재생성할 수 있습니다.')
       return
     }
 
@@ -207,8 +218,8 @@ export default function TeamSettingsPage() {
   }
 
   const handleChangeRole = async (memberId: string, currentRole: string) => {
-    if (userRole !== 'leader') {
-      alert('리더만 역할을 변경할 수 있습니다.')
+    if (userRole !== 'leader' && !isSystemAdmin) {
+      alert('리더 또는 시스템 관리자만 역할을 변경할 수 있습니다.')
       return
     }
 
@@ -239,7 +250,7 @@ export default function TeamSettingsPage() {
   }
 
   const handleRemoveMember = async (memberId: string, memberEmail: string) => {
-    if (userRole !== 'leader' && userRole !== 'admin') {
+    if (userRole !== 'leader' && userRole !== 'admin' && !isSystemAdmin) {
       alert('권한이 없습니다.')
       return
     }
@@ -265,36 +276,109 @@ export default function TeamSettingsPage() {
   }
 
   const handleDeleteTeam = async () => {
-    if (userRole !== 'leader') {
-      alert('리더만 팀을 삭제할 수 있습니다.')
-      return
-    }
-
-    const confirmation = prompt(
-      '정말 이 팀을 삭제하시겠습니까?\n모든 콘티와 데이터가 삭제됩니다.\n삭제하려면 팀 이름을 입력하세요:',
-      ''
-    )
-
-    if (confirmation !== team?.name) {
-      alert('팀 이름이 일치하지 않습니다.')
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('teams')
-        .delete()
-        .eq('id', teamId)
-
-      if (error) throw error
-
-      alert('✅ 팀이 삭제되었습니다.')
-      router.push('/my-team')
-    } catch (error: any) {
-      console.error('Error deleting team:', error)
-      alert(`삭제 실패: ${error.message}`)
-    }
+  // 권한 확인: 리더 또는 시스템 관리자만
+  if (userRole !== 'leader' && !isSystemAdmin) {
+    alert('리더 또는 시스템 관리자만 팀을 삭제할 수 있습니다.')
+    return
   }
+
+  const confirmation = prompt(
+    '정말 이 팀을 삭제하시겠습니까?\n모든 콘티와 데이터가 영구적으로 삭제됩니다.\n\n삭제하려면 팀 이름을 정확히 입력하세요:',
+    ''
+  )
+
+  if (confirmation !== team?.name) {
+    alert('팀 이름이 일치하지 않습니다.')
+    return
+  }
+
+  try {
+    console.log('팀 삭제 시작:', teamId)
+
+    // 1. 팀 콘티의 곡들 먼저 가져오기
+    const { data: teamSetlists } = await supabase
+      .from('team_setlists')
+      .select('id')
+      .eq('team_id', teamId)
+
+    if (teamSetlists && teamSetlists.length > 0) {
+      const setlistIds = teamSetlists.map(s => s.id)
+      
+      // 팀 콘티의 곡들 삭제
+      const { error: teamSongError } = await supabase
+        .from('team_setlist_songs')
+        .delete()
+        .in('setlist_id', setlistIds)
+
+      if (teamSongError) {
+        console.error('Error deleting team songs:', teamSongError)
+      }
+    }
+
+    // 2. 팀 콘티 삭제
+    const { error: teamSetlistError } = await supabase
+      .from('team_setlists')
+      .delete()
+      .eq('team_id', teamId)
+
+    if (teamSetlistError) {
+      console.error('Error deleting team setlists:', teamSetlistError)
+    }
+
+    // 3. 개인 콘티의 곡들 삭제 (team_id가 있는 개인 콘티)
+    const { data: personalSetlists } = await supabase
+      .from('setlists')
+      .select('id')
+      .eq('team_id', teamId)
+
+    if (personalSetlists && personalSetlists.length > 0) {
+      const setlistIds = personalSetlists.map(s => s.id)
+      
+      const { error: personalSongError } = await supabase
+        .from('setlist_songs')
+        .delete()
+        .in('setlist_id', setlistIds)
+
+      if (personalSongError) {
+        console.error('Error deleting personal songs:', personalSongError)
+      }
+
+      // 4. 개인 콘티 삭제
+      const { error: personalSetlistError } = await supabase
+        .from('setlists')
+        .delete()
+        .eq('team_id', teamId)
+
+      if (personalSetlistError) {
+        console.error('Error deleting personal setlists:', personalSetlistError)
+      }
+    }
+
+    // 5. 팀 멤버 삭제
+    const { error: memberError } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', teamId)
+
+    if (memberError) {
+      console.error('Error deleting members:', memberError)
+    }
+
+    // 6. 팀 삭제
+    const { error: teamError } = await supabase
+      .from('teams')
+      .delete()
+      .eq('id', teamId)
+
+    if (teamError) throw teamError
+
+    alert('✅ 팀이 삭제되었습니다.')
+    router.push('/my-team')
+  } catch (error: any) {
+    console.error('Error deleting team:', error)
+    alert(`삭제 실패: ${error.message}`)
+  }
+}
 
   const copyInviteCode = () => {
     if (team) {
@@ -351,7 +435,14 @@ export default function TeamSettingsPage() {
             >
               <ArrowLeft size={20} />
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">팀 설정</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">팀 설정</h1>
+              {isSystemAdmin && (
+                <span className="text-xs text-purple-600 font-semibold">
+                  시스템 관리자 권한
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -405,7 +496,7 @@ export default function TeamSettingsPage() {
                 >
                   {copiedCode ? <Check size={18} /> : <Copy size={18} />}
                 </button>
-                {userRole === 'leader' && (
+                {(userRole === 'leader' || isSystemAdmin) && (
                   <button
                     onClick={handleRegenerateCode}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
@@ -458,7 +549,7 @@ export default function TeamSettingsPage() {
                     {member.role === 'leader' ? '리더' : member.role === 'admin' ? '관리자' : '멤버'}
                   </span>
                   
-                  {userRole === 'leader' && member.user_id !== user.id && (
+                  {(userRole === 'leader' || isSystemAdmin) && member.user_id !== user.id && (
                     <>
                       <button
                         onClick={() => handleChangeRole(member.id, member.role)}
@@ -482,8 +573,8 @@ export default function TeamSettingsPage() {
           </div>
         </div>
 
-        {/* 위험 구역 */}
-        {userRole === 'leader' && (
+        {/* 위험 구역 - 리더 또는 시스템 관리자만 표시 */}
+        {(userRole === 'leader' || isSystemAdmin) && (
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
             <h2 className="text-xl font-bold text-red-900 mb-4">위험 구역</h2>
             <p className="text-sm text-red-700 mb-4">

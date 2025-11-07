@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// ===== 새로운 타입 정의 =====
+// ===== 타입 정의 =====
 export interface User {
   id: string;
   email: string;
@@ -34,34 +34,13 @@ export interface TeamMember {
   joined_at?: string;
 }
 
-// ===== 기존 Song 인터페이스 찾아서 수정 =====
-// Song 인터페이스를 찾아서 아래 필드들을 추가해주세요
-export interface Song {
-  // ... 기존 필드들은 그대로 유지
-  
-  // 새로 추가되는 필드들
-  file_hash?: string;
-  file_size?: number;
-  owner_type?: 'personal' | 'team';
-  owner_id?: string;
-  uploaded_by?: string;
-  source_context?: string;
-  is_part_specific?: boolean;
-  part?: string;
-  version_info?: string;
-  visibility?: 'private' | 'team' | 'public';
-  upload_status?: 'pending' | 'completed' | 'failed';
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// 👇 새로 추가: 송폼 구조 타입
+// 송폼 구조 타입
 export interface SongStructure {
   [key: string]: string
   // 예: { "Verse1": "가사...", "Chorus": "가사..." }
 }
 
-// Song 타입 정의 (기존 유지 + song_structure 추가)
+// Song 타입 정의
 export interface Song {
   id: string
   song_name: string
@@ -72,17 +51,29 @@ export interface Song {
   bpm?: number
   theme1?: string
   theme2?: string
+  themes?: string[]
+  season?: string
   lyrics?: string
-  song_structure?: SongStructure  // 👈 새로 추가!
+  youtube_url?: string
+  song_structure?: SongStructure
   file_url?: string
   file_type?: string
+  file_hash?: string
+  file_size?: number
   created_at?: string
   updated_at?: string
-  season?: string;  
-  themes?: string[];
+  uploaded_by?: string
+  owner_type?: 'personal' | 'team'
+  owner_id?: string
+  source_context?: string
+  is_part_specific?: boolean
+  part?: string
+  version_info?: string
+  visibility?: 'private' | 'team' | 'public'
+  upload_status?: 'pending' | 'completed' | 'failed'
 }
 
-// Folder 타입 정의 (기존 유지)
+// Folder 타입 정의
 export interface Folder {
   id: string
   user_id: string
@@ -95,7 +86,7 @@ export interface Folder {
   updated_at?: string
 }
 
-// Setlist 타입 정의 (기존 유지)
+// Setlist 타입 정의
 export interface Setlist {
   id: string
   user_id: string
@@ -109,12 +100,12 @@ export interface Setlist {
   updated_at?: string
 }
 
-// SetlistWithSongs 타입 정의 (기존 유지)
+// SetlistWithSongs 타입 정의
 export interface SetlistWithSongs extends Setlist {
   folder?: Folder
 }
 
-// SetlistSong 타입 정의 (기존 유지 + selected_form 추가)
+// SetlistSong 타입 정의
 export interface SetlistSong {
   id: string
   setlist_id: string
@@ -122,12 +113,12 @@ export interface SetlistSong {
   order_number: number
   key_transposed?: string
   notes?: string
-  selected_form?: string[]  // 👈 새로 추가! ['C1', 'C2', 'V1', ...]
+  selected_form?: string[]
   created_at?: string
   updated_at?: string
 }
 
-// 👇 새로 추가: 송폼 섹션 타입
+// 송폼 섹션 타입
 export type SongSection = 
   | 'Intro' 
   | 'Verse'
@@ -145,7 +136,7 @@ export type SongSection =
   | 'Bridge' 
   | 'Outro'
 
-// 👇 새로 추가: 송폼 축약어 매핑
+// 송폼 축약어 매핑
 export const SECTION_ABBREVIATIONS: { [key: string]: string } = {
   'Intro': 'I',
   'Verse': 'V',
@@ -164,8 +155,10 @@ export const SECTION_ABBREVIATIONS: { [key: string]: string } = {
   'Outro': 'Out'
 }
 
-// 👇 새로 추가: 축약어 → 전체 이름 역매핑
+// 축약어 → 전체 이름 역매핑
 export const ABBREVIATION_TO_SECTION: { [key: string]: string } = 
   Object.fromEntries(
     Object.entries(SECTION_ABBREVIATIONS).map(([k, v]) => [v, k])
   )
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)

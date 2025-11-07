@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation'
 import { parseLyrics } from '@/lib/lyricParser'
 import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
-  ChevronLeft, ChevronRight, Eye, Upload, Users, UserPlus, MoreVertical,
-  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3
+  ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
+  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube
 } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
@@ -59,8 +59,15 @@ export default function Home() {
   
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
+  // 🆕 미리보기 토글 상태 (각 곡별로)
+  const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
+
+  // 🆕 유튜브 영상 토글 상태 (각 곡별로)
+  const [youtubeStates, setYoutubeStates] = useState<{ [key: string]: boolean }>({})
   const [focusedSongIndex, setFocusedSongIndex] = useState<number>(-1)
-  
+  // 👇 이 줄 추가!
+  const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
+
   // 콘티 저장 관련 상태
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [setlistTitle, setSetlistTitle] = useState('')
@@ -307,6 +314,15 @@ export default function Home() {
       console.log(`   - 소속 팀: ${userTeams.length}개`)
     
       setSongs(filteredData)
+      // 🆕 미리보기 상태 초기화
+      const initialPreviewStates: { [key: string]: boolean } = {}
+      const initialYoutubeStates: { [key: string]: boolean } = {}
+      filteredData.forEach(song => {
+        initialPreviewStates[song.id] = false
+        initialYoutubeStates[song.id] = false
+      })
+      setPreviewStates(initialPreviewStates)
+      setYoutubeStates(initialYoutubeStates)
       setFilteredSongs(filteredData)
     } catch (error) {
       console.error('Error fetching songs:', error)
@@ -361,6 +377,46 @@ export default function Home() {
       console.error('Error fetching user teams:', error)
       setUserTeams([])
     }
+  }
+
+  // 🆕 미리보기 토글
+  const togglePreview = (songId: string) => {
+    setPreviewStates(prev => ({
+      ...prev,
+      [songId]: !prev[songId]
+    }))
+  }
+
+  // 🆕 유튜브 영상 토글
+  const toggleYoutube = (songId: string) => {
+    setYoutubeStates(prev => ({
+      ...prev,
+      [songId]: !prev[songId]
+    }))
+  }
+
+  // 🆕 유튜브 URL을 임베드 형식으로 변환
+  const getYoutubeEmbedUrl = (url: string) => {
+    if (!url) return null
+  
+    // https://www.youtube.com/watch?v=VIDEO_ID 형식
+    const watchMatch = url.match(/[?&]v=([^&]+)/)
+    if (watchMatch) {
+      return `https://www.youtube.com/embed/${watchMatch[1]}`
+    }
+  
+    // https://youtu.be/VIDEO_ID 형식
+    const shortMatch = url.match(/youtu\.be\/([^?]+)/)
+    if (shortMatch) {
+      return `https://www.youtube.com/embed/${shortMatch[1]}`
+    }
+  
+    // 이미 embed 형식인 경우
+    if (url.includes('/embed/')) {
+      return url
+    }
+  
+    return null
   }
 
   const addNewSong = async () => {
@@ -1653,72 +1709,110 @@ export default function Home() {
                   <p>검색 결과가 없습니다.</p>
                 </div>
               ) : viewMode === 'grid' ? (
-                // 그리드 뷰
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredSongs.map((song, index) => (
-                    <div
-                      key={song.id}
-                      onClick={() => {
-                        toggleSongSelection(song)
-                        setFocusedSongIndex(index)
-                      }}
-                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedSongs.find(s => s.id === song.id)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-bold text-gray-900 flex-1">{song.song_name}</h3>
-                        {song.file_url && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setPreviewSong(song)
-                            }}
-                            className="ml-2 p-1 text-blue-600 hover:bg-blue-100 rounded"
-                          >
-                            <Eye size={18} />
-                          </button>
-                        )}
-                      </div>
-                      {song.team_name && (
-                        <p className="text-sm text-gray-600 mb-2">{song.team_name}</p>
-                      )}
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {song.key && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                            Key: {song.key}
-                          </span>
-                        )}
-                        {song.time_signature && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
-                            {song.time_signature}
-                          </span>
-                        )}
-                        {song.tempo && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                            {song.tempo}
-                          </span>
-                        )}
-                      </div>
-                      {(song.theme1 || song.theme2) && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {song.theme1 && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                              {song.theme1}
-                            </span>
-                          )}
-                          {song.theme2 && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                              {song.theme2}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+  
+  // 그리드 뷰
+  <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {filteredSongs.map((song, index) => (
+      <div
+        key={song.id}
+        onClick={() => {
+          toggleSongSelection(song)
+          setFocusedSongIndex(index)
+        }}
+        className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+          selectedSongs.find(s => s.id === song.id)
+            ? 'border-blue-500 bg-blue-50'
+            : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="font-bold text-gray-900 flex-1">{song.song_name}</h3>
+          <div className="flex gap-1 ml-2">
+            {/* 악보 미리보기 버튼 - 모달로 열기 */}
+            {song.file_url && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewSong(song)
+                }}
+                className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                title="악보 보기"
+              >
+                <Eye size={18} />
+              </button>
+            )}
+            {/* 유튜브 버튼 - 모달로 열기 */}
+            {song.youtube_url && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setYoutubeModalSong(song)
+                }}
+                className="p-1 text-red-600 hover:bg-red-100 rounded"
+                title="유튜브"
+              >
+                <Youtube size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {song.team_name && (
+          <p className="text-sm text-gray-600 mb-2">{song.team_name}</p>
+        )}
+        
+        {/* 미리보기 (토글 시 표시) */}
+        {previewStates[song.id] && (
+          <div className="mt-3 border-t pt-3">
+            {song.lyrics && (
+              <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans max-h-40 overflow-y-auto bg-gray-50 p-2 rounded">
+                {song.lyrics}
+              </pre>
+            )}
+            {song.file_url && (
+              <img 
+                src={song.file_url}
+                alt={song.song_name}
+                className="w-full h-auto mt-2 rounded"
+              />
+            )}
+          </div>
+        )}
+        
+        <div className="flex flex-wrap gap-2 text-xs mt-2">
+          {song.key && (
+            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+              Key: {song.key}
+            </span>
+          )}
+          {song.time_signature && (
+            <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+              {song.time_signature}
+            </span>
+          )}
+          {song.tempo && (
+            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
+              {song.tempo}
+            </span>
+          )}
+        </div>
+        {(song.theme1 || song.theme2) && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {song.theme1 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                {song.theme1}
+              </span>
+            )}
+            {song.theme2 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                {song.theme2}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
               ) : (
                 // 리스트 뷰 (기존 스타일 유지)
                 <div ref={songListRef} className="divide-y divide-gray-200">
@@ -1762,6 +1856,68 @@ export default function Home() {
                             템포: {song.tempo || '-'}
                             {song.bpm && ` (${song.bpm}BPM)`}
                           </p>
+
+                          {/* 🆕 유튜브 영상 (토글 시 표시) */}
+{youtubeStates[song.id] && song.youtube_url && (
+  <div className="mt-3 ml-7 mb-3">
+    {getYoutubeEmbedUrl(song.youtube_url) ? (
+      <div className="relative w-full max-w-2xl" style={{ paddingBottom: '56.25%' }}>
+        <iframe
+          src={getYoutubeEmbedUrl(song.youtube_url) || ''}
+          className="absolute top-0 left-0 w-full h-full rounded-lg"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    ) : (
+      <p className="text-sm text-gray-500">유효하지 않은 유튜브 링크입니다.</p>
+    )}
+  </div>
+)}
+
+{/* 🆕 상세 정보 (토글 시 표시) */}
+{previewStates[song.id] && (
+  <div className="mt-3 ml-7 border-t pt-3">
+    {song.lyrics && (
+      <div className="mb-3">
+        <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
+        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded">
+          {song.lyrics}
+        </pre>
+      </div>
+    )}
+    {song.file_url && (
+      <div>
+        <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+        {song.file_type === 'pdf' ? (
+          <iframe
+            src={song.file_url}
+            className="w-full h-[600px] border rounded"
+          />
+        ) : (
+          <img 
+            src={song.file_url}
+            alt={`${song.song_name} 악보`}
+            className="max-w-full h-auto rounded shadow-sm"
+          />
+        )}
+      </div>
+    )}
+  </div>
+)}
+
+<div className="flex flex-wrap gap-1 mt-2 ml-7">
+  {song.theme1 && (
+    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+      {song.theme1}
+    </span>
+  )}
+  {song.theme2 && (
+    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+      {song.theme2}
+    </span>
+  )}
+</div>
                           <div className="flex flex-wrap gap-1 mt-2 ml-7">
                             {song.theme1 && (
                               <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
@@ -1776,30 +1932,52 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="flex gap-2 ml-4">
-                          {selectedSongs.find(s => s.id === song.id) && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openFormModal(song)
-                              }}
-                              className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600"
-                            >
-                              송폼 설정
-                            </button>
-                          )}
-                          {song.file_url && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPreviewSong(song)
-                              }}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
-                              title="악보 미리보기"
-                            >
-                              <Eye size={20} />
-                            </button>
-                          )}
-                        </div>
+  {/* 미리보기 토글 버튼 */}
+  {(song.lyrics || song.file_url) && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        togglePreview(song.id)
+      }}
+      className={`p-2 rounded-lg ${
+        previewStates[song.id]
+          ? 'text-blue-600 bg-blue-100'
+          : 'text-gray-600 hover:bg-gray-100'
+      }`}
+      title={previewStates[song.id] ? '접기' : '펼치기'}
+    >
+      {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
+  )}
+  {/* 유튜브 영상 토글 버튼 */}
+  {song.youtube_url && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        toggleYoutube(song.id)
+      }}
+      className={`p-2 rounded-lg ${
+        youtubeStates[song.id]
+          ? 'text-red-600 bg-red-100'
+          : 'text-gray-600 hover:bg-gray-100'
+      }`}
+      title={youtubeStates[song.id] ? '유튜브 닫기' : '유튜브 열기'}
+    >
+      <Youtube size={18} />
+    </button>
+  )}
+  {selectedSongs.find(s => s.id === song.id) && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        openFormModal(song)
+      }}
+      className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600"
+    >
+      송폼 설정
+    </button>
+  )}
+</div>
                       </div>
                     </div>
                   ))}
@@ -2560,6 +2738,47 @@ export default function Home() {
               >
                 저장
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 유튜브 모달 */}
+      {youtubeModalSong && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{youtubeModalSong.song_name}</h2>
+                <p className="text-sm text-gray-600">
+                  {youtubeModalSong.team_name} | Key: {youtubeModalSong.key || '-'}
+                </p>
+              </div>
+              <button
+                onClick={() => setYoutubeModalSong(null)}
+                className="text-gray-500 hover:text-gray-700 p-2"
+                title="닫기"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 bg-gray-100">
+              {getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') ? (
+                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                  <iframe
+                    src={getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') || ''}
+                    className="absolute top-0 left-0 w-full h-full rounded-lg"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Youtube size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>유효하지 않은 유튜브 링크입니다.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
