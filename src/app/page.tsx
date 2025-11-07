@@ -1741,19 +1741,25 @@ export default function Home() {
                 <Eye size={18} />
               </button>
             )}
-            {/* 유튜브 버튼 - 모달로 열기 */}
-            {song.youtube_url && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
+            {/* 유튜브 버튼 - 항상 표시 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (song.youtube_url) {
                   setYoutubeModalSong(song)
-                }}
-                className="p-1 text-red-600 hover:bg-red-100 rounded"
-                title="유튜브"
-              >
-                <Youtube size={18} />
-              </button>
-            )}
+                }
+              }}
+              disabled={!song.youtube_url}
+              className="p-1 rounded"
+              style={{
+                color: song.youtube_url ? '#dc2626' : '#d1d5db',
+                cursor: song.youtube_url ? 'pointer' : 'not-allowed',
+                opacity: song.youtube_url ? 1 : 0.5
+              }}
+              title={song.youtube_url ? '유튜브' : '유튜브 링크 없음'}
+            >
+              <Youtube size={18} />
+            </button>
           </div>
         </div>
         
@@ -1949,23 +1955,40 @@ export default function Home() {
       {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>
   )}
-  {/* 유튜브 영상 토글 버튼 */}
-  {song.youtube_url && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
+  {/* 유튜브 영상 토글 버튼 - 항상 표시 */}
+  <button
+    onClick={(e) => {
+      e.stopPropagation()
+      if (song.youtube_url) {
         toggleYoutube(song.id)
-      }}
-      className={`p-2 rounded-lg ${
-        youtubeStates[song.id]
-          ? 'text-red-600 bg-red-100'
-          : 'text-gray-600 hover:bg-gray-100'
-      }`}
-      title={youtubeStates[song.id] ? '유튜브 닫기' : '유튜브 열기'}
-    >
-      <Youtube size={18} />
-    </button>
-  )}
+      }
+    }}
+    disabled={!song.youtube_url}
+    className="p-2 rounded-lg"
+    style={{
+      color: !song.youtube_url 
+        ? '#d1d5db' 
+        : youtubeStates[song.id] 
+        ? '#dc2626' 
+        : '#4b5563',
+      backgroundColor: !song.youtube_url
+        ? 'transparent'
+        : youtubeStates[song.id]
+        ? '#fee2e2'
+        : 'transparent',
+      cursor: song.youtube_url ? 'pointer' : 'not-allowed',
+      opacity: song.youtube_url ? 1 : 0.5
+    }}
+    title={
+      !song.youtube_url
+        ? '유튜브 링크 없음'
+        : youtubeStates[song.id]
+        ? '유튜브 닫기'
+        : '유튜브 열기'
+    }
+  >
+    <Youtube size={18} />
+  </button>
   {selectedSongs.find(s => s.id === song.id) && (
     <button
       onClick={(e) => {
