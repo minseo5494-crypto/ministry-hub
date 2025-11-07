@@ -81,12 +81,8 @@ export default function MyTeamPage() {
         invite_code: tm.teams.invite_code
       }))
 
-      setTeams(teamsList)
+    setTeams(teamsList)  // ✅ 이 줄 추가!
 
-      // 팀이 1개면 자동 이동
-      if (teamsList.length === 1) {
-        router.push(`/my-team/${teamsList[0].id}`)
-      }
     } catch (error) {
       console.error('Error fetching teams:', error)
       alert('팀 목록을 불러오는데 실패했습니다.')
