@@ -49,6 +49,10 @@ export default function Home() {
   // PPT 모달 상태
   const [showPPTModal, setShowPPTModal] = useState(false)
 
+  // PDF/PPT 다운로드 로딩 상태
+  const [downloadingPDF, setDownloadingPDF] = useState(false)
+  const [downloadingPPT, setDownloadingPPT] = useState(false)
+
   // 사용 가능한 송폼 섹션
   const availableSections = [
     'Intro', 'Verse1', 'Verse2', 'Verse3', 'Verse4',
@@ -776,6 +780,8 @@ export default function Home() {
       return
     }
 
+    setDownloadingPDF(true)  // 👈 로딩 시작
+
     console.log('==================== PDF 생성 시작 ====================')
     console.log('선택된 곡 목록:', selectedSongs.map(s => ({ id: s.id, name: s.song_name })))
     console.log('현재 songForms 전체:', songForms)
@@ -1044,6 +1050,8 @@ export default function Home() {
     } catch (error) {
       console.error('PDF 생성 오류:', error)
       alert('❌ PDF 생성 중 오류가 발생했습니다.')
+    } finally {
+      setDownloadingPDF(false)  // 👈 로딩 종료 (성공/실패 모두)
     }
   }
 
@@ -1053,6 +1061,8 @@ export default function Home() {
       alert('찬양을 선택해주세요.')
       return
     }
+
+    setDownloadingPPT(true)  // 👈 로딩 시작
 
     try {
       const prs = new PptxGenJS()
@@ -1164,6 +1174,8 @@ export default function Home() {
     } catch (error) {
       console.error('PPT 생성 오류:', error)
       alert('❌ PPT 생성 중 오류가 발생했습니다.')
+    } finally {
+      setDownloadingPPT(false)  // 👈 로딩 종료
     }
   }
 
@@ -1438,20 +1450,43 @@ export default function Home() {
                 </button>
                 <button
                   onClick={generatePDF}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm flex items-center"
+                  disabled={downloadingPDF}
+                  className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
-                  <FileText className="mr-2" size={16} />
-                  PDF
+                  {downloadingPDF ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      PDF 생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="mr-2" size={16} />
+                      PDF
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={startPPTDownload}
-                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm flex items-center"
+                  disabled={downloadingPPT}
+                  className={`px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm flex items-center ${downloadingPPT ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
-                  <Presentation className="mr-2" size={16} />
-                  PPT
+                    {downloadingPPT ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      PPT 생성 중...
+                    </>
+                  ) : (
+                    <>
+                      <Presentation className="mr-2" size={16} />
+                      PPT
+                    </>
+                  )}
                 </button>
                 <button
-                  onClick={() => setSelectedSongs([])}
+                  onClick={() => {
+                    setSelectedSongs([])
+                    setSongForms({})
+                  }}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
                 >
                   초기화
@@ -2806,6 +2841,44 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ✅ 여기부터 새로 추가 ✅ */}
+      {/* PDF/PPT 다운로드 로딩 모달 */}
+      {(downloadingPDF || downloadingPPT) && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+            {/* 스피너 */}
+            <div className="flex justify-center mb-4">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+            </div>
+            
+            {/* 제목 */}
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              {downloadingPDF ? 'PDF 생성 중...' : 'PPT 생성 중...'}
+            </h3>
+            
+            {/* 설명 */}
+            <p className="text-gray-600 mb-4">
+              {downloadingPDF
+                ? '선택하신 곡들의 악보를 PDF로 생성하고 있습니다.'
+                : '선택하신 곡들의 가사를 PPT로 생성하고 있습니다.'}
+            </p>
+            
+            {/* 안내 메시지 */}
+            <p className="text-sm text-gray-500">
+              잠시만 기다려 주세요. 곡 수에 따라 시간이 소요될 수 있습니다.
+            </p>
+            
+            {/* 바운스 애니메이션 점들 */}
+            <div className="mt-6 flex justify-center gap-2">
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ✅ 여기까지 새로 추가 ✅ */}
     </div>
   )
 }
