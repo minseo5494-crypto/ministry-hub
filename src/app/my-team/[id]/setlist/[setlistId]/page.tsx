@@ -674,63 +674,68 @@ export default function TeamSetlistDetailPage() {
               )}
             </div>
 
-            {canEdit() && (
-              <div className="flex gap-2">
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={handleSaveEdit}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                    >
-                      <Save className="mr-2" size={18} />
-                      저장
-                    </button>
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                    >
-                      취소
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* 다운로드 버튼 */}
-                    <button
-                      onClick={handleDownloadPPT}
-                      disabled={downloadingPPT || songs.length === 0}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
-                      title="PPT 다운로드"
-                    >
-                      <Download className="mr-2" size={18} />
-                      {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
-                    </button>
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={downloadingPDF || songs.length === 0}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
-                      title="PDF 다운로드"
-                    >
-                      <FileDown className="mr-2" size={18} />
-                      {downloadingPDF ? 'PDF 생성 중...' : 'PDF'}
-                    </button>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                    >
-                      <Edit className="mr-2" size={18} />
-                      수정
-                    </button>
-                    <button
-                      onClick={handleDeleteSetlist}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
-                    >
-                      <Trash2 className="mr-2" size={18} />
-                      삭제
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+            <div className="flex gap-2">
+  {isEditing ? (
+    <>
+      {/* 편집 모드: 저장/취소 버튼 */}
+      <button
+        onClick={handleSaveEdit}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+      >
+        <Save className="mr-2" size={18} />
+        저장
+      </button>
+      <button
+        onClick={() => setIsEditing(false)}
+        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+      >
+        취소
+      </button>
+    </>
+  ) : (
+    <>
+      {/* 다운로드 버튼 - 모든 팀원 가능 */}
+      <button
+        onClick={handleDownloadPPT}
+        disabled={downloadingPPT || songs.length === 0}
+        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
+        title="PPT 다운로드"
+      >
+        <Download className="mr-2" size={18} />
+        {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
+      </button>
+      <button
+        onClick={handleDownloadPDF}
+        disabled={downloadingPDF || songs.length === 0}
+        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+        title="PDF 다운로드"
+      >
+        <FileDown className="mr-2" size={18} />
+        {downloadingPDF ? 'PDF 생성 중...' : 'PDF'}
+      </button>
+      
+      {/* 수정/삭제 버튼 - leader/admin만 */}
+      {canEdit() && (
+        <>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+          >
+            <Edit className="mr-2" size={18} />
+            수정
+          </button>
+          <button
+            onClick={handleDeleteSetlist}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
+          >
+            <Trash2 className="mr-2" size={18} />
+            삭제
+          </button>
+        </>
+      )}
+    </>
+  )}
+</div>
           </div>
 
           {/* 콘티 정보 */}
