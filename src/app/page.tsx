@@ -15,6 +15,8 @@ import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
 import { logSongSearch, logPPTDownload } from '@/lib/activityLogger'
+// 🆕 PDF 생성 함수 import 추가
+import { generatePDF as generatePDFFile, PDFSong } from '@/lib/pdfGenerator'
 
 // 절기 & 테마 상수 추가
 const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
@@ -773,287 +775,44 @@ export default function Home() {
     setCurrentFormSong(null)
   }
 
-  // PDF 생성 함수
-  const generatePDF = async () => {
-    if (selectedSongs.length === 0) {
-      alert('찬양을 선택해주세요.')
-      return
-    }
-
-    setDownloadingPDF(true)  // 👈 로딩 시작
-
-    console.log('==================== PDF 생성 시작 ====================')
-    console.log('선택된 곡 목록:', selectedSongs.map(s => ({ id: s.id, name: s.song_name })))
-    console.log('현재 songForms 전체:', songForms)
-    console.log('각 곡별 송폼:')
-    selectedSongs.forEach(song => {
-      console.log(`  - ${song.song_name} (${song.id}):`, songForms[song.id] || '❌ 설정 안됨')
-    })
-    console.log('======================================================')
-
-    try {
-      const pdfLib = await import('pdf-lib')
-      const { PDFDocument, rgb } = pdfLib
-      const jsPDFModule = await import('jspdf')
-      const jsPDF = jsPDFModule.default
-      const html2canvas = (await import('html2canvas')).default
-
-      const mergedPdf = await PDFDocument.create()
-
-      // fontkit 등록 (Variable Font 지원)
-      const fontkit = await import('@pdf-lib/fontkit')
-      mergedPdf.registerFontkit(fontkit.default)
-      console.log('✅ fontkit 등록 완료')
-
-      // 한글 폰트 로드
-      console.log('📥 한글 폰트 로딩 시작...')
-      let koreanFont = null
-      try {
-        const fontBytes = await loadKoreanFont()
-        
-        if (fontBytes) {
-          koreanFont = await mergedPdf.embedFont(fontBytes)
-          console.log('✅ 한글 폰트 임베드 성공!')
-        } else {
-          console.warn('⚠️ 한글 폰트를 찾을 수 없습니다. 영문 폰트를 사용합니다.')
-        }
-      } catch (fontError) {
-        console.error('❌ 한글 폰트 로드 실패:', fontError)
-        console.warn('⚠️ 영문 폰트로 대체됩니다.')
-      }
-
-      // 표지 페이지 생성
-      const coverDiv = document.createElement('div')
-      coverDiv.style.cssText = `
-        width: 210mm;
-        height: 297mm;
-        padding: 60px;
-        background-color: #ffffff;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        box-sizing: border-box;
-      `
-
-      coverDiv.innerHTML = `
-        <div style="text-align: center;">
-          <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
-            찬양 콘티
-          </h1>
-          <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
-            ${new Date().toLocaleDateString('ko-KR')}
-          </p>
-        </div>
-        
-        <div style="margin-top: 80px;">
-          <h2 style="font-size: 32px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 3px solid #3b82f6; padding-bottom: 10px;">
-            선택한 찬양 목록
-          </h2>
-          <div style="font-size: 24px; line-height: 2.5; color: #1a202c;">
-            ${selectedSongs.map((song, index) => `
-              <div style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
-                <span style="font-weight: 600; color: #3b82f6; margin-right: 15px;">
-                  ${index + 1}.
-                </span>
-                <span style="font-weight: 500;">
-                  ${song.song_name}
-                </span>
-                <span style="color: #718096; margin-left: 10px;">
-                  (${song.key || '-'})
-                </span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        
-        <div style="position: absolute; bottom: 60px; left: 60px; right: 60px; text-align: center; color: #a0aec0; font-size: 18px;">
-          총 ${selectedSongs.length}곡 선택됨
-        </div>
-      `
-
-      coverDiv.style.position = 'fixed'
-      coverDiv.style.left = '-9999px'
-      document.body.appendChild(coverDiv)
-
-      const canvas = await html2canvas(coverDiv, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true
-      })
-
-      document.body.removeChild(coverDiv)
-
-      const coverPdf = new jsPDF('p', 'mm', 'a4')
-      const imgData = canvas.toDataURL('image/png')
-      coverPdf.addImage(imgData, 'PNG', 0, 0, 210, 297)
-
-      const coverPdfBytes = coverPdf.output('arraybuffer')
-      const coverDoc = await PDFDocument.load(coverPdfBytes)
-      const coverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices())
-      coverPages.forEach(page => mergedPdf.addPage(page))
-
-      // 악보 추가
-      const songsWithSheets = selectedSongs.filter(song => song.file_url && song.file_url.trim() !== '')
-
-      if (songsWithSheets.length === 0) {
-        alert('⚠️ 악보가 업로드된 곡이 없습니다. 표지만 다운로드됩니다.')
-      }
-
-      const A4_WIDTH = 595.28
-      const A4_HEIGHT = 841.89
-
-      for (const song of songsWithSheets) {
-        try {
-          const response = await fetch(song.file_url!)
-          if (!response.ok) continue
-
-          const fileType = song.file_type || 'pdf'
-          const currentSongForm = songForms[song.id]
-      
-          console.log('========================================')
-          console.log(`🎵 현재 처리 중인 곡: ${song.song_name}`)
-          console.log(`📋 곡 ID: ${song.id}`)
-          console.log(`📝 저장된 송폼:`, currentSongForm)
-          console.log(`📄 파일 타입: ${fileType}`)
-          console.log('========================================')
-
-          // PDF 파일 처리
-          if (fileType === 'pdf') {
-            const arrayBuffer = await response.arrayBuffer()
-            const sheetPdf = await PDFDocument.load(arrayBuffer)
-            const pageCount = sheetPdf.getPageCount()
-
-            console.log(`📑 PDF 페이지 수: ${pageCount}`)
-
-            for (let i = 0; i < pageCount; i++) {
-              const [embeddedPage] = await mergedPdf.embedPdf(sheetPdf, [i])
-              const { width, height } = embeddedPage
-
-              const scaleX = A4_WIDTH / width
-              const scaleY = A4_HEIGHT / height
-              const scale = Math.min(scaleX, scaleY)
-
-              const scaledWidth = width * scale
-              const scaledHeight = height * scale
-
-              const a4Page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
-
-              const x = (A4_WIDTH - scaledWidth) / 2
-              const y = (A4_HEIGHT - scaledHeight) / 2
-
-              a4Page.drawPage(embeddedPage, {
-                x: x,
-                y: y,
-                width: scaledWidth,
-                height: scaledHeight,
-              })
-              console.log(`✅ PDF 악보 그리기 완료 (페이지 ${i + 1})`)
-
-              // 송폼 오버레이 (첫 페이지에만)
-              if (i === 0 && currentSongForm && currentSongForm.length > 0) {
-                console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name} (페이지 ${i + 1})`)
-    
-                // 송폼 텍스트
-                const formText = currentSongForm.join(' - ')
-                console.log(`   📝 송폼 텍스트: "${formText}"`)
-    
-                try {
-                  a4Page.drawText(formText, {
-                    x: 30,
-                    y: A4_HEIGHT - 25,
-                    size: 14,
-                    color: rgb(0.23, 0.51, 0.96),
-                    font: koreanFont || undefined,
-                  })
-                  console.log(`✅ PDF 송폼 표시 성공!`)
-                } catch (textError) {
-                  console.error('❌ 송폼 텍스트 렌더링 실패:', textError)
-                }
-              }
-            }
-          } 
-          // 이미지 파일 처리
-          else if (['jpg', 'jpeg', 'png'].includes(fileType)) {
-            console.log(`🖼️ 이미지 파일 처리 중: ${song.song_name}`)
-    
-            const imageBytes = await response.arrayBuffer()
-            let image
-
-            if (fileType === 'png') {
-              image = await mergedPdf.embedPng(imageBytes)
-            } else {
-              image = await mergedPdf.embedJpg(imageBytes)
-            }
-
-            const imgWidth = image.width
-            const imgHeight = image.height
-            const scaleX = A4_WIDTH / imgWidth
-            const scaleY = A4_HEIGHT / imgHeight
-            const scale = Math.min(scaleX, scaleY)
-
-            const scaledWidth = imgWidth * scale
-            const scaledHeight = imgHeight * scale
-
-            const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
-
-            const x = (A4_WIDTH - scaledWidth) / 2
-            const y = (A4_HEIGHT - scaledHeight) / 2
-
-            // 1. 먼저 이미지 그리기
-            page.drawImage(image, {
-              x: x,
-              y: y,
-              width: scaledWidth,
-              height: scaledHeight,
-            })
-            console.log(`✅ 이미지 그리기 완료`)
-
-            // 2. 그 다음 송폼 오버레이
-            if (currentSongForm && currentSongForm.length > 0) {
-              console.log(`✅ 이미지 송폼 오버레이 시작: ${song.song_name}`)
-
-              // 송폼 텍스트
-              const formText = currentSongForm.join(' - ')
-              console.log(`   📝 송폼 텍스트: "${formText}"`)
-      
-              try {
-                page.drawText(formText, {
-                  x: 30,
-                  y: A4_HEIGHT - 35,
-                  size: 14,
-                  color: rgb(0.23, 0.51, 0.96),
-                  font: koreanFont || undefined,
-                })
-                console.log(`✅ 이미지 송폼 표시 성공!`)
-              } catch (textError) {
-                console.error('❌ 송폼 텍스트 렌더링 실패:', textError)
-              }
-            } else {
-              console.warn(`⚠️ ${song.song_name}: 송폼이 설정되지 않음`)
-            }
-          }
-        } catch (error) {
-          console.error(`${song.song_name} 처리 중 오류:`, error)
-        }
-      }
-
-      // PDF 다운로드
-      const pdfBytes = await mergedPdf.save()
-      const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `찬양콘티_${new Date().toISOString().split('T')[0]}.pdf`
-      link.click()
-      URL.revokeObjectURL(url)
-
-      alert(`✅ PDF가 생성되었습니다!`)
-    } catch (error) {
-      console.error('PDF 생성 오류:', error)
-      alert('❌ PDF 생성 중 오류가 발생했습니다.')
-    } finally {
-      setDownloadingPDF(false)  // 👈 로딩 종료 (성공/실패 모두)
-    }
+  // PDF 생성 함수 - pdfGenerator 사용
+const generatePDF = async () => {
+  if (selectedSongs.length === 0) {
+    alert('찬양을 선택해주세요.')
+    return
   }
+
+  setDownloadingPDF(true)
+
+  try {
+    // PDFSong 형식으로 변환
+    const pdfSongs: PDFSong[] = selectedSongs.map(song => ({
+      id: song.id,
+      song_name: song.song_name,
+      team_name: song.team_name,
+      key: song.key,
+      file_url: song.file_url,
+      file_type: song.file_type,
+      lyrics: song.lyrics,
+      selectedForm: songForms[song.id] || [],
+    }))
+
+    // generatePDFFile 함수 호출
+    await generatePDFFile({
+      title: '찬양 콘티',
+      date: new Date().toLocaleDateString('ko-KR'),
+      songs: pdfSongs,
+      songForms: songForms
+    })
+
+    alert('✅ PDF가 생성되었습니다!')
+  } catch (error) {
+    console.error('PDF 생성 오류:', error)
+    alert('❌ PDF 생성 중 오류가 발생했습니다.')
+  } finally {
+    setDownloadingPDF(false)
+  }
+}
 
   // PPT 생성 함수
   const generatePPTWithOptions = async (mode: 'form' | 'original') => {
