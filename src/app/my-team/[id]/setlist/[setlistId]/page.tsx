@@ -6,6 +6,7 @@ import { supabase, Song } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logDownload } from '@/lib/downloadLogger'
 import { generatePDF, PDFSong } from '@/lib/pdfGenerator'
+import SongFormPositionModal from '@/components/SongFormPositionModal' // 🆕 추가
 import pptxgen from 'pptxgenjs'
 import { 
   ArrowLeft, Edit, Trash2, Plus, Music, X, 
@@ -29,6 +30,13 @@ interface SetlistDetail {
   service_type?: string
   notes?: string
   team_id: string
+}
+
+// 🆕 송폼 위치 타입 정의
+interface SongFormPosition {
+  x: number
+  y: number
+  size?: 'small' | 'medium' | 'large'
 }
 
 export default function TeamSetlistDetailPage() {
@@ -76,6 +84,10 @@ export default function TeamSetlistDetailPage() {
   // 다운로드 상태
   const [downloadingPPT, setDownloadingPPT] = useState(false)
   const [downloadingPDF, setDownloadingPDF] = useState(false)
+
+  // 🆕 송폼 위치 선택 모달 상태
+  const [showPositionModal, setShowPositionModal] = useState(false)
+  const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
 
   useEffect(() => {
     checkUser()
@@ -577,14 +589,33 @@ export default function TeamSetlistDetailPage() {
     }
   }
 
-  // PDF 다운로드 (메인 페이지와 동일한 방식)
+  // 🆕 PDF 다운로드 - 1단계: 송폼 위치 선택 모달 열기
   const handleDownloadPDF = async () => {
     if (!setlist || songs.length === 0) {
       alert('다운로드할 곡이 없습니다.')
       return
     }
 
+    // 송폼이 있는 곡이 있는지 확인
+    const songsWithForms = songs.filter(song => 
+      song.selected_form && song.selected_form.length > 0
+    )
+
+    if (songsWithForms.length > 0) {
+      // 송폼이 있으면 위치 선택 모달 열기
+      setShowPositionModal(true)
+    } else {
+      // 송폼이 없으면 바로 PDF 생성
+      await generatePDFFile({})
+    }
+  }
+
+  // 🆕 PDF 다운로드 - 2단계: 실제 PDF 생성
+  const generatePDFFile = async (positions: { [key: string]: SongFormPosition }) => {
+    if (!setlist) return
+
     setDownloadingPDF(true)
+    setShowPositionModal(false)
 
     try {
       // 곡 데이터 변환
@@ -609,12 +640,13 @@ export default function TeamSetlistDetailPage() {
         }
       })
 
-      // PDF 생성
+      // 🆕 PDF 생성 (위치 정보 포함)
       await generatePDF({
         title: setlist.title,
         date: new Date(setlist.service_date).toLocaleDateString('ko-KR'),
         songs: pdfSongs,
-        songForms: songForms
+        songForms: songForms,
+        songFormPositions: positions  // 🆕 위치 정보 전달
       })
 
       // 다운로드 로그
@@ -675,67 +707,67 @@ export default function TeamSetlistDetailPage() {
             </div>
 
             <div className="flex gap-2">
-  {isEditing ? (
-    <>
-      {/* 편집 모드: 저장/취소 버튼 */}
-      <button
-        onClick={handleSaveEdit}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-      >
-        <Save className="mr-2" size={18} />
-        저장
-      </button>
-      <button
-        onClick={() => setIsEditing(false)}
-        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-      >
-        취소
-      </button>
-    </>
-  ) : (
-    <>
-      {/* 다운로드 버튼 - 모든 팀원 가능 */}
-      <button
-        onClick={handleDownloadPPT}
-        disabled={downloadingPPT || songs.length === 0}
-        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
-        title="PPT 다운로드"
-      >
-        <Download className="mr-2" size={18} />
-        {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
-      </button>
-      <button
-        onClick={handleDownloadPDF}
-        disabled={downloadingPDF || songs.length === 0}
-        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
-        title="PDF 다운로드"
-      >
-        <FileDown className="mr-2" size={18} />
-        {downloadingPDF ? 'PDF 생성 중...' : 'PDF'}
-      </button>
-      
-      {/* 수정/삭제 버튼 - leader/admin만 */}
-      {canEdit() && (
-        <>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-          >
-            <Edit className="mr-2" size={18} />
-            수정
-          </button>
-          <button
-            onClick={handleDeleteSetlist}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
-          >
-            <Trash2 className="mr-2" size={18} />
-            삭제
-          </button>
-        </>
-      )}
-    </>
-  )}
-</div>
+              {isEditing ? (
+                <>
+                  {/* 편집 모드: 저장/취소 버튼 */}
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                  >
+                    <Save className="mr-2" size={18} />
+                    저장
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* 다운로드 버튼 - 모든 팀원 가능 */}
+                  <button
+                    onClick={handleDownloadPPT}
+                    disabled={downloadingPPT || songs.length === 0}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
+                    title="PPT 다운로드"
+                  >
+                    <Download className="mr-2" size={18} />
+                    {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
+                  </button>
+                  <button
+                    onClick={handleDownloadPDF}
+                    disabled={downloadingPDF || songs.length === 0}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+                    title="PDF 다운로드"
+                  >
+                    <FileDown className="mr-2" size={18} />
+                    {downloadingPDF ? 'PDF 생성 중...' : 'PDF'}
+                  </button>
+                  
+                  {/* 수정/삭제 버튼 - leader/admin만 */}
+                  {canEdit() && (
+                    <>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                      >
+                        <Edit className="mr-2" size={18} />
+                        수정
+                      </button>
+                      <button
+                        onClick={handleDeleteSetlist}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
+                      >
+                        <Trash2 className="mr-2" size={18} />
+                        삭제
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* 콘티 정보 */}
@@ -1104,6 +1136,27 @@ export default function TeamSetlistDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 🆕 송폼 위치 선택 모달 */}
+      {showPositionModal && (
+        <SongFormPositionModal
+          songs={songs.map(s => ({
+            id: s.id,
+            song_name: s.songs.song_name,
+            file_url: s.songs.file_url,
+            file_type: s.songs.file_type,
+            selectedForm: s.selected_form
+          }))}
+          songForms={songs.reduce((acc, song) => {
+            if (song.selected_form && song.selected_form.length > 0) {
+              acc[song.id] = song.selected_form
+            }
+            return acc
+          }, {} as { [key: string]: string[] })}
+          onConfirm={generatePDFFile}
+          onCancel={() => setShowPositionModal(false)}
+        />
       )}
     </div>
   )

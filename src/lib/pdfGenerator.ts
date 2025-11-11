@@ -13,18 +13,62 @@ export interface PDFSong {
   notes?: string
 }
 
+// 송폼 크기 타입
+type SizeType = 'small' | 'medium' | 'large'
+
+// 송폼 위치를 퍼센트로 저장 (0~100)
+export interface SongFormPosition {
+  x: number  // 0~100 (왼쪽 0%, 오른쪽 100%)
+  y: number  // 0~100 (위쪽 100%, 아래쪽 0%)
+  size?: SizeType  // 🆕 크기 정보
+}
+
 export interface PDFGenerateOptions {
   title: string
   date: string
   songs: PDFSong[]
   songForms: { [key: string]: string[] }
+  songFormPositions?: { [key: string]: SongFormPosition }
 }
 
 /**
- * PDF 생성 함수 (메인 페이지와 동일한 로직)
+ * 🆕 크기에 따른 폰트 크기와 패딩 반환
+ */
+const getSizeConfig = (size: SizeType = 'medium') => {
+  const sizeMap = {
+    small: { fontSize: 16, padding: 12 },    // 작게 (더 크게!)
+    medium: { fontSize: 22, padding: 14 },   // 보통 (더 크게!)
+    large: { fontSize: 28, padding: 18 }     // 크게 (훨씬 크게!)
+  }
+  return sizeMap[size]
+}
+
+/**
+ * 퍼센트 좌표를 실제 좌표로 변환
+ */
+const calculatePositionFromPercent = (
+  percentX: number,
+  percentY: number,
+  pageWidth: number,
+  pageHeight: number,
+  textWidth: number,
+  fontSize: number
+): { x: number; y: number } => {
+  const margin = 20
+  const maxX = pageWidth - textWidth - margin
+  const maxY = pageHeight - fontSize - margin
+  
+  const x = Math.max(margin, Math.min(maxX, (percentX / 100) * pageWidth))
+  const y = Math.max(margin + fontSize, Math.min(maxY, (percentY / 100) * pageHeight))
+  
+  return { x, y }
+}
+
+/**
+ * PDF 생성 함수
  */
 export const generatePDF = async (options: PDFGenerateOptions) => {
-  const { title, date, songs, songForms } = options
+  const { title, date, songs, songForms, songFormPositions } = options
 
   if (songs.length === 0) {
     throw new Error('곡이 없습니다.')
@@ -33,6 +77,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
   console.log('==================== PDF 생성 시작 ====================')
   console.log('선택된 곡 목록:', songs.map(s => ({ id: s.id, name: s.song_name })))
   console.log('각 곡별 송폼:', songForms)
+  console.log('각 곡별 송폼 위치:', songFormPositions)
 
   try {
     const pdfLib = await import('pdf-lib')
@@ -129,6 +174,14 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
         const response = await fetch(song.file_url)
         const arrayBuffer = await response.arrayBuffer()
 
+        // 송폼 정보 가져오기
+        const selectedForms = songForms[song.id] || song.selectedForm || []
+        const songPosition = songFormPositions?.[song.id]
+        const formSize = songPosition?.size || 'medium'  // 🆕 크기 정보
+        
+        console.log(`📍 송폼 위치 정보:`, songPosition)
+        console.log(`📏 송폼 크기:`, formSize)
+
         // PDF 파일 처리
         if (song.file_type === 'pdf' || song.file_url.toLowerCase().endsWith('.pdf')) {
           const sheetPdf = await PDFDocument.load(arrayBuffer)
@@ -142,53 +195,68 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             mergedPdf.addPage(page)
 
             // 송폼 오버레이 (각 곡의 첫 페이지에)
-            if (pageIdx === 0) {
-              const selectedForms = songForms[song.id] || song.selectedForm || []
-              if (selectedForms.length > 0 && koreanFont) {
-                console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name} (곡 ${i + 1}, 페이지 ${pageIdx + 1})`)
-                console.log(`   송폼 내용: ${selectedForms.join(' - ')}`)
+            if (pageIdx === 0 && selectedForms.length > 0 && koreanFont) {
+              console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name}`)
+              console.log(`   송폼 내용: ${selectedForms.join(' - ')}`)
 
-                // 방금 추가한 페이지 가져오기
-                const pages = mergedPdf.getPages()
-                const currentPage = pages[pages.length - 1]
-                
-                const formText = selectedForms.join(' - ')
-                const { width, height } = currentPage.getSize()
+              const pages = mergedPdf.getPages()
+              const currentPage = pages[pages.length - 1]
+              
+              const formText = selectedForms.join(' - ')
+              const { width, height } = currentPage.getSize()
 
-                const fontSize = 14
-                const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
-                const x = width - textWidth - 30
-                const y = height - 30
+              // 🆕 크기에 따른 설정 가져오기
+              const { fontSize, padding } = getSizeConfig(formSize)
+              const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
 
-                currentPage.drawRectangle({
-                  x: x - 10,
-                  y: y - 5,
-                  width: textWidth + 20,
-                  height: fontSize + 10,
-                  color: rgb(1, 1, 1),
-                  opacity: 0.9,
-                })
+              console.log(`   📏 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
-                currentPage.drawText(formText, {
-                  x: x,
-                  y: y,
-                  size: fontSize,
-                  font: koreanFont,
-                  color: rgb(0.4, 0.2, 0.8),
-                })
-
-                console.log(`✅ PDF 송폼 표시 성공! (곡 ${i + 1}: ${song.song_name})`)
+              // 위치 계산
+              let x, y
+              if (songPosition) {
+                const position = calculatePositionFromPercent(
+                  songPosition.x,
+                  songPosition.y,
+                  width,
+                  height,
+                  textWidth,
+                  fontSize
+                )
+                x = position.x
+                y = position.y
+                console.log(`   📍 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
               } else {
-                console.log(`⚠️ 송폼 없음 또는 폰트 없음: ${song.song_name}`)
-                console.log(`   - 송폼: ${JSON.stringify(selectedForms)}`)
-                console.log(`   - 폰트: ${koreanFont ? '있음' : '없음'}`)
+                x = width - textWidth - 30
+                y = height - 30
+                console.log(`   📍 기본 위치 사용: 우측 상단`)
               }
+
+              // 배경 박스
+              currentPage.drawRectangle({
+                x: x - padding,
+                y: y - (padding * 0.5),
+                width: textWidth + (padding * 2),
+                height: fontSize + padding,
+                color: rgb(1, 1, 1),
+                opacity: 0.9,
+              })
+
+              // 텍스트
+              currentPage.drawText(formText, {
+                x: x,
+                y: y,
+                size: fontSize,
+                font: koreanFont,
+                color: rgb(0.4, 0.2, 0.8),
+              })
+
+              console.log(`✅ PDF 송폼 표시 성공! (곡 ${i + 1}: ${song.song_name})`)
             }
           }
 
           console.log(`✅ PDF 악보 처리 완료: ${song.song_name}`)
         } 
-        // 이미지 파일 처리 (PNG, JPG)
+        // 이미지 파일 처리
         else {
           console.log('🖼️ 이미지 파일 처리 중...')
           
@@ -220,23 +288,46 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           })
 
           // 송폼 오버레이
-          const selectedForms = songForms[song.id] || song.selectedForm || []
           if (selectedForms.length > 0 && koreanFont) {
             const formText = selectedForms.join(' - ')
-            const fontSize = 14
+            
+            // 🆕 크기에 따른 설정 가져오기
+            const { fontSize, padding } = getSizeConfig(formSize)
             const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
-            const textX = width - textWidth - 30
-            const textY = height - 30
 
+            console.log(`   📏 이미지: 폰트 크기: ${fontSize}, 패딩: ${padding}`)
+
+            // 위치 계산
+            let textX, textY
+            if (songPosition) {
+              const position = calculatePositionFromPercent(
+                songPosition.x,
+                songPosition.y,
+                width,
+                height,
+                textWidth,
+                fontSize
+              )
+              textX = position.x
+              textY = position.y
+              console.log(`   📍 이미지: 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
+            } else {
+              textX = width - textWidth - 30
+              textY = height - 30
+              console.log(`   📍 이미지: 기본 위치 사용: 우측 상단`)
+            }
+
+            // 배경 박스
             page.drawRectangle({
-              x: textX - 10,
-              y: textY - 5,
-              width: textWidth + 20,
-              height: fontSize + 10,
+              x: textX - padding,
+              y: textY - (padding * 0.5),
+              width: textWidth + (padding * 2),
+              height: fontSize + padding,
               color: rgb(1, 1, 1),
               opacity: 0.9,
             })
 
+            // 텍스트
             page.drawText(formText, {
               x: textX,
               y: textY,

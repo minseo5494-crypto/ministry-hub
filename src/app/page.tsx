@@ -15,8 +15,9 @@ import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
 import { logSongSearch, logPPTDownload } from '@/lib/activityLogger'
-// 🆕 PDF 생성 함수 import 추가
-import { generatePDF as generatePDFFile, PDFSong } from '@/lib/pdfGenerator'
+// 🆕 추가
+import SongFormPositionModal from '@/components/SongFormPositionModal'
+import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
 
 // 절기 & 테마 상수 추가
 const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
@@ -54,6 +55,10 @@ export default function Home() {
   // PDF/PPT 다운로드 로딩 상태
   const [downloadingPDF, setDownloadingPDF] = useState(false)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
+
+  // 🆕 추가
+  const [showPositionModal, setShowPositionModal] = useState(false)
+  const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
 
   // 사용 가능한 송폼 섹션
   const availableSections = [
@@ -775,14 +780,32 @@ export default function Home() {
     setCurrentFormSong(null)
   }
 
-  // PDF 생성 함수 - pdfGenerator 사용
-const generatePDF = async () => {
+  // 🆕 PDF 다운로드 버튼 클릭 시 (모달 열기 or 바로 생성)
+const handleDownloadPDF = () => {
   if (selectedSongs.length === 0) {
     alert('찬양을 선택해주세요.')
     return
   }
 
+  // 송폼이 있는 곡이 하나라도 있으면 위치 설정 모달 열기
+  const songsWithForms = selectedSongs.filter(song => {
+    const forms = songForms[song.id] || []
+    return forms.length > 0
+  })
+
+  if (songsWithForms.length > 0) {
+    // 송폼이 있으면 모달 열기
+    setShowPositionModal(true)
+  } else {
+    // 송폼이 없으면 바로 PDF 생성
+    generatePDF({})
+  }
+}
+
+// 🆕 위치 확정 후 PDF 생성 (모달에서 "확정" 버튼 클릭 시 호출됨)
+const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
   setDownloadingPDF(true)
+  setShowPositionModal(false)  // 모달 닫기
 
   try {
     // PDFSong 형식으로 변환
@@ -802,7 +825,8 @@ const generatePDF = async () => {
       title: '찬양 콘티',
       date: new Date().toLocaleDateString('ko-KR'),
       songs: pdfSongs,
-      songForms: songForms
+      songForms: songForms,
+      songFormPositions: positions  // 🆕 위치 정보 추가
     })
 
     alert('✅ PDF가 생성되었습니다!')
@@ -1208,7 +1232,7 @@ const generatePDF = async () => {
                   콘티 저장
                 </button>
                 <button
-                  onClick={generatePDF}
+                  onClick={handleDownloadPDF}  // 🆕 함수명 변경
                   disabled={downloadingPDF}
                   className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
@@ -2638,6 +2662,18 @@ const generatePDF = async () => {
         </div>
       )}
       {/* ✅ 여기까지 새로 추가 ✅ */}
+      {/* ✅ 여기까지 새로 추가 ✅ */}
+
+      {/* 🆕 송폼 위치 설정 모달 */}
+      {showPositionModal && (
+        <SongFormPositionModal
+          songs={selectedSongs}
+          songForms={songForms}
+          onConfirm={generatePDF}
+          onCancel={() => setShowPositionModal(false)}
+        />
+      )}
+      
     </div>
   )
 }
