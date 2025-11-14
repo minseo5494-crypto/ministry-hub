@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase, Song } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
@@ -8,10 +8,10 @@ import { logDownload } from '@/lib/downloadLogger'
 import { generatePDF, PDFSong } from '@/lib/pdfGenerator'
 import SongFormPositionModal from '@/components/SongFormPositionModal' // 🆕 추가
 import pptxgen from 'pptxgenjs'
-import { 
-  ArrowLeft, Edit, Trash2, Plus, Music, X, 
+import {
+  ArrowLeft, Edit, Trash2, Plus, Music, X,
   Save, Eye, EyeOff, ChevronUp, ChevronDown,
-  Download, FileDown, Youtube
+  Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation
 } from 'lucide-react'
 
 interface SetlistSong {
@@ -88,6 +88,17 @@ export default function TeamSetlistDetailPage() {
   // 🆕 송폼 위치 선택 모달 상태
   const [showPositionModal, setShowPositionModal] = useState(false)
   const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
+
+  // 🎵 악보보기 모드 전용 상태 추가
+  const [showSheetViewer, setShowSheetViewer] = useState(false)
+  const [currentSheetSong, setCurrentSheetSong] = useState<Song | null>(null)
+  const [currentPDFPage, setCurrentPDFPage] = useState(1)
+  const [totalPDFPages, setTotalPDFPages] = useState(0)
+  const [pdfDoc, setPdfDoc] = useState<any>(null)
+  const [isLoadingPDF, setIsLoadingPDF] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // 🎵 유튜브 모달 상태 추가
+  const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -299,25 +310,47 @@ export default function TeamSetlistDetailPage() {
   }
 
   const openAddSongModal = async () => {
-    if (!canEdit()) {
-      alert('추가 권한이 없습니다.')
-      return
-    }
+  if (!canEdit()) {
+    alert('추가 권한이 없습니다.')
+    return
+  }
 
-    try {
+  try {
+    // 🔥 전체 데이터를 페이지네이션으로 가져오기
+    let allData: any[] = []
+    let from = 0
+    const pageSize = 1000
+
+    console.log('📊 곡 목록 로딩 시작...')
+
+    while (true) {
       const { data, error } = await supabase
         .from('songs')
         .select('*')
         .order('song_name', { ascending: true })
+        .range(from, from + pageSize - 1)
 
       if (error) throw error
-      setAvailableSongs(data || [])
-      setShowAddSongModal(true)
-    } catch (error) {
-      console.error('Error fetching songs:', error)
-      alert('곡 목록을 불러오는데 실패했습니다.')
+      if (!data || data.length === 0) break
+
+      allData = [...allData, ...data]
+      console.log(`📦 ${allData.length}개 로딩 중...`)
+
+      // 마지막 페이지면 종료
+      if (data.length < pageSize) break
+      
+      from += pageSize
     }
+
+    console.log('✅ 전체 곡 목록:', allData.length)
+    
+    setAvailableSongs(allData)
+    setShowAddSongModal(true)
+  } catch (error) {
+    console.error('Error fetching songs:', error)
+    alert('곡 목록을 불러오는데 실패했습니다.')
   }
+}
 
   const addSongToSetlist = async (song: Song) => {
     try {
@@ -610,6 +643,17 @@ export default function TeamSetlistDetailPage() {
     }
   }
 
+  // 🎵 플레이리스트 공유
+const handleSharePlaylist = () => {
+  const playlistUrl = `${window.location.origin}/playlist/${setlistId}`
+  
+  // 새 탭에서 플레이리스트 열기
+  window.open(playlistUrl, '_blank')
+  
+  // 링크도 자동 복사 (공유용)
+  navigator.clipboard.writeText(playlistUrl)
+}
+
   // 🆕 PDF 다운로드 - 2단계: 실제 PDF 생성
   const generatePDFFile = async (positions: { [key: string]: SongFormPosition }) => {
     if (!setlist) return
@@ -667,6 +711,127 @@ export default function TeamSetlistDetailPage() {
       setDownloadingPDF(false)
     }
   }
+
+  // 🎵 악보보기 모드 열기
+  const openSheetViewerForSong = (setlistSong: SetlistSong) => {
+    console.log('🎵 악보보기 모드 열기:', setlistSong.songs.song_name);
+    setCurrentSheetSong(setlistSong.songs);
+    setCurrentPDFPage(1);
+    setPdfDoc(null);
+    setShowSheetViewer(true);
+  }
+
+  // 🎵 악보보기 모드 닫기
+  const closeSheetViewer = () => {
+    setShowSheetViewer(false);
+    setCurrentSheetSong(null);
+    setPdfDoc(null);
+    setCurrentPDFPage(1);
+    setTotalPDFPages(0);
+  }
+
+  // 🎵 다음/이전 곡으로 이동 (콘티 내의 곡들만)
+  const goToAdjacentSong = (direction: 'prev' | 'next') => {
+    if (!currentSheetSong) return;
+
+    const currentIndex = songs.findIndex(s => s.songs.id === currentSheetSong.id);
+    let targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+
+    // 악보가 있는 곡 찾기
+    while (targetIndex >= 0 && targetIndex < songs.length) {
+      if (songs[targetIndex].songs.file_url) {
+        setCurrentSheetSong(songs[targetIndex].songs);
+        setCurrentPDFPage(1);
+        setPdfDoc(null);
+        console.log(`🎵 ${direction === 'prev' ? '이전' : '다음'} 곡으로 이동:`,
+          songs[targetIndex].songs.song_name);
+        break;
+      }
+      targetIndex = direction === 'prev' ? targetIndex - 1 : targetIndex + 1;
+    }
+  }
+
+  // 🎵 악보보기 모드 키보드 단축키
+  useEffect(() => {
+    if (!showSheetViewer) return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeSheetViewer();
+      } else if (e.key === 'ArrowLeft') {
+        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage > 1) {
+          setCurrentPDFPage(p => p - 1);
+        } else {
+          goToAdjacentSong('prev');
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage < totalPDFPages) {
+          setCurrentPDFPage(p => p + 1);
+        } else {
+          goToAdjacentSong('next');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages]);
+
+  // 🎵 PDF 렌더링 useEffect
+  useEffect(() => {
+    if (!showSheetViewer || !currentSheetSong?.file_url || currentSheetSong.file_type !== 'pdf') return;
+
+    const loadPDF = async () => {
+      setIsLoadingPDF(true);
+      try {
+        // @ts-ignore
+        const pdfjsLib = window.pdfjsLib;
+        if (!pdfjsLib) {
+          console.error('PDF.js not loaded');
+          return;
+        }
+
+        const loadingTask = pdfjsLib.getDocument(currentSheetSong.file_url);
+        const pdf = await loadingTask.promise;
+        setPdfDoc(pdf);
+        setTotalPDFPages(pdf.numPages);
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+      } finally {
+        setIsLoadingPDF(false);
+      }
+    };
+
+    loadPDF();
+  }, [showSheetViewer, currentSheetSong]);
+
+  // 🎵 PDF 페이지 렌더링
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current) return;
+
+    const renderPage = async () => {
+      try {
+        const page = await pdfDoc.getPage(currentPDFPage);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const context = canvas.getContext('2d');
+        const viewport = page.getViewport({ scale: 2.0 });
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+      } catch (error) {
+        console.error('Error rendering page:', error);
+      }
+    };
+
+    renderPage();
+  }, [pdfDoc, currentPDFPage]);
 
   if (loading) {
     return (
@@ -736,6 +901,26 @@ export default function TeamSetlistDetailPage() {
                     <Download className="mr-2" size={18} />
                     {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
                   </button>
+                  <button
+                onClick={handleDownloadPPT}
+                disabled={downloadingPPT || songs.length === 0}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
+                title="PPT 다운로드"
+              >
+                <Download className="mr-2" size={18} />
+                {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
+              </button>
+              
+              {/* 🎵 플레이리스트 공유 버튼 추가 */}
+              <button
+                onClick={handleSharePlaylist}
+                disabled={songs.length === 0}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+                title="유튜브 플레이리스트 공유"
+              >
+                <Youtube className="mr-2" size={18} />
+                플레이리스트
+              </button>
                   <button
                     onClick={handleDownloadPDF}
                     disabled={downloadingPDF || songs.length === 0}
@@ -857,27 +1042,6 @@ export default function TeamSetlistDetailPage() {
                           </p>
                         )}
 
-                        {/* 유튜브 영상 (토글 시 표시) */}
-                        {youtubeStates[song.id] && song.songs.youtube_url && (
-                          <div className="mt-4 mb-2">
-                            <h4 className="font-semibold text-gray-700 mb-2">유튜브 영상</h4>
-                            {getYoutubeEmbedUrl(song.songs.youtube_url) ? (
-                              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                                <iframe
-                                  src={getYoutubeEmbedUrl(song.songs.youtube_url) || ''}
-                                  className="absolute top-0 left-0 w-full h-full rounded-lg"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                />
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">
-                                유효하지 않은 유튜브 링크입니다.
-                              </p>
-                            )}
-                          </div>
-                        )}
-
                         {/* 상세 정보 (토글 시 표시) */}
                         {previewStates[song.id] && (
                           <div className="mt-4 border-t pt-4">
@@ -926,20 +1090,43 @@ export default function TeamSetlistDetailPage() {
                           {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
                       )}
-                      {/* 유튜브 영상 토글 버튼 */}
-                      {song.songs.youtube_url && (
+                      {/* 🎵 악보보기 전체화면 버튼 추가 */}
+                      {song.songs.file_url && (
                         <button
-                          onClick={() => toggleYoutube(song.id)}
-                          className={`p-2 rounded-lg ${
-                            youtubeStates[song.id]
-                              ? 'text-red-600 bg-red-100'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          title={youtubeStates[song.id] ? '유튜브 닫기' : '유튜브 열기'}
+                          onClick={() => openSheetViewerForSong(song)}
+                          className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+                          title="악보 전체화면"
                         >
-                          <Youtube size={18} />
+                          <Presentation size={18} />
                         </button>
                       )}
+                      {/* 유튜브 영상 버튼 - 항상 표시 */}
+                      <button
+                        onClick={() => {
+                          if (song.songs.youtube_url) {
+                            setYoutubeModalSong(song.songs)
+                          }
+                        }}
+                        disabled={!song.songs.youtube_url}
+                        className="p-2 rounded-lg"
+                        style={{
+                          color: !song.songs.youtube_url
+                            ? '#d1d5db'
+                            : '#dc2626',
+                          backgroundColor: !song.songs.youtube_url
+                            ? 'transparent'
+                            : 'transparent',
+                          cursor: song.songs.youtube_url ? 'pointer' : 'not-allowed',
+                          opacity: song.songs.youtube_url ? 1 : 0.5
+                        }}
+                        title={
+                          !song.songs.youtube_url
+                            ? '유튜브 링크 없음'
+                            : '유튜브 열기'
+                        }
+                      >
+                        <Youtube size={18} />
+                      </button>
                       {canEdit() && (
                         <>
                           <button
@@ -1157,6 +1344,190 @@ export default function TeamSetlistDetailPage() {
           onConfirm={generatePDFFile}
           onCancel={() => setShowPositionModal(false)}
         />
+      )}
+      
+      {/* 🎵 유튜브 모달 */}
+      {youtubeModalSong && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{youtubeModalSong.song_name}</h2>
+                <p className="text-sm text-gray-600">
+                  {youtubeModalSong.team_name} | Key: {youtubeModalSong.key || '-'}
+                </p>
+              </div>
+              <button
+                onClick={() => setYoutubeModalSong(null)}
+                className="text-gray-500 hover:text-gray-700 p-2"
+                title="닫기"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 bg-gray-100">
+              {getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') ? (
+                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                  <iframe
+                    src={getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') || ''}
+                    className="absolute top-0 left-0 w-full h-full rounded-lg"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Youtube size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>유효하지 않은 유튜브 링크입니다.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 🎵 악보보기 모드 (전체화면) */}
+      {showSheetViewer && currentSheetSong && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* 상단 바 */}
+          <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-lg font-bold">
+                {currentSheetSong.song_name}
+              </span>
+              {currentSheetSong.team_name && (
+                <span className="text-sm text-gray-400">
+                  {currentSheetSong.team_name}
+                </span>
+              )}
+              {currentSheetSong.key && (
+                <span className="text-sm text-gray-400">
+                  Key: {currentSheetSong.key}
+                </span>
+              )}
+            </div>
+
+            {/* 닫기 버튼 */}
+            <button
+              onClick={closeSheetViewer}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+              title="닫기 (ESC)"
+            >
+              <X size={20} />
+              <span className="font-medium">닫기</span>
+            </button>
+          </div>
+
+          {/* 악보 표시 영역 */}
+          <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-900">
+            {!currentSheetSong.file_url ? (
+              <div className="text-white text-center">
+                <Music size={80} className="mx-auto mb-4 opacity-30" />
+                <p className="text-2xl">악보가 없습니다</p>
+              </div>
+            ) : currentSheetSong.file_type === 'pdf' ? (
+              <>
+                {isLoadingPDF ? (
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
+                    <p className="text-white">PDF 로딩 중...</p>
+                  </div>
+                ) : (
+                  <canvas
+                    ref={canvasRef}
+                    className="shadow-2xl bg-white"
+                    style={{
+                      maxHeight: '85vh',
+                      width: 'auto'
+                    }}
+                  />
+                )}
+
+                {/* PDF 페이지 네비게이션 버튼 */}
+                {!isLoadingPDF && totalPDFPages > 1 && (
+                  <>
+                    {currentPDFPage > 1 && (
+                      <button
+                        onClick={() => setCurrentPDFPage(p => p - 1)}
+                        className="absolute left-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                      >
+                        <ChevronLeft size={32} />
+                      </button>
+                    )}
+
+                    {currentPDFPage < totalPDFPages && (
+                      <button
+                        onClick={() => setCurrentPDFPage(p => p + 1)}
+                        className="absolute right-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                      >
+                        <ChevronRight size={32} />
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* 페이지 번호 표시 */}
+                {!isLoadingPDF && totalPDFPages > 0 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-full">
+                    페이지 {currentPDFPage} / {totalPDFPages}
+                  </div>
+                )}
+              </>
+            ) : (
+              <img
+                src={currentSheetSong.file_url}
+                alt={currentSheetSong.song_name}
+                className="shadow-2xl"
+                style={{
+                  maxHeight: '85vh',
+                  width: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            )}
+          </div>
+
+          {/* 하단 정보 바 */}
+          <div className="bg-gray-900 text-white p-4 flex justify-between items-center border-t border-gray-700">
+            <div className="flex gap-4 text-sm">
+              {currentSheetSong.bpm && (
+                <span className="px-3 py-1 bg-gray-800 rounded">
+                  BPM: {currentSheetSong.bpm}
+                </span>
+              )}
+              {currentSheetSong.time_signature && (
+                <span className="px-3 py-1 bg-gray-800 rounded">
+                  박자: {currentSheetSong.time_signature}
+                </span>
+              )}
+            </div>
+
+            {/* 곡 네비게이션 */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => goToAdjacentSong('prev')}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+              >
+                <ChevronLeft size={20} />
+                이전 곡
+              </button>
+
+              {/* 현재 위치 */}
+              <span className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">
+                {songs.findIndex(s => s.songs.id === currentSheetSong?.id) + 1} / {songs.filter(s => s.songs.file_url).length}
+              </span>
+
+              <button
+                onClick={() => goToAdjacentSong('next')}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+              >
+                다음 곡
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -8,7 +8,7 @@ import { parseLyrics } from '@/lib/lyricParser'
 import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
-  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube
+  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2
 } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
@@ -441,78 +441,121 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages]);
 
-  const fetchSongs = async () => {
-    setLoading(true)
-    try {
+const fetchSongs = async () => {
+  setLoading(true)
+  try {
+    // 🔥 전체 데이터를 페이지네이션으로 가져오기
+    let allData: any[] = []
+    let from = 0
+    const pageSize = 1000
+
+    console.log('📊 데이터 로딩 시작...')
+
+    while (true) {
       const { data, error } = await supabase
         .from('songs')
         .select('*')
         .order('song_name', { ascending: true })
-    
+        .range(from, from + pageSize - 1)
+
       if (error) throw error
-    
-      console.log('🔍 전체 곡 데이터:', data?.length)
-    
-      // 🆕 공유 범위에 따른 필터링
-      const filteredData = (data || []).filter(song => {
-        // 기본 유효성 검사
-        if (!song.song_name || song.song_name.trim() === '' || song.song_name.length <= 1) {
-          return false
-        }
+      if (!data || data.length === 0) break
 
-        // 1. public 곡은 모두에게 표시
-        if (song.visibility === 'public' || !song.visibility) {
-          return true
-        }
+      allData = [...allData, ...data]
+      console.log(`📦 ${allData.length}개 로딩 중...`)
 
-        // 로그인 안 한 사용자는 public만 볼 수 있음
-        if (!user) {
-          return false
-        }
-
-        // 2. private 곡은 본인만
-        if (song.visibility === 'private') {
-          return song.uploaded_by === user.id
-        }
-
-        // 3. teams 곡은 해당 팀 소속 멤버만
-        if (song.visibility === 'teams') {
-          if (song.uploaded_by === user.id) {
-            return true // 본인이 올린 곡
-          }
-        
-          // 내가 속한 팀과 곡이 공유된 팀이 겹치는지 확인
-          const myTeamIds = userTeams.map(t => t.id)
-          const sharedTeamIds = song.shared_with_teams || []
-        
-          return myTeamIds.some(teamId => sharedTeamIds.includes(teamId))
-        }
-
-        return false
-      })
-    
-      console.log(`✅ 총 ${data?.length || 0}개 중 ${filteredData.length}개의 곡 표시`)
-      console.log(`   - 사용자: ${user?.email || '비로그인'}`)
-      console.log(`   - 소속 팀: ${userTeams.length}개`)
-    
-      setSongs(filteredData)
-      // 🆕 미리보기 상태 초기화
-      const initialPreviewStates: { [key: string]: boolean } = {}
-      const initialYoutubeStates: { [key: string]: boolean } = {}
-      filteredData.forEach(song => {
-        initialPreviewStates[song.id] = false
-        initialYoutubeStates[song.id] = false
-      })
-      setPreviewStates(initialPreviewStates)
-      setYoutubeStates(initialYoutubeStates)
-      setFilteredSongs(filteredData)
-    } catch (error) {
-      console.error('Error fetching songs:', error)
-      alert('데이터를 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+      // 마지막 페이지면 종료
+      if (data.length < pageSize) break
+      
+      from += pageSize
     }
+
+    console.log('✅ 전체 곡 데이터:', allData.length)
+
+    // 🔍 특정 곡 존재 여부 확인
+    const has3149 = allData.some(s => s.id === '3149')
+    const has3150 = allData.some(s => s.id === '3150')
+    const has3151 = allData.some(s => s.id === '3151')
+    console.log('🎵 3149 존재?', has3149)
+    console.log('🎵 3150 존재?', has3150)
+    console.log('🎵 3151 존재?', has3151)
+
+    // 🆕 공유 범위에 따른 필터링
+    const filteredData = allData.filter(song => {
+      // 🔍 디버깅: 특정 곡 체크
+      if (song.id === '3149' || song.id === '3150' || song.id === '3151') {
+        console.log(`🔍 곡 ${song.id} - "${song.song_name}" 필터링 체크:`, {
+          song_name: song.song_name,
+          name_length: song.song_name?.length,
+          visibility: song.visibility,
+          will_pass: song.song_name && song.song_name.trim() !== '' && song.song_name.length > 1
+        })
+      }
+        
+      // 기본 유효성 검사
+      if (!song.song_name || song.song_name.trim() === '' || song.song_name.length <= 1) {
+        return false
+      }
+
+      // 1. public 곡은 모두에게 표시
+      if (song.visibility === 'public' || !song.visibility) {
+        return true
+      }
+
+      // 로그인 안 한 사용자는 public만 볼 수 있음
+      if (!user) {
+        return false
+      }
+
+      // 2. private 곡은 본인만
+      if (song.visibility === 'private') {
+        return song.uploaded_by === user.id
+      }
+
+      // 3. teams 곡은 해당 팀 소속 멤버만
+      if (song.visibility === 'teams') {
+        if (song.uploaded_by === user.id) {
+          return true // 본인이 올린 곡
+        }
+      
+        // 내가 속한 팀과 곡이 공유된 팀이 겹치는지 확인
+        const myTeamIds = userTeams.map(t => t.id)
+        const sharedTeamIds = song.shared_with_teams || []
+      
+        return myTeamIds.some(teamId => sharedTeamIds.includes(teamId))
+      }
+
+      return false
+    })
+  
+    console.log(`✅ 총 ${allData.length}개 중 ${filteredData.length}개의 곡 표시`)
+    console.log(`   - 사용자: ${user?.email || '비로그인'}`)
+    console.log(`   - 소속 팀: ${userTeams.length}개`)
+    
+    // 🔍 필터링 후 특정 곡 존재 여부
+    console.log('🎵 필터링 후 3149 포함?', filteredData.some(s => s.id === '3149'))
+    console.log('🎵 필터링 후 3150 포함?', filteredData.some(s => s.id === '3150'))
+    console.log('🎵 필터링 후 3151 포함?', filteredData.some(s => s.id === '3151'))
+  
+    setSongs(filteredData)
+    
+    // 🆕 미리보기 상태 초기화
+    const initialPreviewStates: { [key: string]: boolean } = {}
+    const initialYoutubeStates: { [key: string]: boolean } = {}
+    filteredData.forEach(song => {
+      initialPreviewStates[song.id] = false
+      initialYoutubeStates[song.id] = false
+    })
+    setPreviewStates(initialPreviewStates)
+    setYoutubeStates(initialYoutubeStates)
+    setFilteredSongs(filteredData)
+  } catch (error) {
+    console.error('Error fetching songs:', error)
+    alert('데이터를 불러오는데 실패했습니다.')
+  } finally {
+    setLoading(false)
   }
+}
 
   const fetchFolders = async () => {
     try {
@@ -602,118 +645,146 @@ export default function Home() {
   }
 
   const addNewSong = async () => {
-    if (!newSong.song_name.trim()) {
-      alert('곡 제목을 입력하세요.')
-      return
+  if (!newSong.song_name.trim()) {
+    alert('곡 제목을 입력하세요.')
+    return
+  }
+
+  // 팀 공유 시 팀 선택 확인
+  if (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0) {
+    alert('공유할 팀을 최소 1개 선택해주세요')
+    return
+  }
+
+  setUploading(true)
+
+  try {
+    let fileUrl = ''
+    let fileType = ''
+
+    // 파일 업로드 (기존 로직 유지)
+    if (uploadingFile) {
+      const fileExt = uploadingFile.name.split('.').pop()?.toLowerCase() || 'pdf'
+      const timestamp = Date.now()
+      const randomStr = Math.random().toString(36).substring(2, 8)
+      const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
+      const filePath = `${user.id}/${safeFileName}`
+
+      console.log('📤 파일 업로드 시작:', filePath)
+
+      const { error: uploadError } = await supabase.storage
+        .from('song-sheets')
+        .upload(filePath, uploadingFile, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: uploadingFile.type
+        })
+
+      if (uploadError) {
+        console.error('❌ 업로드 오류:', uploadError)
+        throw new Error(`파일 업로드 실패: ${uploadError.message}`)
+      }
+
+      console.log('✅ 파일 업로드 성공')
+
+      const { data: urlData } = supabase.storage
+        .from('song-sheets')
+        .getPublicUrl(filePath)
+
+      fileUrl = urlData.publicUrl
+      fileType = fileExt
+
+      console.log('🔗 Public URL:', fileUrl)
     }
 
-    setUploading(true)
+    console.log('💾 DB에 곡 정보 저장 중...')
 
-    try {
-      let fileUrl = ''
-      let fileType = ''
+    // ✨ 핵심 변경: visibility에 따라 다른 테이블에 저장
+    if (newSong.visibility === 'public') {
+      // 전체 공개 → 승인 요청 테이블에 저장
+      const { error: requestError } = await supabase
+        .from('song_approval_requests')
+        .insert({
+          song_name: newSong.song_name.trim(),
+          team_name: newSong.team_name.trim() || null,
+          key: newSong.key || null,
+          time_signature: newSong.time_signature || null,
+          tempo: newSong.tempo || null,
+          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+          themes: newSong.themes.length > 0 ? newSong.themes : null,
+          season: newSong.season || null,
+          youtube_url: newSong.youtube_url.trim() || null,
+          lyrics: newSong.lyrics.trim() || null,
+          file_url: fileUrl || null,
+          file_type: fileType || null,
+          requester_id: user.id,
+          visibility: 'public',
+          status: 'pending'
+        })
 
-      if (uploadingFile) {
-        const fileExt = uploadingFile.name.split('.').pop()?.toLowerCase() || 'pdf'
-        const timestamp = Date.now()
-        const randomStr = Math.random().toString(36).substring(2, 8)
-        const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
-        const filePath = `${USER_ID}/${safeFileName}`
+      if (requestError) throw requestError
 
-        console.log('📤 파일 업로드 시작:', filePath)
+      alert('✅ 곡이 제출되었습니다!\n관리자 승인 후 전체 공개됩니다.')
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('song-sheets')
-          .upload(filePath, uploadingFile, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: uploadingFile.type
-          })
-
-        if (uploadError) {
-          console.error('❌ 업로드 오류:', uploadError)
-          throw new Error(`파일 업로드 실패: ${uploadError.message}`)
-        }
-
-        console.log('✅ 파일 업로드 성공:', uploadData)
-
-        const { data: urlData } = supabase.storage
-          .from('song-sheets')
-          .getPublicUrl(filePath)
-
-        fileUrl = urlData.publicUrl
-        fileType = fileExt
-
-        console.log('🔗 Public URL:', fileUrl)
-      }
-
-      console.log('💾 DB에 곡 정보 저장 중...')
-      
-      const songData = {
-        song_name: newSong.song_name.trim(),
-        team_name: newSong.team_name.trim() || null,
-        key: newSong.key || null,
-        time_signature: newSong.time_signature || null,
-        tempo: newSong.tempo || null,
-        bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
-        themes: newSong.themes.length > 0 ? newSong.themes : null, // 🆕 배열로
-        season: newSong.season || null, // 🆕 추가
-        youtube_url: newSong.youtube_url.trim() || null, // 🆕 추가
-        lyrics: newSong.lyrics.trim() || null,
-        file_url: fileUrl || null,
-        file_type: fileType || null,
-        uploaded_by: USER_ID, // 🆕 추가
-        uploader_name: user?.name || user?.email || null, // 🆕 추가
-        visibility: newSong.visibility, // 🆕 추가
-        shared_with_teams: newSong.visibility === 'teams' ? newSong.shared_with_teams : null, // 🆕 추가
-        is_user_uploaded: true, // 🆕 추가
-        created_at: new Date().toISOString()
-      }
-
-      console.log('📝 저장할 데이터:', songData)
-
-      const { data: insertedSong, error: songError } = await supabase
+    } else {
+      // 팀 공개 또는 비공개 → 바로 songs 테이블에 저장
+      const { error: insertError } = await supabase
         .from('songs')
-        .insert(songData)
-        .select()
-        .single()
+        .insert({
+          song_name: newSong.song_name.trim(),
+          team_name: newSong.team_name.trim() || null,
+          key: newSong.key || null,
+          time_signature: newSong.time_signature || null,
+          tempo: newSong.tempo || null,
+          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+          themes: newSong.themes.length > 0 ? newSong.themes : null,
+          season: newSong.season || null,
+          youtube_url: newSong.youtube_url.trim() || null,
+          lyrics: newSong.lyrics.trim() || null,
+          file_url: fileUrl || null,
+          file_type: fileType || null,
+          uploaded_by: user.id,
+          visibility: newSong.visibility,
+          shared_with_teams: newSong.visibility === 'teams' 
+            ? newSong.shared_with_teams 
+            : null,
+          is_user_uploaded: true
+        })
 
-      if (songError) {
-        console.error('❌ DB 저장 오류:', songError)
-        throw songError
-      }
-
-      console.log('✅ 곡 추가 완료:', insertedSong)
+      if (insertError) throw insertError
 
       alert('✅ 곡이 추가되었습니다!')
-      
-      // 🆕 초기화 로직 수정
-      setShowAddSongModal(false)
-      setNewSong({
-        song_name: '',
-        team_name: '',
-        key: '',
-        time_signature: '',
-        tempo: '',
-        bpm: '',
-        themes: [],
-        season: '',
-        youtube_url: '',
-        lyrics: '',
-        visibility: 'public',
-        shared_with_teams: []
-      })
-      setUploadingFile(null)
-      
-      fetchSongs()
-
-    } catch (error: any) {
-      console.error('❌ 곡 추가 오류:', error)
-      alert(`❌ 곡 추가에 실패했습니다.\n\n오류: ${error.message}\n\n브라우저 콘솔(F12)을 확인하세요.`)
-    } finally {
-      setUploading(false)
     }
+
+    console.log('✅ 곡 저장 완료')
+
+    // 초기화
+    setShowAddSongModal(false)
+    setNewSong({
+      song_name: '',
+      team_name: '',
+      key: '',
+      time_signature: '',
+      tempo: '',
+      bpm: '',
+      themes: [],
+      season: '',
+      youtube_url: '',
+      lyrics: '',
+      visibility: 'public',
+      shared_with_teams: []
+    })
+    setUploadingFile(null)
+
+    fetchSongs()
+
+  } catch (error: any) {
+    console.error('❌ 곡 추가 오류:', error)
+    alert(`❌ 곡 추가에 실패했습니다.\n\n오류: ${error.message}`)
+  } finally {
+    setUploading(false)
   }
+}
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1234,32 +1305,56 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                         </button>
 
                         {/* ✨ 여기부터 새로 추가하는 부분 ✨ */}
-                        {user?.is_admin && (
-                          <>
-                            <div className="border-t my-1"></div>
-                            <button
-                              onClick={() => {
-                                router.push('/admin/approvals')
-                                setShowMenu(false)
-                              }}
-                              className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                            >
-                              <Activity className="mr-2" size={18} />
-                              팀 승인 관리
-                            </button>
-                            <button
-                              onClick={() => {
-                                router.push('/admin/dashboard')
-                                setShowMenu(false)
-                              }}
-                              className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                            >
-                              <BarChart3 className="mr-2" size={18} />
-                              통계 대시보드
-                            </button>
-                          </>
-                        )}
-                        {/* ✨ 여기까지 새로 추가하는 부분 ✨ */}
+{user?.is_admin && (
+  <>
+    <div className="border-t my-1"></div>
+    {/* 🆕 곡 승인 관리 버튼 */}
+    <button
+      onClick={() => {
+        router.push('/admin/song-approvals')
+        setShowMenu(false)
+      }}
+      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+    >
+      <Music className="mr-2" size={18} />
+      곡 승인 관리
+    </button>
+    {/* 🆕 사용자 곡 관리 버튼 (새로 추가!) */}
+    <button
+      onClick={() => {
+        router.push('/admin/user-songs')
+        setShowMenu(false)
+      }}
+      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+    >
+      <Trash2 className="mr-2" size={18} />
+      사용자 곡 관리
+    </button>
+    {/* 팀 승인 관리 버튼 */}
+    <button
+      onClick={() => {
+        router.push('/admin/approvals')
+        setShowMenu(false)
+      }}
+      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+    >
+      <Activity className="mr-2" size={18} />
+      팀 승인 관리
+    </button>
+    {/* 통계 대시보드 버튼 */}
+    <button
+      onClick={() => {
+        router.push('/admin/dashboard')
+        setShowMenu(false)
+      }}
+      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+    >
+      <BarChart3 className="mr-2" size={18} />
+      통계 대시보드
+    </button>
+  </>
+)}
+{/* ✨ 여기까지 새로 추가하는 부분 ✨ */}
                       </div>
                     )}
                   </div>
@@ -2113,11 +2208,15 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                       name="visibility"
                       value="public"
                       checked={newSong.visibility === 'public'}
-                      onChange={(e) => setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })}
+                      onChange={(e) => {
+                        setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })
+                        // ✨ 경고문 추가
+                        alert('⚠️ 전체 공개로 선택하시면 관리자 승인 후 공개됩니다.\n\n바로 사용하시려면 "팀 공유" 또는 "나만 보기"를 선택해주세요.')
+                      }}
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">전체 공개</div>
+                      <div className="font-medium text-gray-900">전체 공개</div>
                       <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>
@@ -2132,7 +2231,7 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">팀 공개</div>
+                      <div className="font-medium text-gray-900">팀 공개</div>
                       <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>
@@ -2147,7 +2246,7 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">비공개</div>
+                      <div className="font-medium text-gray-900">비공개</div>
                       <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>

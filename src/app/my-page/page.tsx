@@ -218,64 +218,108 @@ export default function MyPagePage() {
     }
   }
 
-  // 곡 추가 핸들러 (메인페이지와 동일)
-  const handleAddSong = async () => {
-    if (!newSong.song_name.trim()) {
-      alert('곡명을 입력해주세요')
-      return
-    }
+  const addNewSong = async () => {
+  if (!newSong.song_name.trim()) {
+    alert('곡 제목을 입력하세요.')
+    return
+  }
 
-    // 팀 공유 시 팀 선택 확인
-    if (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0) {
-      alert('공유할 팀을 최소 1개 선택해주세요')
-      return
-    }
+  // 팀 공유 시 팀 선택 확인
+  if (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0) {
+    alert('공유할 팀을 최소 1개 선택해주세요')
+    return
+  }
 
-    try {
-      setUploading(true)
+  setUploading(true)
 
-      let fileUrl = null
-      let fileType = null
+  try {
+    let fileUrl = ''
+    let fileType = ''
 
-      // 파일 업로드 처리
-      if (uploadingFile) {
-        const fileExt = uploadingFile.name.split('.').pop()
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-        const filePath = `songs/${fileName}`
+    // 파일 업로드 (기존 로직 유지)
+    if (uploadingFile) {
+      const fileExt = uploadingFile.name.split('.').pop()?.toLowerCase() || 'pdf'
+      const timestamp = Date.now()
+      const randomStr = Math.random().toString(36).substring(2, 8)
+      const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
+      const filePath = `${user.id}/${safeFileName}`
 
-        const { error: uploadError, data } = await supabase.storage
-          .from('song-files')
-          .upload(filePath, uploadingFile)
+      console.log('📤 파일 업로드 시작:', filePath)
 
-        if (uploadError) throw uploadError
+      const { error: uploadError } = await supabase.storage
+        .from('song-sheets')
+        .upload(filePath, uploadingFile, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: uploadingFile.type
+        })
 
-        const { data: urlData } = supabase.storage
-          .from('song-files')
-          .getPublicUrl(filePath)
-
-        fileUrl = urlData.publicUrl
-        fileType = uploadingFile.type.includes('pdf') ? 'pdf' : 'image'
+      if (uploadError) {
+        console.error('❌ 업로드 오류:', uploadError)
+        throw new Error(`파일 업로드 실패: ${uploadError.message}`)
       }
 
-      // 곡 저장
-      const { error: insertError } = await supabase
-        .from('songs')
+      console.log('✅ 파일 업로드 성공')
+
+      const { data: urlData } = supabase.storage
+        .from('song-sheets')
+        .getPublicUrl(filePath)
+
+      fileUrl = urlData.publicUrl
+      fileType = fileExt
+
+      console.log('🔗 Public URL:', fileUrl)
+    }
+
+    console.log('💾 DB에 곡 정보 저장 중...')
+
+    // ✨ 핵심 변경: visibility에 따라 다른 테이블에 저장
+    if (newSong.visibility === 'public') {
+      // 전체 공개 → 승인 요청 테이블에 저장
+      const { error: requestError } = await supabase
+        .from('song_approval_requests')
         .insert({
-          song_name: newSong.song_name,
-          team_name: newSong.team_name || null,
+          song_name: newSong.song_name.trim(),
+          team_name: newSong.team_name.trim() || null,
           key: newSong.key || null,
           time_signature: newSong.time_signature || null,
           tempo: newSong.tempo || null,
           bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
           themes: newSong.themes.length > 0 ? newSong.themes : null,
           season: newSong.season || null,
-          youtube_url: newSong.youtube_url || null,
-          lyrics: newSong.lyrics || null,
-          file_url: fileUrl,
-          file_type: fileType,
+          youtube_url: newSong.youtube_url.trim() || null,
+          lyrics: newSong.lyrics.trim() || null,
+          file_url: fileUrl || null,
+          file_type: fileType || null,
+          requester_id: user.id,
+          visibility: 'public',
+          status: 'pending'
+        })
+
+      if (requestError) throw requestError
+
+      alert('✅ 곡이 제출되었습니다!\n관리자 승인 후 전체 공개됩니다.')
+
+    } else {
+      // 팀 공개 또는 비공개 → 바로 songs 테이블에 저장
+      const { error: insertError } = await supabase
+        .from('songs')
+        .insert({
+          song_name: newSong.song_name.trim(),
+          team_name: newSong.team_name.trim() || null,
+          key: newSong.key || null,
+          time_signature: newSong.time_signature || null,
+          tempo: newSong.tempo || null,
+          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+          themes: newSong.themes.length > 0 ? newSong.themes : null,
+          season: newSong.season || null,
+          youtube_url: newSong.youtube_url.trim() || null,
+          lyrics: newSong.lyrics.trim() || null,
+          file_url: fileUrl || null,
+          file_type: fileType || null,
           uploaded_by: user.id,
           visibility: newSong.visibility,
-          shared_with_teams: newSong.visibility === 'teams' && newSong.shared_with_teams.length > 0
+          shared_with_teams: newSong.visibility === 'teams' 
             ? newSong.shared_with_teams 
             : null,
           is_user_uploaded: true
@@ -283,35 +327,38 @@ export default function MyPagePage() {
 
       if (insertError) throw insertError
 
-      alert('곡이 추가되었습니다!')
-      
-      // 초기화
-      setShowAddSongModal(false)
-      setNewSong({
-        song_name: '',
-        team_name: '',
-        key: '',
-        time_signature: '',
-        tempo: '',
-        bpm: '',
-        themes: [],
-        season: '',
-        youtube_url: '',
-        lyrics: '',
-        visibility: 'public',
-        shared_with_teams: []
-      })
-      setUploadingFile(null)
-
-      // 곡 목록 새로고침
-      fetchUploadedSongs()
-    } catch (error: any) {
-      console.error('Error adding song:', error)
-      alert(`곡 추가 실패: ${error.message}`)
-    } finally {
-      setUploading(false)
+      alert('✅ 곡이 추가되었습니다!')
     }
+
+    console.log('✅ 곡 저장 완료')
+
+    // 초기화
+    setShowAddSongModal(false)
+    setNewSong({
+      song_name: '',
+      team_name: '',
+      key: '',
+      time_signature: '',
+      tempo: '',
+      bpm: '',
+      themes: [],
+      season: '',
+      youtube_url: '',
+      lyrics: '',
+      visibility: 'public',
+      shared_with_teams: []
+    })
+    setUploadingFile(null)
+
+    fetchUploadedSongs()  // ✅ 이게 맞음
+
+  } catch (error: any) {
+    console.error('❌ 곡 추가 오류:', error)
+    alert(`❌ 곡 추가에 실패했습니다.\n\n오류: ${error.message}`)
+  } finally {
+    setUploading(false)
   }
+}
 
   // 필터링된 곡 목록
   const filteredSongs = songs
@@ -527,7 +574,7 @@ export default function MyPagePage() {
                 <div key={song.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg">{song.song_name}</h3>
+                      <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                         {song.team_name && <span>{song.team_name}</span>}
                         {song.key && <span>Key: {song.key}</span>}
@@ -665,7 +712,7 @@ export default function MyPagePage() {
                 />
               </div>
 
-              {/* 공유 범위 선택 */}
+              {/* 🆕 공유 범위 선택 */}
               <div className="border-t pt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   공유 범위 <span className="text-red-500">*</span>
@@ -677,12 +724,16 @@ export default function MyPagePage() {
                       name="visibility"
                       value="public"
                       checked={newSong.visibility === 'public'}
-                      onChange={(e) => setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })}
+                      onChange={(e) => {
+                        setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })
+                        // ✨ 경고문 추가
+                        alert('⚠️ 전체 공개로 선택하시면 관리자 승인 후 공개됩니다.\n\n바로 사용하시려면 "팀 공유" 또는 "나만 보기"를 선택해주세요.')
+                      }}
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">전체 공유</div>
-                      <div className="text-sm text-gray-500">모든 사용자가 검색하고 사용할 수 있습니다</div>
+                      <div className="font-medium text-gray-900">전체 공개</div>
+                      <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>
 
@@ -696,8 +747,8 @@ export default function MyPagePage() {
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">팀 공유</div>
-                      <div className="text-sm text-gray-500">선택한 팀의 팀원들만 검색할 수 있습니다</div>
+                      <div className="font-medium text-gray-900">팀 공개</div>
+                      <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>
 
@@ -711,13 +762,13 @@ export default function MyPagePage() {
                       className="mr-3"
                     />
                     <div>
-                      <div className="font-medium">나만 보기</div>
-                      <div className="text-sm text-gray-500">나만 검색하고 사용할 수 있습니다</div>
+                      <div className="font-medium text-gray-900">비공개</div>
+                      <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                   </label>
                 </div>
 
-                {/* 팀 선택 (팀 공유 선택 시) */}
+                {/* 🆕 팀 선택 (팀 공개 선택 시에만 표시) */}
                 {newSong.visibility === 'teams' && (
                   <div className="mt-3">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -750,7 +801,7 @@ export default function MyPagePage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">참여 중인 팀이 없습니다. 먼저 팀을 만들거나 참여하세요.</p>
+                      <p className="text-sm text-gray-500">소속된 팀이 없습니다. 먼저 팀에 참여하거나 생성하세요.</p>
                     )}
                   </div>
                 )}
@@ -956,7 +1007,7 @@ export default function MyPagePage() {
                 취소
               </button>
               <button
-                onClick={handleAddSong}
+                onClick={addNewSong}
                 disabled={uploading || !newSong.song_name.trim() || (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0)}
                 className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >

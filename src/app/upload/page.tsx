@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
-// 🆕 로깅 함수 import
-import { logActivity } from '@/lib/activityLogger'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function UploadPage() {
@@ -23,43 +21,36 @@ export default function UploadPage() {
     setMessage('엑셀 파일을 읽는 중...')
     
     try {
-      // 파일 읽기
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
       
-      // 첫 번째 행은 헤더이므로 제외
       const headers = jsonData[0]
       const rows = jsonData.slice(1)
       
       setMessage(`${rows.length}개의 찬양 데이터를 처리 중...`)
       
-      // 데이터 변환 및 업로드
       const songs = []
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]
-        
-        // 진행률 표시
         setProgress(Math.round((i / rows.length) * 100))
         
-        // 빈 행 건너뛰기
         if (!row[0] || !row[1]) continue
         
         const song = {
           id: String(row[0] || ''),
           song_name: String(row[1] || ''),
           team_name: row[2] ? String(row[2]) : null,
-          theme1: row[3] ? String(row[3]) : null,
-          theme2: row[4] ? String(row[4]) : null,
-          key: row[5] ? String(row[5]) : null,
-          bpm: row[6] ? parseInt(String(row[6])) : null,
-          time_signature: row[7] ? String(row[7]) : null,
-          tempo: row[8] ? String(row[8]) : null,
-          style: row[9] ? String(row[9]) : null,
-          highest_note: row[10] ? String(row[10]) : null,
-          lowest_note: row[11] ? String(row[11]) : null,
-          lyrics: row[12] ? String(row[12]) : null
+          key: row[3] ? String(row[3]) : null,
+          bpm: row[4] ? parseInt(String(row[4])) : null,
+          time_signature: row[5] ? String(row[5]) : null,
+          tempo: row[6] ? String(row[6]) : null,
+          lyrics: row[7] ? String(row[7]) : null,
+          season: row[8] ? String(row[8]) : null,
+          themes: row[9] ? String(row[9]) : null,
+          youtube_url: row[10] ? String(row[10]) : null,
+          visibility: row[11] ? String(row[11]) : 'public'
         }
         
         songs.push(song)
@@ -67,7 +58,6 @@ export default function UploadPage() {
       
       setMessage(`데이터베이스에 업로드 중...`)
       
-      // Supabase에 배치로 업로드 (upsert 사용 - 중복 ID는 업데이트)
       const { error } = await supabase
         .from('songs')
         .upsert(songs, { onConflict: 'id' })
@@ -86,155 +76,190 @@ export default function UploadPage() {
     }
   }
 
-  // 악보 파일 업로드 처리 - 개선된 버전
-   const handleSheetMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-   const files = e.target.files
-   if (!files || files.length === 0) return
+  // 악보 파일 업로드 처리 - 실시간 DB 조회 방식으로 개선
+  const handleSheetMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-   setUploading(true)
-   setUploadStatus('idle')
+    setUploading(true)
+    setUploadStatus('idle')
     setMessage(`${files.length}개의 악보 파일 업로드 중...`)
-  
-   try {
-     // 1단계: 모든 곡 정보를 한 번에 가져오기
-      setMessage('데이터베이스에서 곡 목록 로딩 중...')
-      const { data: allSongs, error: fetchError } = await supabase
-        .from('songs')
-        .select('id, file_url')
     
-      if (fetchError) throw fetchError
+    let uploadCount = 0
+    let failedFiles: string[] = []
     
-     // ID를 키로 하는 Map 생성 (빠른 조회)
-     const songMap = new Map()
-     allSongs?.forEach(song => {
-        songMap.set(song.id, song)
-      })
-    
-      console.log(`총 ${songMap.size}개의 곡 정보 로딩 완료`)
-    
-      let uploadCount = 0
-      let failedFiles: string[] = []
-    
-     // 2단계: 각 파일 처리
-     for (let i = 0; i < files.length; i++) {
+    try {
+      // 각 파일 처리
+      for (let i = 0; i < files.length; i++) {
         const file = files[i]
         setProgress(Math.round(((i + 1) / files.length) * 100))
         setMessage(`업로드 중... (${i + 1}/${files.length})`)
-      
+        
         try {
           const originalFileName = file.name
-         const idMatch = originalFileName.match(/^(\d{3,4})/)
-
-         if (!idMatch) {
+          const idMatch = originalFileName.match(/^(\d{3,4})/)
+          
+          if (!idMatch) {
             console.warn(`파일명에서 ID를 찾을 수 없음: ${originalFileName}`)
             failedFiles.push(`${originalFileName} (ID 형식 오류)`)
             continue
-         }
-
-          let songId = idMatch[1]
-          console.log(`[${i+1}/${files.length}] 파일: ${originalFileName}, ID: ${songId}`)
-        
-          // Map에서 곡 찾기 (빠름!)
-          let existingSong = songMap.get(songId)
-         let targetId = songId
-        
-          // 못 찾으면 0으로 패딩해서 재시도
-          if (!existingSong) {
-            const paddedId = songId.padStart(4, '0')
-            existingSong = songMap.get(paddedId)
-            if (existingSong) {
-              targetId = paddedId
-             console.log(`ID 변환: ${songId} → ${paddedId}`)
-           }
           }
-        
-         if (!existingSong) {
-           console.warn(`곡을 찾을 수 없음: ${songId}`)
-           failedFiles.push(`${originalFileName} (ID ${songId} 없음)`)
-           continue
-          }
-        
-        // 파일 확장자 추출
-          const fileExtension = originalFileName.split('.').pop()?.toLowerCase() || 'pdf'
-        
-         const mimeTypes: { [key: string]: string } = {
-           'pdf': 'application/pdf',
-           'jpg': 'image/jpeg',
-           'jpeg': 'image/jpeg',
-           'png': 'image/png'
-          }
-        
-          const contentType = mimeTypes[fileExtension] || 'application/octet-stream'
-        
-         // 안전한 파일명 생성
-         const timestamp = Date.now()
-         const cleanFileName = originalFileName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
-          const safeFileName = `${targetId}/${timestamp}_${cleanFileName}`
-        
-         // Storage에 업로드
-          const { error: uploadError } = await supabase.storage
-           .from('sheetmusic')
-           .upload(safeFileName, file, {
-             contentType: contentType,
-             upsert: true,
-             cacheControl: '3600'
-            })
-        
-         if (uploadError) {
-           console.error(`Storage 업로드 실패 - ${originalFileName}:`, uploadError)
-           failedFiles.push(`${originalFileName} (업로드 실패)`)
-           continue
-         }
-        
-         // 공개 URL 생성
-         const { data: { publicUrl } } = supabase.storage
-           .from('sheetmusic')
-           .getPublicUrl(safeFileName)
-        
-         // DB 업데이트
-          const { error: updateError } = await supabase
-           .from('songs')
-           .update({
-             file_url: publicUrl,
-             file_type: fileExtension,
-             uploaded_at: new Date().toISOString()
-           })
-           .eq('id', targetId)
           
-         if (updateError) {
-           console.error(`DB 업데이트 실패 - ${targetId}:`, updateError)
-           await supabase.storage.from('sheetmusic').remove([safeFileName])
-           failedFiles.push(`${originalFileName} (DB 업데이트 실패)`)
-         } else {
-           uploadCount++
-           console.log(`✅ [${uploadCount}] ${originalFileName} → ID: ${targetId}`)
-         }
-
-       } catch (fileError) {
-         console.error(`파일 처리 오류 - ${file.name}:`, fileError)
-         failedFiles.push(`${file.name} (처리 오류)`)
-       }
-     }
-
-     // 결과 메시지
-     if (uploadCount === files.length) {
-       setUploadStatus('success')
-       setMessage(`✅ ${uploadCount}개의 악보 파일이 모두 성공적으로 업로드되었습니다!`)
+          const rawId = idMatch[1]
+          console.log(`[${i+1}/${files.length}] 파일: ${originalFileName}, 추출된 ID: ${rawId}`)
+          
+          // ⭐ 핵심 변경: 각 파일마다 실시간으로 DB 조회
+          // 3자리든 4자리든 모두 처리 가능하도록 OR 조건 사용
+          const { data: songData, error: queryError } = await supabase
+            .from('songs')
+            .select('id, song_name, file_url')
+            .or(`id.eq.${rawId},id.eq.${rawId.padStart(4, '0')}`)
+            .limit(1)
+            .single()
+          
+          if (queryError) {
+            console.error(`DB 조회 오류 - ID ${rawId}:`, queryError)
+            
+            // 다시 한 번 시도 (정확한 ID로)
+            const paddedId = rawId.padStart(4, '0')
+            const { data: retryData, error: retryError } = await supabase
+              .from('songs')
+              .select('id, song_name, file_url')
+              .eq('id', paddedId)
+              .single()
+            
+            if (retryError || !retryData) {
+              console.warn(`곡을 찾을 수 없음: ${rawId} (패딩 시도: ${paddedId})`)
+              failedFiles.push(`${originalFileName} (ID ${rawId} 없음)`)
+              continue
+            }
+            
+            // 재시도 성공
+            const targetId = retryData.id
+            console.log(`재시도 성공 - ID 변환: ${rawId} → ${targetId}`)
+            
+            // 파일 업로드 진행
+            await uploadFileToStorage(file, targetId, originalFileName)
+            uploadCount++
+            console.log(`✅ [${uploadCount}] ${originalFileName} → ID: ${targetId}`)
+          } else if (songData) {
+            // 첫 시도에서 성공
+            const targetId = songData.id
+            console.log(`DB 조회 성공 - ID: ${targetId}, 곡명: ${songData.song_name}`)
+            
+            // 파일 업로드 진행
+            const uploadSuccess = await uploadFileToStorage(file, targetId, originalFileName)
+            if (uploadSuccess) {
+              uploadCount++
+              console.log(`✅ [${uploadCount}] ${originalFileName} → ID: ${targetId}`)
+            } else {
+              failedFiles.push(`${originalFileName} (업로드 실패)`)
+            }
+          } else {
+            console.warn(`곡 데이터가 비어있음: ${rawId}`)
+            failedFiles.push(`${originalFileName} (데이터 없음)`)
+          }
+          
+        } catch (fileError) {
+          console.error(`파일 처리 오류 - ${file.name}:`, fileError)
+          failedFiles.push(`${file.name} (처리 오류: ${(fileError as Error).message})`)
+        }
+      }
+      
+      // 결과 메시지
+      if (uploadCount === files.length) {
+        setUploadStatus('success')
+        setMessage(`✅ ${uploadCount}개의 악보 파일이 모두 성공적으로 업로드되었습니다!`)
+        
+        // 로그 기록은 일단 스킵 (타입 오류)
+        console.log('Upload success:', { count: uploadCount })
       } else if (uploadCount > 0) {
         setUploadStatus('success')
-        setMessage(`⚠️ ${uploadCount}개 성공, ${failedFiles.length}개 실패\n\n실패 목록:\n${failedFiles.join('\n')}`)
+        const failedList = failedFiles.map((f, idx) => `  ${idx + 1}. ${f}`).join('\n')
+        setMessage(`⚠️ 부분 성공\n\n✅ 성공: ${uploadCount}개\n❌ 실패: ${failedFiles.length}개\n\n실패 목록:\n${failedList}`)
       } else {
-       setUploadStatus('error')
-       setMessage(`❌ 모든 파일 업로드 실패\n\n실패 목록:\n${failedFiles.join('\n')}`)
-     }
-
-   } catch (error) {
-     console.error('Upload error:', error)
-     setUploadStatus('error')
+        setUploadStatus('error')
+        const failedList = failedFiles.map((f, idx) => `  ${idx + 1}. ${f}`).join('\n')
+        setMessage(`❌ 모든 파일 업로드 실패\n\n실패 목록:\n${failedList}`)
+      }
+      
+    } catch (error) {
+      console.error('Upload error:', error)
+      setUploadStatus('error')
       setMessage(`❌ 업로드 중 오류: ${(error as Error).message}`)
     } finally {
       setUploading(false)
       setProgress(0)
+    }
+  }
+  
+  // 파일을 Storage에 업로드하고 DB를 업데이트하는 헬퍼 함수
+  const uploadFileToStorage = async (
+    file: File, 
+    songId: string, 
+    originalFileName: string
+  ): Promise<boolean> => {
+    try {
+      // 파일 확장자 추출
+      const fileExtension = originalFileName.split('.').pop()?.toLowerCase() || 'pdf'
+      
+      const mimeTypes: { [key: string]: string } = {
+        'pdf': 'application/pdf',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png'
+      }
+      
+      const contentType = mimeTypes[fileExtension] || 'application/octet-stream'
+      
+      // 안전한 파일명 생성 (특수문자 제거)
+      const cleanFileName = originalFileName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
+      const safeFileName = `${songId}/${cleanFileName}`
+      
+      console.log(`Storage 업로드 시작: ${safeFileName}`)
+      
+      // Storage에 업로드
+      const { error: uploadError } = await supabase.storage
+        .from('sheetmusic')
+        .upload(safeFileName, file, {
+          contentType: contentType,
+          upsert: true,  // 기존 파일 덮어쓰기
+          cacheControl: '3600'
+        })
+      
+      if (uploadError) {
+        console.error(`Storage 업로드 실패 - ${originalFileName}:`, uploadError)
+        return false
+      }
+      
+      // 공개 URL 생성
+      const { data: { publicUrl } } = supabase.storage
+        .from('sheetmusic')
+        .getPublicUrl(safeFileName)
+      
+      console.log(`생성된 URL: ${publicUrl}`)
+      
+      // DB 업데이트
+      const { error: updateError } = await supabase
+        .from('songs')
+        .update({
+          file_url: publicUrl,
+          file_type: fileExtension,
+          uploaded_at: new Date().toISOString()
+        })
+        .eq('id', songId)
+      
+      if (updateError) {
+        console.error(`DB 업데이트 실패 - ${songId}:`, updateError)
+        // 실패 시 Storage에서 파일 삭제
+        await supabase.storage.from('sheetmusic').remove([safeFileName])
+        return false
+      }
+      
+      return true
+    } catch (error) {
+      console.error(`파일 업로드 처리 오류:`, error)
+      return false
     }
   }
 
@@ -254,8 +279,6 @@ export default function UploadPage() {
       } else {
         console.log('테스트 업로드 성공:', data)
         alert('Storage 연결 성공!')
-        
-        // 테스트 파일 삭제
         await supabase.storage.from('sheetmusic').remove([testFileName])
       }
     } catch (err) {
@@ -285,83 +308,98 @@ export default function UploadPage() {
     }
   }
 
-  // Storage의 모든 파일을 스캔해서 DB 업데이트
+  // Storage → DB 동기화 개선
   const syncStorageToDatabase = async () => {
     try {
       setUploading(true)
       setMessage('Storage 파일 목록을 가져오는 중...')
-      
-      // 1. Storage에서 모든 파일 목록 가져오기
-      const { data: files, error: listError } = await supabase.storage
+
+      const { data: folders, error: listError } = await supabase.storage
         .from('sheetmusic')
         .list('', {
           limit: 10000,
           offset: 0,
         })
-      
+
       if (listError) throw listError
-      
-      setMessage(`${files.length}개의 폴더를 찾았습니다. 각 폴더의 파일을 확인 중...`)
-      
+
+      setMessage(`${folders?.length || 0}개의 폴더를 찾았습니다. 처리 중...`)
+
       let updateCount = 0
-      
-      // 2. 각 폴더(ID)마다 파일 확인
-      for (const folder of files) {
+      let skipCount = 0
+      let processedCount = 0
+
+      for (const folder of folders || []) {
         if (!folder.name || folder.name === '.emptyFolderPlaceholder') continue
+
+        processedCount++
+        setProgress(Math.round((processedCount / folders.length) * 100))
         
         const songId = folder.name
-        
-        // 폴더 내부의 파일들 가져오기
-        const { data: folderFiles, error: folderError } = await supabase.storage
+
+        // 해당 곡 정보 가져오기
+        const { data: songData, error: songError } = await supabase
+          .from('songs')
+          .select('id, song_name')
+          .eq('id', songId)
+          .single()
+
+        if (songError || !songData) {
+          console.log(`곡 정보 없음: ${songId}`)
+          skipCount++
+          continue
+        }
+
+        // Storage에서 파일 목록 가져오기
+        const { data: files, error: filesError } = await supabase.storage
           .from('sheetmusic')
-          .list(songId, {
-            limit: 100,
-            offset: 0,
-          })
+          .list(songId)
+
+        if (filesError || !files || files.length === 0) {
+          console.log(`파일 없음: ${songId}`)
+          skipCount++
+          continue
+        }
+
+        // 첫 번째 파일 사용 (보통 하나만 있음)
+        const actualFile = files[0]
         
-        if (folderError || !folderFiles || folderFiles.length === 0) continue
-        
-        // 첫 번째 파일 사용 (보통 1개만 있음)
-        const firstFile = folderFiles[0]
-        const filePath = `${songId}/${firstFile.name}`
-        
-        // 공개 URL 생성
+        // Public URL 생성
         const { data: { publicUrl } } = supabase.storage
           .from('sheetmusic')
-          .getPublicUrl(filePath)
-        
-        // 파일 확장자 추출
-        const fileExtension = firstFile.name.split('.').pop()?.toLowerCase() || 'pdf'
-        
+          .getPublicUrl(`${songId}/${actualFile.name}`)
+
         // DB 업데이트
         const { error: updateError } = await supabase
           .from('songs')
           .update({
             file_url: publicUrl,
-            file_type: fileExtension,
+            file_type: actualFile.name.split('.').pop(),
             uploaded_at: new Date().toISOString()
           })
           .eq('id', songId)
-        
+
         if (!updateError) {
           updateCount++
-          console.log(`✅ [${updateCount}] ID: ${songId} → ${publicUrl}`)
+          console.log(`✅ ${songId}: ${actualFile.name}`)
         } else {
-          console.error(`❌ ID: ${songId} 업데이트 실패:`, updateError)
+          console.error(`업데이트 실패 ${songId}:`, updateError)
+          skipCount++
         }
-        
-        setMessage(`처리 중... (${updateCount}개 완료)`)
+
+        setMessage(`처리 중... (${updateCount}개 완료, ${skipCount}개 스킵)`)
       }
-      
+
       setUploadStatus('success')
-      setMessage(`✅ 총 ${updateCount}개의 곡 정보가 업데이트되었습니다!`)
-      
+      setMessage(`✅ 동기화 완료!\n\n성공: ${updateCount}개\n스킵: ${skipCount}개`)
+
     } catch (error) {
       console.error('Sync error:', error)
       setUploadStatus('error')
       setMessage('❌ 동기화 중 오류: ' + (error as Error).message)
     } finally {
       setUploading(false)
+      setProgress(0)
     }
   }
 
@@ -404,6 +442,7 @@ export default function UploadPage() {
             <button
               onClick={testStorageConnection}
               className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm"
+              disabled={uploading}
             >
               Storage 연결 테스트
             </button>
@@ -411,6 +450,7 @@ export default function UploadPage() {
             <button
               onClick={testDBConnection}
               className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+              disabled={uploading}
             >
               DB 연결 테스트
             </button>
@@ -418,6 +458,7 @@ export default function UploadPage() {
             <button
               onClick={checkTableSchema}
               className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
+              disabled={uploading}
             >
               테이블 구조 확인
             </button>
@@ -425,6 +466,7 @@ export default function UploadPage() {
             <button
               onClick={syncStorageToDatabase}
               className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-bold"
+              disabled={uploading}
             >
               🔄 Storage → DB 일괄 동기화
             </button>
@@ -435,13 +477,13 @@ export default function UploadPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <FileSpreadsheet className="mr-2" />
-            엑셀 데이터 업로드
+            엑셀 데이터 업로드 (CSV)
           </h2>
           
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               onChange={handleExcelUpload}
               disabled={uploading}
               className="hidden"
@@ -455,18 +497,18 @@ export default function UploadPage() {
                   : 'bg-blue-500 hover:bg-blue-600 cursor-pointer'
               } text-white rounded-lg transition`}
             >
-              {uploading ? '업로드 중...' : '엑셀 파일 선택'}
+              {uploading ? '업로드 중...' : '엑셀/CSV 파일 선택'}
             </label>
             
             <p className="mt-4 text-sm text-gray-600">
-              .xlsx 또는 .xls 파일만 가능합니다
+              .xlsx, .xls, .csv 파일 가능
             </p>
           </div>
 
           <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800 font-medium mb-2">📌 엑셀 파일 형식:</p>
+            <p className="text-sm text-blue-800 font-medium mb-2">📌 CSV 파일 형식:</p>
             <p className="text-xs text-blue-700">
-              ID | 곡명 | 팀명 | 주제1 | 주제2 | 키 | BPM | 박자 | 템포 | 스타일 | 최고음 | 최저음 | 가사
+              id | song_name | team_name | key | bpm | time_signature | tempo | lyrics | season | themes | youtube_url | visibility
             </p>
           </div>
         </div>
@@ -508,13 +550,19 @@ export default function UploadPage() {
             <p className="text-sm text-green-800 font-medium mb-2">📌 파일명 형식:</p>
             <div className="text-xs text-green-700 space-y-1">
               <p>파일명이 3-4자리 숫자로 시작해야 합니다</p>
-              <p className="font-semibold">지원되는 형식:</p>
+              <p className="font-semibold">예시:</p>
               <ul className="ml-4 space-y-1">
-                <li>• 0655_주를바라보며.pdf ✅</li>
-                <li>• 1234_찬양제목.pdf ✅</li>
-                <li>• 001_찬송가.pdf ✅</li>
-                <li>• 123-01_부제목.pdf ✅</li>
+                <li>✅ 3454_성령이여_내_영혼을.png</li>
+                <li>✅ 0001_만복의_근원.jpg</li>
+                <li>✅ 123_찬양제목.pdf</li>
+                <li>❌ 찬양제목.pdf (숫자 없음)</li>
               </ul>
+            </div>
+            
+            <div className="mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
+              <p className="text-xs text-yellow-800 font-semibold">
+                ⚠️ 중요: CSV 업로드 후 악보를 업로드하세요!
+              </p>
             </div>
           </div>
         </div>
@@ -528,7 +576,7 @@ export default function UploadPage() {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-blue-500 h-2 rounded-full transition-all"
+                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -538,15 +586,15 @@ export default function UploadPage() {
         {/* 상태 메시지 */}
         {message && (
           <div className={`mt-6 p-4 rounded-lg flex items-start ${
-            uploadStatus === 'success' ? 'bg-green-50 text-green-800' :
-            uploadStatus === 'error' ? 'bg-red-50 text-red-800' :
-            'bg-blue-50 text-blue-800'
+            uploadStatus === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+            uploadStatus === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
           }`}>
             <div className="mr-2 mt-0.5">
-              {uploadStatus === 'success' && <CheckCircle />}
-              {uploadStatus === 'error' && <AlertCircle />}
+              {uploadStatus === 'success' && <CheckCircle className="w-5 h-5" />}
+              {uploadStatus === 'error' && <AlertCircle className="w-5 h-5" />}
             </div>
-            <span className="whitespace-pre-line">{message}</span>
+            <span className="whitespace-pre-line text-sm">{message}</span>
           </div>
         )}
       </div>
