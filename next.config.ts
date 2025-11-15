@@ -1,13 +1,40 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   typescript: {
-    // ⚠️ 프로덕션 빌드 시 TypeScript 오류 무시
     ignoreBuildErrors: true,
   },
   eslint: {
-    // ⚠️ 프로덕션 빌드 시 ESLint 오류 무시
     ignoreDuringBuilds: true,
   },
-}
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Node.js 모듈 무시
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
+      };
+      
+      // 🆕 externals 추가
+      config.externals = config.externals || [];
+      config.externals.push({
+        'node:fs': 'commonjs node:fs',
+        'node:https': 'commonjs node:https',
+      });
+    }
+    return config;
+  },
+};
 
-module.exports = nextConfig
+export default nextConfig;

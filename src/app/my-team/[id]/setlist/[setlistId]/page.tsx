@@ -26,7 +26,6 @@ import { logDownload } from '@/lib/downloadLogger'
 import { generatePDF, PDFSong } from '@/lib/pdfGenerator'
 import SongFormPositionModal from '@/components/SongFormPositionModal' // 🆕 추가
 import { canEditSetlist } from '@/lib/teamOperations' // ✅ 추가
-import pptxgen from 'pptxgenjs'
 import {
   ArrowLeft, Edit, Trash2, Plus, Music, X,
   Save, Eye, EyeOff, ChevronUp, ChevronDown,
@@ -775,16 +774,12 @@ const removeSongForm = (index: number) => {
   }
 
   // PPT 다운로드
-  const handleDownloadPPT = async () => {
-    if (!setlist || songs.length === 0) {
-      alert('다운로드할 곡이 없습니다.')
-      return
-    }
-
-    setDownloadingPPT(true)
-
-    try {
-      const ppt = new pptxgen()
+  const generatePPTFile = async () => {
+  setDownloadingPPT(true)
+  try {
+    // 🆕 동적 import
+    const pptxgen = (await import('pptxgenjs')).default
+    const ppt = new pptxgen()
 
       // 표지 슬라이드
       const coverSlide = ppt.addSlide()
@@ -1183,7 +1178,7 @@ const handleSharePlaylist = () => {
                 <>
                   {/* 다운로드 버튼 - 모든 팀원 가능 */}
                   <button
-                    onClick={handleDownloadPPT}
+                    onClick={generatePPTFile}
                     disabled={downloadingPPT || songs.length === 0}
                     className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
                     title="PPT 다운로드"

@@ -10,7 +10,6 @@ import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2
 } from 'lucide-react'
-import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
@@ -1348,7 +1347,9 @@ const sanitizeFilename = (filename: string): string => {
     setDownloadingPPT(true)  // 👈 로딩 시작
 
     try {
-      const prs = new PptxGenJS()
+      // 🆕 동적 import
+    const PptxGenJS = (await import('pptxgenjs')).default
+    const prs = new PptxGenJS()
       
       // 표지 슬라이드
       const coverSlide = prs.addSlide()
