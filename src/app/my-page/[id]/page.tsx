@@ -33,7 +33,7 @@ interface Setlist {
 export default function TeamDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const teamId = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : ''
+  const teamId = params.id as string
 
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -82,13 +82,6 @@ export default function TeamDetailPage() {
   }
 
   const fetchTeamInfo = async () => {
-    // teamId 유효성 체크
-    if (!teamId || teamId === 'undefined') {
-      console.error('Invalid teamId:', teamId)
-      router.push('/my-team')
-      return
-    }
-
     try {
       const { data: memberData, error: memberError } = await supabase
         .from('team_members')
@@ -132,12 +125,6 @@ export default function TeamDetailPage() {
   }
 
   const fetchSetlists = async () => {
-    // teamId 유효성 체크
-    if (!teamId || teamId === 'undefined') {
-      console.error('Invalid teamId:', teamId)
-      return
-    }
-
     try {
       const { data, error } = await supabase
         .from('team_setlists')

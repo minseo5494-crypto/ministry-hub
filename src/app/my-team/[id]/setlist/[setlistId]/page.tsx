@@ -1,17 +1,37 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+// 🆕 드래그 앤 드롭 라이브러리 추가
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase, Song } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logDownload } from '@/lib/downloadLogger'
 import { generatePDF, PDFSong } from '@/lib/pdfGenerator'
 import SongFormPositionModal from '@/components/SongFormPositionModal' // 🆕 추가
+import { canEditSetlist } from '@/lib/teamOperations' // ✅ 추가
 import pptxgen from 'pptxgenjs'
 import {
   ArrowLeft, Edit, Trash2, Plus, Music, X,
   Save, Eye, EyeOff, ChevronUp, ChevronDown,
-  Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation
+  Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation,
+  GripVertical // 🆕 드래그 핸들 아이콘 추가
 } from 'lucide-react'
 
 interface SetlistSong {
@@ -30,6 +50,7 @@ interface SetlistDetail {
   service_type?: string
   notes?: string
   team_id: string
+   created_by: string // ✅ 추가
 }
 
 // 🆕 송폼 위치 타입 정의
@@ -37,6 +58,207 @@ interface SongFormPosition {
   x: number
   y: number
   size?: 'small' | 'medium' | 'large'
+}
+
+// 🆕 드래그 가능한 곡 아이템 컴포넌트
+interface SortableSongItemProps {
+  song: SetlistSong
+  index: number
+  canEdit: boolean
+  onRemove: (id: string) => void
+  onMoveUp: (index: number) => void
+  onMoveDown: (index: number) => void
+  onTogglePreview: (id: string) => void
+  onOpenSongForm: (song: SetlistSong) => void
+  onOpenSheetViewer: (song: SetlistSong) => void
+  onOpenYoutubeModal: (song: Song) => void
+  isPreviewOpen: boolean
+  totalSongs: number
+}
+
+function SortableSongItem({
+  song,
+  index,
+  canEdit,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  onTogglePreview,
+  onOpenSongForm,
+  onOpenSheetViewer,
+  onOpenYoutubeModal,
+  isPreviewOpen,
+  totalSongs,
+}: SortableSongItemProps) {
+  // 🆕 여기서 useSortable 호출 (컴포넌트 최상위)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: song.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`p-4 hover:bg-gray-50 print-song ${isDragging ? 'shadow-2xl z-50' : ''}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-start flex-1 gap-2">
+          {/* 🆕 드래그 핸들 */}
+          {canEdit && (
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing pt-1 text-gray-400 hover:text-gray-600"
+              title="드래그하여 순서 변경"
+            >
+              <GripVertical size={20} />
+            </div>
+          )}
+          <span className="text-lg font-bold text-blue-600 w-8 mt-1">
+            {index + 1}.
+          </span>
+          <div className="flex-1">
+            {/* 기본 정보 (항상 표시) */}
+            <h3 className="font-semibold text-gray-900 text-xl mb-2">
+              {song.songs.song_name}
+            </h3>
+            <p className="text-sm text-gray-600 mb-2">
+              {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
+            </p>
+            {song.selected_form && song.selected_form.length > 0 && (
+              <p className="text-sm text-purple-600 mb-2">
+                송폼: {song.selected_form.join(' - ')}
+              </p>
+            )}
+            {song.notes && (
+              <p className="text-sm text-red-600 italic mb-2">
+                메모: {song.notes}
+              </p>
+            )}
+
+            {/* 상세 정보 (토글 시 표시) */}
+            {isPreviewOpen && (
+              <div className="mt-4 border-t pt-4">
+                {song.songs.lyrics && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-700 mb-2">가사</h4>
+                    <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded">
+                      {song.songs.lyrics}
+                    </pre>
+                  </div>
+                )}
+                {song.songs.file_url && (
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-2">악보</h4>
+                    {song.songs.file_type === 'pdf' ? (
+                      <iframe
+                        src={song.songs.file_url}
+                        className="w-full h-[600px] border rounded"
+                      />
+                    ) : (
+                      <img
+                        src={song.songs.file_url}
+                        alt={`${song.songs.song_name} 악보`}
+                        className="max-w-full h-auto rounded shadow-sm"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2 no-print ml-4">
+          {/* 미리보기 토글 버튼 */}
+          {(song.songs.lyrics || song.songs.file_url) && (
+            <button
+              onClick={() => onTogglePreview(song.id)}
+              className={`p-2 rounded-lg ${
+                isPreviewOpen
+                  ? 'text-blue-600 bg-blue-100'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              title={isPreviewOpen ? '접기' : '펼치기'}
+            >
+              {isPreviewOpen ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          )}
+          {/* 악보보기 전체화면 버튼 */}
+          {song.songs.file_url && (
+            <button
+              onClick={() => onOpenSheetViewer(song)}
+              className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+              title="악보 전체화면"
+            >
+              <Presentation size={18} />
+            </button>
+          )}
+          {/* 유튜브 영상 버튼 */}
+          <button
+            onClick={() => {
+              if (song.songs.youtube_url) {
+                onOpenYoutubeModal(song.songs)
+              }
+            }}
+            disabled={!song.songs.youtube_url}
+            className="p-2 rounded-lg"
+            style={{
+              color: !song.songs.youtube_url ? '#d1d5db' : '#dc2626',
+              backgroundColor: 'transparent',
+              cursor: song.songs.youtube_url ? 'pointer' : 'not-allowed',
+              opacity: song.songs.youtube_url ? 1 : 0.5
+            }}
+            title={!song.songs.youtube_url ? '유튜브 링크 없음' : '유튜브 열기'}
+          >
+            <Youtube size={18} />
+          </button>
+          {canEdit && (
+            <>
+              <button
+                onClick={() => onOpenSongForm(song)}
+                className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+                title="송폼 편집"
+              >
+                <Edit size={18} />
+              </button>
+              <button
+                onClick={() => onMoveUp(index)}
+                disabled={index === 0}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+              >
+                <ChevronUp size={18} />
+              </button>
+              <button
+                onClick={() => onMoveDown(index)}
+                disabled={index === totalSongs - 1}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+              >
+                <ChevronDown size={18} />
+              </button>
+              <button
+                onClick={() => onRemove(song.id)}
+                className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
+              >
+                <Trash2 size={18} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function TeamSetlistDetailPage() {
@@ -100,6 +322,20 @@ export default function TeamSetlistDetailPage() {
   // 🎵 유튜브 모달 상태 추가
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
 
+  // 🆕 드래그 앤 드롭 센서 설정
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px 이상 움직여야 드래그 시작
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const [canUserEdit, setCanUserEdit] = useState(false) // ✅ 편집 권한 상태
+
   useEffect(() => {
     checkUser()
   }, [])
@@ -109,6 +345,17 @@ export default function TeamSetlistDetailPage() {
       fetchSetlistDetail()
     }
   }, [user, teamId, setlistId])
+
+  // ✅ 편집 권한 확인 (생성자 체크 추가)
+useEffect(() => {
+  const checkEditPermission = async () => {
+    if (user && teamId && setlistId) {
+      const canEdit = await canEditSetlist(teamId, setlistId, user.id)
+      setCanUserEdit(canEdit)
+    }
+  }
+  checkEditPermission()
+}, [user, teamId, setlistId, setlist])
 
   const checkUser = async () => {
     try {
@@ -194,9 +441,10 @@ export default function TeamSetlistDetailPage() {
     }
   }
 
-  const canEdit = () => {
-    return userRole === 'leader' || userRole === 'admin'
-  }
+  // ✅ 기존 함수 수정
+const canEdit = () => {
+  return canUserEdit
+}
 
   const handleSaveEdit = async () => {
     if (!canEdit()) {
@@ -283,6 +531,50 @@ export default function TeamSetlistDetailPage() {
     } catch (error) {
       console.error('Error moving song:', error)
       alert('순서 변경에 실패했습니다.')
+    }
+  }
+
+  // 🆕 드래그 앤 드롭 핸들러
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    if (!canEdit()) {
+      return
+    }
+
+    const oldIndex = songs.findIndex((song) => song.id === active.id)
+    const newIndex = songs.findIndex((song) => song.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return
+    }
+
+    // 로컬 상태 즉시 업데이트 (부드러운 UX)
+    const newSongs = arrayMove(songs, oldIndex, newIndex)
+    setSongs(newSongs)
+
+    // DB 업데이트
+    try {
+      const updates = newSongs.map((song, idx) => ({
+        id: song.id,
+        order_number: idx + 1
+      }))
+
+      for (const update of updates) {
+        await supabase
+          .from('team_setlist_songs')
+          .update({ order_number: update.order_number })
+          .eq('id', update.id)
+      }
+    } catch (error) {
+      console.error('Error updating order:', error)
+      alert('순서 변경에 실패했습니다.')
+      // 실패 시 원래 상태로 복구
+      fetchSetlistDetail()
     }
   }
 
@@ -433,26 +725,24 @@ export default function TeamSetlistDetailPage() {
     setShowSongFormModal(true)
   }
 
-  // 송폼 추가
-  const addSongForm = (form: string) => {
-    if (!tempSongForm.includes(form)) {
-      setTempSongForm([...tempSongForm, form])
-    }
-  }
+  // 송폼 추가 (중복 허용)
+const addSongForm = (form: string) => {
+  setTempSongForm([...tempSongForm, form])
+}
 
-  // 커스텀 송폼 추가
-  const addCustomSongForm = () => {
-    const trimmed = customFormInput.trim()
-    if (trimmed && !tempSongForm.includes(trimmed)) {
-      setTempSongForm([...tempSongForm, trimmed])
-      setCustomFormInput('')
-    }
+  // 커스텀 송폼 추가 (중복 허용)
+const addCustomSongForm = () => {
+  const trimmed = customFormInput.trim()
+  if (trimmed) {
+    setTempSongForm([...tempSongForm, trimmed])
+    setCustomFormInput('')
   }
+}
 
-  // 송폼 제거
-  const removeSongForm = (form: string) => {
-    setTempSongForm(tempSongForm.filter(f => f !== form))
-  }
+  // 송폼 제거 (인덱스 기반)
+const removeSongForm = (index: number) => {
+  setTempSongForm(tempSongForm.filter((_, i) => i !== index))
+}
 
   // 송폼 순서 변경
   const moveSongForm = (index: number, direction: 'up' | 'down') => {
@@ -901,15 +1191,7 @@ const handleSharePlaylist = () => {
                     <Download className="mr-2" size={18} />
                     {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
                   </button>
-                  <button
-                onClick={handleDownloadPPT}
-                disabled={downloadingPPT || songs.length === 0}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
-                title="PPT 다운로드"
-              >
-                <Download className="mr-2" size={18} />
-                {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
-              </button>
+                  
               
               {/* 🎵 플레이리스트 공유 버튼 추가 */}
               <button
@@ -1015,155 +1297,38 @@ const handleSharePlaylist = () => {
               )}
             </div>
           ) : (
-            <div className="divide-y">
-              {songs.map((song, index) => (
-                <div key={song.id} className="p-4 hover:bg-gray-50 print-song">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start flex-1">
-                      <span className="text-lg font-bold text-blue-600 w-8 mt-1">
-                        {index + 1}.
-                      </span>
-                      <div className="flex-1">
-                        {/* 기본 정보 (항상 표시) */}
-                        <h3 className="font-semibold text-gray-900 text-xl mb-2">
-                          {song.songs.song_name}
-                        </h3>
-                        <p className="text-sm text-gray-600 mb-2">
-                          {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
-                        </p>
-                        {song.selected_form && song.selected_form.length > 0 && (
-                          <p className="text-sm text-purple-600 mb-2">
-                            송폼: {song.selected_form.join(' - ')}
-                          </p>
-                        )}
-                        {song.notes && (
-                          <p className="text-sm text-red-600 italic mb-2">
-                            메모: {song.notes}
-                          </p>
-                        )}
-
-                        {/* 상세 정보 (토글 시 표시) */}
-                        {previewStates[song.id] && (
-                          <div className="mt-4 border-t pt-4">
-                            {song.songs.lyrics && (
-                              <div className="mb-4">
-                                <h4 className="font-semibold text-gray-700 mb-2">가사</h4>
-                                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded">
-                                  {song.songs.lyrics}
-                                </pre>
-                              </div>
-                            )}
-                            {song.songs.file_url && (
-                              <div>
-                                <h4 className="font-semibold text-gray-700 mb-2">악보</h4>
-                                {song.songs.file_type === 'pdf' ? (
-                                  <iframe
-                                    src={song.songs.file_url}
-                                    className="w-full h-[600px] border rounded"
-                                  />
-                                ) : (
-                                  <img 
-                                    src={song.songs.file_url} 
-                                    alt={`${song.songs.song_name} 악보`}
-                                    className="max-w-full h-auto rounded shadow-sm"
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 no-print ml-4">
-                      {/* 미리보기 토글 버튼 */}
-                      {(song.songs.lyrics || song.songs.file_url) && (
-                        <button
-                          onClick={() => togglePreview(song.id)}
-                          className={`p-2 rounded-lg ${
-                            previewStates[song.id]
-                              ? 'text-blue-600 bg-blue-100'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          title={previewStates[song.id] ? '접기' : '펼치기'}
-                        >
-                          {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      )}
-                      {/* 🎵 악보보기 전체화면 버튼 추가 */}
-                      {song.songs.file_url && (
-                        <button
-                          onClick={() => openSheetViewerForSong(song)}
-                          className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
-                          title="악보 전체화면"
-                        >
-                          <Presentation size={18} />
-                        </button>
-                      )}
-                      {/* 유튜브 영상 버튼 - 항상 표시 */}
-                      <button
-                        onClick={() => {
-                          if (song.songs.youtube_url) {
-                            setYoutubeModalSong(song.songs)
-                          }
-                        }}
-                        disabled={!song.songs.youtube_url}
-                        className="p-2 rounded-lg"
-                        style={{
-                          color: !song.songs.youtube_url
-                            ? '#d1d5db'
-                            : '#dc2626',
-                          backgroundColor: !song.songs.youtube_url
-                            ? 'transparent'
-                            : 'transparent',
-                          cursor: song.songs.youtube_url ? 'pointer' : 'not-allowed',
-                          opacity: song.songs.youtube_url ? 1 : 0.5
-                        }}
-                        title={
-                          !song.songs.youtube_url
-                            ? '유튜브 링크 없음'
-                            : '유튜브 열기'
-                        }
-                      >
-                        <Youtube size={18} />
-                      </button>
-                      {canEdit() && (
-                        <>
-                          <button
-                            onClick={() => openSongFormModal(song)}
-                            className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
-                            title="송폼 편집"
-                          >
-                            <Edit size={18} />
-                          </button>
-                          <button
-                            onClick={() => moveSong(index, 'up')}
-                            disabled={index === 0}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-                          >
-                            <ChevronUp size={18} />
-                          </button>
-                          <button
-                            onClick={() => moveSong(index, 'down')}
-                            disabled={index === songs.length - 1}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-                          >
-                            <ChevronDown size={18} />
-                          </button>
-                          <button
-                            onClick={() => removeSongFromSetlist(song.id)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+  <DndContext
+    sensors={sensors}
+    collisionDetection={closestCenter}
+    onDragEnd={handleDragEnd}
+  >
+    <SortableContext
+      items={songs.map(s => s.id)}
+      strategy={verticalListSortingStrategy}
+      disabled={!canEdit()}
+    >
+      <div className="divide-y">
+        {songs.map((song, index) => (
+          <SortableSongItem
+            key={song.id}
+            song={song}
+            index={index}
+            canEdit={canEdit()}
+            onRemove={removeSongFromSetlist}
+            onMoveUp={() => moveSong(index, 'up')}
+            onMoveDown={() => moveSong(index, 'down')}
+            onTogglePreview={togglePreview}
+            onOpenSongForm={openSongFormModal}
+            onOpenSheetViewer={openSheetViewerForSong}
+            onOpenYoutubeModal={setYoutubeModalSong}
+            isPreviewOpen={previewStates[song.id] || false}
+            totalSongs={songs.length}
+          />
+        ))}
+      </div>
+    </SortableContext>
+  </DndContext>
+)}
         </div>
       </div>
 
@@ -1214,116 +1379,126 @@ const handleSharePlaylist = () => {
       )}
 
       {/* 송폼 편집 모달 */}
-      {showSongFormModal && selectedSongForForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="p-6 border-b">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">송폼 편집: {selectedSongForForm.songs.song_name}</h2>
-                <button
-                  onClick={() => setShowSongFormModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+{showSongFormModal && selectedSongForForm && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+      <h3 className="text-2xl font-bold mb-4">
+        {selectedSongForForm.songs.song_name} - 송폼 편집
+      </h3>
 
-            <div className="flex-1 overflow-auto p-6">
-              {/* 선택된 송폼 */}
-              <div className="mb-6">
-                <h3 className="font-semibold mb-3">선택된 송폼 순서</h3>
-                {tempSongForm.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">아직 선택된 송폼이 없습니다.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {tempSongForm.map((form, index) => (
-                      <div key={index} className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-                        <span className="font-semibold text-purple-900 min-w-[40px]">{index + 1}.</span>
-                        <span className="flex-1 font-medium">{form}</span>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => moveSongForm(index, 'up')}
-                            disabled={index === 0}
-                            className="p-1 hover:bg-purple-200 rounded disabled:opacity-30"
-                          >
-                            <ChevronUp size={16} />
-                          </button>
-                          <button
-                            onClick={() => moveSongForm(index, 'down')}
-                            disabled={index === tempSongForm.length - 1}
-                            className="p-1 hover:bg-purple-200 rounded disabled:opacity-30"
-                          >
-                            <ChevronDown size={16} />
-                          </button>
-                          <button
-                            onClick={() => removeSongForm(form)}
-                            className="p-1 hover:bg-red-200 rounded text-red-600"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 송폼 옵션 */}
-              <div className="mb-4">
-                <h3 className="font-semibold mb-3">송폼 추가</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  {songFormOptions.map((form) => (
-                    <button
-                      key={form}
-                      onClick={() => addSongForm(form)}
-                      className="px-3 py-2 bg-gray-100 hover:bg-purple-100 rounded-lg text-sm font-medium"
-                    >
-                      {form}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 커스텀 송폼 */}
-              <div>
-                <h3 className="font-semibold mb-3">커스텀 송폼</h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customFormInput}
-                    onChange={(e) => setCustomFormInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && addCustomSongForm()}
-                    placeholder="예: Special, Transition..."
-                    className="flex-1 px-3 py-2 border rounded-lg"
-                  />
-                  <button
-                    onClick={addCustomSongForm}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    추가
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t flex gap-2">
+      <div className="grid grid-cols-2 gap-6">
+        {/* 왼쪽: 사용 가능한 송폼 */}
+        <div>
+          <h4 className="font-bold mb-3 text-lg">송폼 추가</h4>
+          <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
+            {songFormOptions.map((form) => (
               <button
-                onClick={() => setShowSongFormModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                key={form}
+                onClick={() => addSongForm(form)}
+                className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
               >
-                취소
+                <span>{form}</span>
               </button>
+            ))}
+          </div>
+
+          {/* 커스텀 송폼 입력 */}
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <h5 className="font-bold mb-2">커스텀 송폼</h5>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customFormInput}
+                onChange={(e) => setCustomFormInput(e.target.value)}
+                placeholder="예: Special, Transition"
+                className="flex-1 px-3 py-2 border rounded"
+                onKeyPress={(e) => e.key === 'Enter' && addCustomSongForm()}
+              />
               <button
-                onClick={saveSongForm}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                onClick={addCustomSongForm}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >
-                저장
+                추가
               </button>
             </div>
           </div>
         </div>
-      )}
+
+        {/* 오른쪽: 선택된 송폼 순서 */}
+        <div className="flex flex-col h-[500px]">
+          <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
+          <div className="border-2 border-dashed rounded-lg p-4 flex-1 overflow-y-auto bg-gray-50">
+            {tempSongForm.length === 0 ? (
+              <p className="text-gray-400 text-center mt-20">
+                왼쪽에서 송폼을 선택하세요
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tempSongForm.map((form, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
+                  >
+                    <span className="font-bold text-green-900 flex-1 text-lg">
+                      {index + 1}. {form}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => moveSongForm(index, 'up')}
+                        disabled={index === 0}
+                        className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => moveSongForm(index, 'down')}
+                        disabled={index === tempSongForm.length - 1}
+                        className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onClick={() => removeSongForm(index)}
+                        className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {tempSongForm.length > 0 && (
+            <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+              <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
+              <p className="text-blue-800 font-mono">
+                {tempSongForm.join(' - ')}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 버튼 */}
+      <div className="mt-6 flex justify-end gap-3">
+        <button
+          onClick={() => setShowSongFormModal(false)}
+          className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium"
+        >
+          취소
+        </button>
+        <button
+          onClick={saveSongForm}
+          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
+        >
+          저장
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* 🆕 송폼 위치 선택 모달 */}
       {showPositionModal && (

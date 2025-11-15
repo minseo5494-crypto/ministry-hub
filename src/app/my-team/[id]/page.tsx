@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-// 🆕 로깅 함수 import
+import { canEditSetlist } from '@/lib/teamOperations'
 import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
-import { 
-  ArrowLeft, Plus, Calendar, FileText, Settings, 
-  Users, Music, ChevronRight, Crown, User, Search, Filter 
+import {
+  ArrowLeft, Plus, Calendar, FileText, Settings,
+  Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy
 } from 'lucide-react'
 
 interface TeamInfo {
@@ -30,6 +30,7 @@ interface Setlist {
   created_by: string
   created_at: string
   creator_email?: string
+  canEdit?: boolean
 }
 
 export default function TeamDetailPage() {
@@ -50,10 +51,39 @@ export default function TeamDetailPage() {
   })
   const [creating, setCreating] = useState(false)
 
-  // 🆕 검색 및 필터 상태
+  // 검색 및 필터 상태
   const [searchTerm, setSearchTerm] = useState('')
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all')
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'created'>('date_desc')
+
+  // 삭제 확인 모달
+  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, setlistId: string, title: string}>({
+    show: false,
+    setlistId: '',
+    title: ''
+  })
+  const [deleting, setDeleting] = useState(false)
+
+  // ✅ 빠른 편집 모달
+  const [quickEditModal, setQuickEditModal] = useState<{
+    show: boolean
+    setlistId: string
+    title: string
+    date: string
+    type: string
+    customType: string
+  }>({
+    show: false,
+    setlistId: '',
+    title: '',
+    date: '',
+    type: '',
+    customType: ''
+  })
+  const [quickEditing, setQuickEditing] = useState(false)
+
+  // ✅ 복사 중 상태
+  const [copying, setCopying] = useState(false)
 
   useEffect(() => {
     checkUser()
@@ -84,7 +114,6 @@ export default function TeamDetailPage() {
   }
 
   const fetchTeamInfo = async () => {
-    // teamId 유효성 체크
     if (!teamId || teamId === 'undefined') {
       console.error('Invalid teamId:', teamId)
       router.push('/my-team')
@@ -134,7 +163,6 @@ export default function TeamDetailPage() {
   }
 
   const fetchSetlists = async () => {
-    // teamId 유효성 체크
     if (!teamId || teamId === 'undefined') {
       console.error('Invalid teamId:', teamId)
       return
@@ -157,13 +185,14 @@ export default function TeamDetailPage() {
 
       if (error) throw error
 
-      // 각 콘티의 곡 수 가져오기
-      const setlistsWithCount = await Promise.all(
+      const setlistsWithDetails = await Promise.all(
         (data || []).map(async (setlist: any) => {
           const { count } = await supabase
             .from('team_setlist_songs')
             .select('*', { count: 'exact', head: true })
             .eq('setlist_id', setlist.id)
+
+          const canEdit = await canEditSetlist(teamId, setlist.id, user.id)
 
           return {
             id: setlist.id,
@@ -173,12 +202,13 @@ export default function TeamDetailPage() {
             song_count: count || 0,
             created_by: setlist.created_by,
             created_at: setlist.created_at,
-            creator_email: setlist.users?.email
+            creator_email: setlist.users?.email,
+            canEdit
           }
         })
       )
 
-      setSetlists(setlistsWithCount)
+      setSetlists(setlistsWithDetails)
     } catch (error) {
       console.error('Error fetching setlists:', error)
     }
@@ -204,8 +234,8 @@ export default function TeamDetailPage() {
           team_id: teamId,
           title: newSetlist.title.trim(),
           service_date: newSetlist.service_date,
-          service_type: newSetlist.service_type === '직접입력' 
-            ? newSetlist.custom_service_type.trim() 
+          service_type: newSetlist.service_type === '직접입력'
+            ? newSetlist.custom_service_type.trim()
             : newSetlist.service_type,
           created_by: user.id
         })
@@ -214,13 +244,12 @@ export default function TeamDetailPage() {
 
       if (error) throw error
 
-      // 🆕 셋리스트 생성 로깅
-      if (user && data) {  // ✅ data로 변경!
+      if (user && data) {
         await logSetlistCreate(
-          data.id,      // ✅ data.id 사용!
-          [],                 // 곡 ID 배열 (나중에 추가되면 여기에 넣기)
-          teamId,             // 팀 ID
-          user.id             // 사용자 ID
+          data.id,
+          [],
+          teamId,
+          user.id
         ).catch(error => {
           console.error('Error logging setlist create:', error)
         })
@@ -234,8 +263,7 @@ export default function TeamDetailPage() {
         service_type: '주일집회',
         custom_service_type: ''
       })
-      
-      // 콘티 상세 페이지로 이동
+
       router.push(`/my-team/${teamId}/setlist/${data.id}`)
     } catch (error: any) {
       console.error('Error creating setlist:', error)
@@ -245,17 +273,185 @@ export default function TeamDetailPage() {
     }
   }
 
-  // 🆕 필터링 및 정렬된 콘티 목록
+  // ✅ 빠른 편집 모달 열기
+  const openQuickEditModal = (setlist: Setlist) => {
+    setQuickEditModal({
+      show: true,
+      setlistId: setlist.id,
+      title: setlist.title,
+      date: setlist.service_date,
+      type: setlist.service_type,
+      customType: ''
+    })
+  }
+
+  // ✅ 빠른 편집 저장
+  const handleQuickEdit = async () => {
+    if (!quickEditModal.title.trim()) {
+      alert('콘티 제목을 입력하세요.')
+      return
+    }
+
+    if (quickEditModal.type === '직접입력' && !quickEditModal.customType.trim()) {
+      alert('예배 유형을 입력하세요.')
+      return
+    }
+
+    setQuickEditing(true)
+
+    try {
+      const { error } = await supabase
+        .from('team_setlists')
+        .update({
+          title: quickEditModal.title.trim(),
+          service_date: quickEditModal.date,
+          service_type: quickEditModal.type === '직접입력'
+            ? quickEditModal.customType.trim()
+            : quickEditModal.type,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', quickEditModal.setlistId)
+
+      if (error) throw error
+
+      alert('✅ 수정되었습니다!')
+      setQuickEditModal({
+        show: false,
+        setlistId: '',
+        title: '',
+        date: '',
+        type: '',
+        customType: ''
+      })
+      fetchSetlists() // 목록 새로고침
+    } catch (error: any) {
+      console.error('Error updating setlist:', error)
+      alert(`수정 실패: ${error.message}`)
+    } finally {
+      setQuickEditing(false)
+    }
+  }
+
+  // ✅ 콘티 복사 기능
+  const handleCopySetlist = async (setlist: Setlist) => {
+    if (!confirm(`"${setlist.title}" 콘티를 복사하시겠습니까?`)) return
+
+    setCopying(true)
+
+    try {
+      // 1. 새 콘티 생성
+      const { data: newSetlist, error: setlistError } = await supabase
+        .from('team_setlists')
+        .insert({
+          team_id: teamId,
+          title: `${setlist.title} (복사본)`,
+          service_date: new Date().toISOString().split('T')[0], // 오늘 날짜
+          service_type: setlist.service_type,
+          created_by: user.id
+        })
+        .select()
+        .single()
+
+      if (setlistError) throw setlistError
+
+      // 2. 기존 콘티의 곡들 가져오기
+      const { data: songs, error: songsError } = await supabase
+        .from('team_setlist_songs')
+        .select('*')
+        .eq('setlist_id', setlist.id)
+        .order('order_number', { ascending: true })
+
+      if (songsError) throw songsError
+
+      // 3. 곡들을 새 콘티에 복사
+      if (songs && songs.length > 0) {
+        const newSongs = songs.map(song => ({
+          setlist_id: newSetlist.id,
+          song_id: song.song_id,
+          order_number: song.order_number,
+          key_transposed: song.key_transposed,
+          notes: song.notes,
+          selected_form: song.selected_form
+        }))
+
+        const { error: insertError } = await supabase
+          .from('team_setlist_songs')
+          .insert(newSongs)
+
+        if (insertError) throw insertError
+      }
+
+      // 4. 로깅
+      if (user) {
+        await logSetlistCreate(
+          newSetlist.id,
+          songs?.map(s => s.song_id) || [],
+          teamId,
+          user.id
+        ).catch(error => {
+          console.error('Error logging setlist create:', error)
+        })
+      }
+
+      alert('✅ 콘티가 복사되었습니다!')
+      
+      // 5. 복사된 콘티를 바로 편집 모달로 열기 (제목 수정하도록)
+      setQuickEditModal({
+        show: true,
+        setlistId: newSetlist.id,
+        title: newSetlist.title,
+        date: newSetlist.service_date,
+        type: newSetlist.service_type,
+        customType: ''
+      })
+
+      fetchSetlists() // 목록 새로고침
+    } catch (error: any) {
+      console.error('Error copying setlist:', error)
+      alert(`콘티 복사 실패: ${error.message}`)
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  const handleDeleteSetlist = async () => {
+    if (!deleteConfirm.setlistId) return
+
+    setDeleting(true)
+    try {
+      const { error: songsError } = await supabase
+        .from('team_setlist_songs')
+        .delete()
+        .eq('setlist_id', deleteConfirm.setlistId)
+
+      if (songsError) throw songsError
+
+      const { error: setlistError } = await supabase
+        .from('team_setlists')
+        .delete()
+        .eq('id', deleteConfirm.setlistId)
+
+      if (setlistError) throw setlistError
+
+      alert('✅ 콘티가 삭제되었습니다.')
+      setDeleteConfirm({ show: false, setlistId: '', title: '' })
+      fetchSetlists()
+    } catch (error: any) {
+      console.error('Error deleting setlist:', error)
+      alert(`콘티 삭제 실패: ${error.message}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const filteredSetlists = setlists
     .filter(setlist => {
-      // 검색어 필터
-      const matchesSearch = searchTerm === '' || 
+      const matchesSearch = searchTerm === '' ||
         setlist.title.toLowerCase().includes(searchTerm.toLowerCase())
-      
-      // 예배 유형 필터
-      const matchesServiceType = serviceTypeFilter === 'all' || 
+
+      const matchesServiceType = serviceTypeFilter === 'all' ||
         setlist.service_type === serviceTypeFilter
-      
+
       return matchesSearch && matchesServiceType
     })
     .sort((a, b) => {
@@ -374,9 +570,8 @@ export default function TeamDetailPage() {
               </button>
             </div>
 
-            {/* 🆕 검색 및 필터 */}
+            {/* 검색 및 필터 */}
             <div className="flex flex-col md:flex-row gap-3 mt-4">
-              {/* 검색 */}
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -390,7 +585,6 @@ export default function TeamDetailPage() {
                 </div>
               </div>
 
-              {/* 예배 유형 필터 */}
               <select
                 value={serviceTypeFilter}
                 onChange={(e) => setServiceTypeFilter(e.target.value)}
@@ -402,7 +596,6 @@ export default function TeamDetailPage() {
                 <option value="기도회">기도회</option>
               </select>
 
-              {/* 정렬 */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
@@ -435,25 +628,27 @@ export default function TeamDetailPage() {
           ) : (
             <div className="divide-y">
               {filteredSetlists.map((setlist) => (
-                <button
-                    key={setlist.id}
-                    onClick={() => {
-                        // 🆕 셋리스트 조회 로깅
+                <div
+                  key={setlist.id}
+                  className="p-6 hover:bg-gray-50 transition group"
+                >
+                  <div className="flex items-center justify-between">
+                    {/* ✅ 클릭 가능한 영역 - 콘티 상세 페이지로 이동 */}
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => {
                         if (user) {
-                        logSetlistView(
-                            setlist.id,   // 셋리스트 ID
-                            teamId,       // 팀 ID
-                            user.id       // 사용자 ID
-                        ).catch(error => {
+                          logSetlistView(
+                            setlist.id,
+                            teamId,
+                            user.id
+                          ).catch(error => {
                             console.error('Error logging setlist view:', error)
-                        })
+                          })
                         }
                         router.push(`/my-team/${teamId}/setlist/${setlist.id}`)
-                    }}
-                    className="w-full p-6 hover:bg-gray-50 transition text-left group"
+                      }}
                     >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
                       <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">
                         {setlist.title}
                       </h3>
@@ -474,9 +669,59 @@ export default function TeamDetailPage() {
                         )}
                       </div>
                     </div>
-                    <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition" />
+
+                    {/* ✅ 버튼 영역 */}
+                    <div className="flex items-center gap-2 ml-4">
+                      {setlist.canEdit && (
+                        <>
+                          {/* ✅ 빠른 편집 버튼 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openQuickEditModal(setlist)
+                            }}
+                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition flex items-center gap-1"
+                            title="빠른 편집"
+                          >
+                            <Edit size={16} />
+                            <span>편집</span>
+                          </button>
+                          
+                          {/* ✅ 복사 버튼 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopySetlist(setlist)
+                            }}
+                            disabled={copying}
+                            className="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition flex items-center gap-1 disabled:opacity-50"
+                            title="콘티 복사"
+                          >
+                            <Copy size={16} />
+                            <span>복사</span>
+                          </button>
+                          
+                          {/* 삭제 버튼 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteConfirm({
+                                show: true,
+                                setlistId: setlist.id,
+                                title: setlist.title
+                              })
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="삭제"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </>
+                      )}
+                      <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition" />
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -569,6 +814,132 @@ export default function TeamDetailPage() {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
                 {creating ? '생성 중...' : '생성'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ 빠른 편집 모달 */}
+      {quickEditModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4">콘티 편집</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  콘티 제목 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={quickEditModal.title}
+                  onChange={(e) => setQuickEditModal({ ...quickEditModal, title: e.target.value })}
+                  placeholder="예: 아버지의 마음"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  예배 날짜
+                </label>
+                <input
+                  type="date"
+                  value={quickEditModal.date}
+                  onChange={(e) => setQuickEditModal({ ...quickEditModal, date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  예배 유형
+                </label>
+                <select
+                  value={quickEditModal.type}
+                  onChange={(e) => setQuickEditModal({ ...quickEditModal, type: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="주일집회">주일집회</option>
+                  <option value="중보기도회">중보기도회</option>
+                  <option value="기도회">기도회</option>
+                  <option value="직접입력">직접입력</option>
+                </select>
+              </div>
+
+              {quickEditModal.type === '직접입력' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    예배 유형 입력
+                  </label>
+                  <input
+                    type="text"
+                    value={quickEditModal.customType}
+                    onChange={(e) => setQuickEditModal({ ...quickEditModal, customType: e.target.value })}
+                    placeholder="예: 또래 기도회"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setQuickEditModal({
+                    show: false,
+                    setlistId: '',
+                    title: '',
+                    date: '',
+                    type: '',
+                    customType: ''
+                  })
+                }}
+                className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                disabled={quickEditing}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleQuickEdit}
+                disabled={quickEditing}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {quickEditing ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 삭제 확인 모달 */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4 text-red-600">콘티 삭제</h2>
+            <p className="text-gray-700 mb-6">
+              정말로 <strong>"{deleteConfirm.title}"</strong> 콘티를 삭제하시겠습니까?
+              <br />
+              <span className="text-sm text-red-500">
+                이 작업은 되돌릴 수 없으며, 포함된 모든 곡이 함께 삭제됩니다.
+              </span>
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteConfirm({ show: false, setlistId: '', title: '' })}
+                className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                disabled={deleting}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteSetlist}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+              >
+                {deleting ? '삭제 중...' : '삭제'}
               </button>
             </div>
           </div>

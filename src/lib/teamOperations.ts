@@ -19,18 +19,18 @@ export const createTeam = async (
 ) => {
   try {
     console.log('Creating team with:', { name, type, churchName, userId });
-    
+
     // 초대 코드 생성 (중복 체크)
     let inviteCode = generateInviteCode();
     let isUnique = false;
-    
+
     while (!isUnique) {
       const { data: existing } = await supabase
         .from('teams')
         .select('id')
         .eq('invite_code', inviteCode)
         .single();
-      
+
       if (!existing) {
         isUnique = true;
       } else {
@@ -177,4 +177,40 @@ export const getTeamMembers = async (teamId: string) => {
   if (error) throw error;
 
   return data || [];
+};
+
+// ✅ 콘티 편집/삭제 권한 확인 함수
+export const canEditSetlist = async (
+  teamId: string,
+  setlistId: string,
+  userId: string
+): Promise<boolean> => {
+  try {
+    // 1. 사용자의 팀 역할 확인
+    const { data: memberData } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('team_id', teamId)
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    // 2. 콘티 생성자 확인
+    const { data: setlistData } = await supabase
+      .from('team_setlists')
+      .select('created_by')
+      .eq('id', setlistId)
+      .single();
+
+    if (!memberData || !setlistData) return false;
+
+    // 3. 인도자(leader/admin) 또는 생성자이면 true
+    const isLeader = memberData.role === 'leader' || memberData.role === 'admin';
+    const isCreator = setlistData.created_by === userId;
+
+    return isLeader || isCreator;
+  } catch (error) {
+    console.error('Error checking setlist edit permission:', error);
+    return false;
+  }
 };

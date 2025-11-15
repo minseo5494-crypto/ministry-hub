@@ -63,6 +63,9 @@ export default function Home() {
   const [downloadingPDF, setDownloadingPDF] = useState(false)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
 
+  // 🆕 파일 형식 선택 모달 상태
+  const [showFormatModal, setShowFormatModal] = useState(false)
+
   // 🆕 추가
   const [showPositionModal, setShowPositionModal] = useState(false)
   const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
@@ -74,6 +77,7 @@ export default function Home() {
     'Chorus', 'Chorus1', 'Chorus2',
     'Interlude', 'Bridge', 'Outro'
   ]
+  
   
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
@@ -1022,25 +1026,36 @@ const fetchSongs = async () => {
     setCurrentFormSong(null)
   }
 
-  // 🆕 PDF 다운로드 버튼 클릭 시 (모달 열기 or 바로 생성)
-const handleDownloadPDF = () => {
+  // 🆕 다운로드 버튼 클릭 시 (파일 형식 선택 모달 열기)
+const handleDownload = () => {
   if (selectedSongs.length === 0) {
     alert('찬양을 선택해주세요.')
     return
   }
+  
+  // 파일 형식 선택 모달 열기
+  setShowFormatModal(true)
+}
 
-  // 송폼이 있는 곡이 하나라도 있으면 위치 설정 모달 열기
-  const songsWithForms = selectedSongs.filter(song => {
-    const forms = songForms[song.id] || []
-    return forms.length > 0
-  })
-
-  if (songsWithForms.length > 0) {
-    // 송폼이 있으면 모달 열기
-    setShowPositionModal(true)
+// 🆕 선택한 형식에 따라 다운로드 시작
+const startDownloadWithFormat = (format: 'pdf' | 'image') => {
+  setShowFormatModal(false)
+  
+  if (format === 'pdf') {
+    // PDF 다운로드 로직
+    const songsWithForms = selectedSongs.filter(song => {
+      const forms = songForms[song.id] || []
+      return forms.length > 0
+    })
+    
+    if (songsWithForms.length > 0) {
+      setShowPositionModal(true)
+    } else {
+      generatePDF({})
+    }
   } else {
-    // 송폼이 없으면 바로 PDF 생성
-    generatePDF({})
+    // 사진파일 다운로드
+    downloadAsImageFiles()
   }
 }
 
@@ -1078,6 +1093,249 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
   } finally {
     setDownloadingPDF(false)
   }
+}
+
+// 🆕 사진파일로 다운로드 (각 곡을 개별 파일로)
+const downloadAsImageFiles = async () => {
+  setDownloadingPDF(true)
+  
+  try {
+    let downloadCount = 0
+    
+    console.log(`✅ 총 ${selectedSongs.length}개 곡 다운로드 시작`)
+    
+    for (let i = 0; i < selectedSongs.length; i++) {
+      const song = selectedSongs[i]
+      
+      if (!song.file_url) {
+        console.warn(`⚠️ ${song.song_name}: 파일이 없어서 건너뜁니다`)
+        continue
+      }
+      
+      console.log(`\n📥 처리 중 (${i + 1}/${selectedSongs.length}): ${song.song_name}`)
+      
+      try {
+        if (song.file_type === 'pdf') {
+          // PDF → JPG 변환
+          await downloadPdfAsJpg(song, i)
+        } else {
+          // JPG/PNG → 원본 형식 유지
+          await downloadImageWithForm(song, i)
+        }
+        downloadCount++
+      } catch (error) {
+        console.error(`❌ ${song.song_name} 다운로드 실패:`, error)
+        alert(`⚠️ ${song.song_name} 다운로드 중 오류가 발생했습니다.\n계속 진행합니다.`)
+      }
+      
+      // 다음 파일 다운로드 전 0.5초 대기
+      if (i < selectedSongs.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+    }
+    
+    alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!\n\n※ 브라우저에서 여러 파일 다운로드를 차단한 경우\n설정에서 허용해주세요.`)
+  } catch (error) {
+    console.error('다운로드 오류:', error)
+    alert('❌ 다운로드 중 오류가 발생했습니다.')
+  } finally {
+    setDownloadingPDF(false)
+  }
+}
+
+// 🆕 이미지 파일에 송폼 추가해서 다운로드
+const downloadImageWithForm = async (song: Song, index: number) => {
+  return new Promise<void>((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    
+    img.onload = () => {
+      try {
+        // Canvas 생성
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('Canvas context를 가져올 수 없습니다'))
+          return
+        }
+        
+        // 1. 원본 이미지 그리기
+        ctx.drawImage(img, 0, 0)
+        
+        // 2. 송폼 오버레이
+        const selectedForms = songForms[song.id] || []
+        if (selectedForms.length > 0) {
+          const formText = selectedForms.join(' - ')
+          
+          // 폰트 크기 설정 (이미지 크기에 비례)
+          const fontSize = Math.max(24, Math.floor(canvas.height / 30))
+          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+          
+          const textWidth = ctx.measureText(formText).width
+          const padding = fontSize * 0.6
+          
+          // 우측 상단 위치
+          const x = canvas.width - textWidth - padding * 2 - 30
+          const y = 50
+          
+          // 배경 박스
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+          ctx.fillRect(
+            x - padding,
+            y - fontSize - padding / 2,
+            textWidth + padding * 2,
+            fontSize + padding
+          )
+          
+          // 텍스트
+          ctx.fillStyle = 'rgb(102, 51, 204)'
+          ctx.fillText(formText, x, y - padding / 2)
+          
+          console.log(`✅ 송폼 추가: ${formText}`)
+        }
+        
+        // 3. 원본 형식으로 다운로드
+        const mimeType = song.file_type === 'png' ? 'image/png' : 'image/jpeg'
+        const extension = song.file_type === 'png' ? 'png' : 'jpg'
+        
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Blob 생성 실패'))
+            return
+          }
+          
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `${index + 1}_${sanitizeFilename(song.song_name)}.${extension}`
+          link.click()
+          URL.revokeObjectURL(url)
+          
+          console.log(`✅ 다운로드 완료: ${link.download}`)
+          resolve()
+        }, mimeType, 0.95)
+      } catch (error) {
+        reject(error)
+      }
+    }
+    
+    img.onerror = () => {
+      reject(new Error(`이미지 로드 실패: ${song.file_url}`))
+    }
+    
+    img.src = song.file_url
+  })
+}
+
+// 🆕 PDF를 JPG로 변환해서 다운로드
+const downloadPdfAsJpg = async (song: Song, index: number) => {
+  if (!window.pdfjsLib) {
+    throw new Error('PDF.js가 로드되지 않았습니다')
+  }
+  
+  try {
+    // PDF 로드
+    const loadingTask = window.pdfjsLib.getDocument(song.file_url)
+    const pdf = await loadingTask.promise
+    const pageCount = pdf.numPages
+    
+    console.log(`📄 PDF 페이지 수: ${pageCount}`)
+    
+    // 각 페이지를 JPG로 변환
+    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      
+      // Canvas에 렌더링
+      const viewport = page.getViewport({ scale: 2.0 }) // 고화질을 위해 scale 2.0
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+      
+      if (!context) continue
+      
+      canvas.height = viewport.height
+      canvas.width = viewport.width
+      
+      // PDF 페이지 렌더링
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise
+      
+      // 송폼 오버레이 (첫 페이지에만)
+      if (pageNum === 1) {
+        const selectedForms = songForms[song.id] || []
+        if (selectedForms.length > 0) {
+          const formText = selectedForms.join(' - ')
+          
+          const fontSize = Math.max(32, Math.floor(canvas.height / 30))
+          context.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+          
+          const textWidth = context.measureText(formText).width
+          const padding = fontSize * 0.6
+          
+          const x = canvas.width - textWidth - padding * 2 - 30
+          const y = 50
+          
+          // 배경 박스
+          context.fillStyle = 'rgba(255, 255, 255, 0.95)'
+          context.fillRect(
+            x - padding,
+            y - fontSize - padding / 2,
+            textWidth + padding * 2,
+            fontSize + padding
+          )
+          
+          // 텍스트
+          context.fillStyle = 'rgb(102, 51, 204)'
+          context.fillText(formText, x, y - padding / 2)
+          
+          console.log(`✅ PDF 첫 페이지에 송폼 추가: ${formText}`)
+        }
+      }
+      
+      // JPG로 다운로드
+      await new Promise<void>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Blob 생성 실패'))
+            return
+          }
+          
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          
+          // 파일명: 페이지가 여러 개면 _page1, _page2 추가
+          const filename = pageCount > 1
+            ? `${index + 1}_${sanitizeFilename(song.song_name)}_page${pageNum}.jpg`
+            : `${index + 1}_${sanitizeFilename(song.song_name)}.jpg`
+          
+          link.download = filename
+          link.click()
+          URL.revokeObjectURL(url)
+          
+          console.log(`✅ PDF > JPG 다운로드 완료: ${filename}`)
+          resolve()
+        }, 'image/jpeg', 0.95)
+      })
+      
+      // 페이지가 여러 개면 0.3초 간격으로 다운로드
+      if (pageNum < pageCount) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+    }
+  } catch (error) {
+    console.error('PDF 변환 오류:', error)
+    throw error
+  }
+}
+
+// 🆕 파일명에서 사용 불가능한 문자 제거
+const sanitizeFilename = (filename: string): string => {
+  return filename.replace(/[\\/:*?"<>|]/g, '_')
 }
 
   // PPT 생성 함수
@@ -1498,7 +1756,7 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                   콘티 저장
                 </button>
                 <button
-                  onClick={handleDownloadPDF}  // 🆕 함수명 변경
+                  onClick={handleDownload}  // 🆕 함수명 변경
                   disabled={downloadingPDF}
                   className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
@@ -1510,7 +1768,7 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
                   ) : (
                     <>
                       <FileText className="mr-2" size={16} />
-                      PDF
+                      다운로드
                     </>
                   )}
                 </button>
@@ -2698,6 +2956,50 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
         </div>
       )}
 
+      {/* 🆕 파일 형식 선택 모달 */}
+{showFormatModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg w-full max-w-md p-6">
+      <h3 className="text-xl font-bold mb-4">다운로드 형식 선택</h3>
+      <p className="text-gray-600 mb-6">
+        어떤 형식으로 다운로드하시겠습니까?
+      </p>
+      
+      <div className="space-y-3">
+        <button
+          onClick={() => startDownloadWithFormat('pdf')}
+          className="w-full p-4 border-2 border-blue-600 rounded-lg hover:bg-blue-50 text-left transition"
+        >
+          <div className="font-bold text-blue-900 mb-1">📄 PDF 파일</div>
+          <div className="text-sm text-gray-600">
+            모든 곡을 하나의 PDF 문서로 통합
+          </div>
+        </button>
+        
+        <button
+          onClick={() => startDownloadWithFormat('image')}
+          className="w-full p-4 border-2 border-green-600 rounded-lg hover:bg-green-50 text-left transition"
+        >
+          <div className="font-bold text-green-900 mb-1">🖼️ 사진파일 (JPG/PNG)</div>
+          <div className="text-sm text-gray-600">
+            각 곡을 개별 이미지 파일로 다운로드
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            ※ PDF 악보는 JPG로 변환됩니다
+          </div>
+        </button>
+      </div>
+      
+      <button
+        onClick={() => setShowFormatModal(false)}
+        className="w-full mt-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+      >
+        취소
+      </button>
+    </div>
+  </div>
+)}
+
       {/* PPT 옵션 모달 */}
       {showPPTModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -2790,60 +3092,63 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
               </div>
 
               {/* 오른쪽: 선택된 순서 */}
-              <div>
-                <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
-                <div className="border-2 border-dashed rounded-lg p-4 min-h-[500px] bg-gray-50">
-                  {tempSelectedForm.length === 0 ? (
-                    <p className="text-gray-400 text-center mt-20">
-                      왼쪽에서 섹션을 선택하세요
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {tempSelectedForm.map((abbr, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
-                        >
-                          <span className="font-bold text-green-900 flex-1 text-lg">
-                            {index + 1}. {abbr}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => moveSectionUp(index)}
-                              disabled={index === 0}
-                              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              onClick={() => moveSectionDown(index)}
-                              disabled={index === tempSelectedForm.length - 1}
-                              className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            >
-                              ↓
-                            </button>
-                            <button
-                              onClick={() => removeSection(index)}
-                              className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {tempSelectedForm.length > 0 && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                    <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
-                    <p className="text-blue-800 font-mono">
-                      {tempSelectedForm.join(' - ')}
-                    </p>
-                  </div>
-                )}
-              </div>
+<div className="flex flex-col h-[500px]">
+  <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
+  
+  {/* 스크롤 가능한 송폼 리스트 영역 */}
+  <div className="flex-1 overflow-y-auto border-2 border-dashed rounded-lg p-4 bg-gray-50">
+    {tempSelectedForm.length === 0 ? (
+      <p className="text-gray-400 text-center mt-20">
+        왼쪽에서 섹션을 선택하세요
+      </p>
+    ) : (
+      <div className="space-y-2">
+        {tempSelectedForm.map((abbr, index) => (
+          <div
+            key={index}
+            className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
+          >
+            <span className="font-bold text-green-900 flex-1 text-lg">
+              {index + 1}. {abbr}
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => moveSectionUp(index)}
+                disabled={index === 0}
+                className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                ↑
+              </button>
+              <button
+                onClick={() => moveSectionDown(index)}
+                disabled={index === tempSelectedForm.length - 1}
+                className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                ↓
+              </button>
+              <button
+                onClick={() => removeSection(index)}
+                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+
+  {/* 미리보기 - 하단 고정 */}
+  {tempSelectedForm.length > 0 && (
+    <div className="flex-none mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+      <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
+      <p className="text-blue-800 font-mono">
+        {tempSelectedForm.join(' - ')}
+      </p>
+    </div>
+  )}
+</div>
             </div>
 
             {/* 버튼 */}
