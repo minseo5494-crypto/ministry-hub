@@ -3,6 +3,19 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+// Supabase 클라이언트에 추가 옵션 설정
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'x-my-custom-header': 'worship-app'
+    },
+  },
+})
+
 // ===== 타입 정의 =====
 export interface User {
   id: string;
@@ -161,4 +174,3 @@ export const ABBREVIATION_TO_SECTION: { [key: string]: string } =
     Object.entries(SECTION_ABBREVIATIONS).map(([k, v]) => [v, k])
   )
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)

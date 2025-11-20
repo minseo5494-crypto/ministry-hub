@@ -139,6 +139,7 @@ export default function Home() {
     themes: string[];
     theme: string;
     key: string;
+    isMinor: boolean;  // ← 추가!
     timeSignature: string;
     tempo: string;
     searchText: string;
@@ -149,6 +150,7 @@ export default function Home() {
     themes: [] as string[],
     theme: '',  // 기존 호환성
     key: '',
+    isMinor: false,  // ← 추가!
     timeSignature: '',
     tempo: '',
     searchText: '',
@@ -915,9 +917,28 @@ const fetchSongs = async () => {
       )
     }
 
-    if (filters.key) {
-      result = result.filter(song => song.key === filters.key)
+    if (filters.key || filters.isMinor) {
+  result = result.filter(song => {
+    if (!song.key) return false
+    
+    // Minor만 선택된 경우 - 모든 minor key
+    if (filters.isMinor && !filters.key) {
+      return song.key.includes('m')
     }
+    
+    // 특정 키만 선택된 경우 - Major keys
+    if (filters.key && !filters.isMinor) {
+      return song.key === filters.key && !song.key.includes('m')
+    }
+    
+    // 특정 키 + Minor 선택된 경우
+    if (filters.key && filters.isMinor) {
+      return song.key === `${filters.key}m`
+    }
+    
+    return false
+  })
+}
 
     if (filters.timeSignature) {
       result = result.filter(song => song.time_signature === filters.timeSignature)
@@ -1499,6 +1520,18 @@ const sanitizeFilename = (filename: string): string => {
 
             {/* 네비게이션 */}
             <div className="flex items-center gap-2">
+               {/* 새로운 스트리밍 허브 버튼 추가 */}
+  <button
+    onClick={() => router.push('/streaming')}
+    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+  >
+    <Music size={18} />
+    <span className="text-sm font-medium">PraiseHub</span>
+  </button>
+  
+  {/* 기존 버튼들은 그대로 유지 */}
+  <Link href="/setlists">
+  </Link>
               {user ? (
                 <>
                   <button
@@ -1662,10 +1695,11 @@ const sanitizeFilename = (filename: string): string => {
         <div className="max-w-7xl mx-auto px-4">
           {/* 제목 - 강제 흰색 */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4" style={{ 
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 hero-title" style={{
               color: '#FFFFFF',
+              textShadow: '0 2px 8px rgba(0,0,0,0.8)'
             }}>
-              찬양으로 하나되는 예배
+            찬양으로 하나되는 예배
             </h1>
             <p className="text-xl" style={{ 
               color: '#FFFFFF',
@@ -1695,24 +1729,22 @@ const sanitizeFilename = (filename: string): string => {
           {/* 통계 카드 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold">{songs.length}+</div>
-              <div className="text-sm opacity-90">찬양곡</div>
+              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>{songs.length}+</div>
+              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>찬양곡</div>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold">
+              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>
                 {new Set(songs.map(s => s.team_name).filter(Boolean)).size}+
               </div>
-              <div className="text-sm opacity-90">아티스트</div>
+              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>아티스트</div>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold">{selectedSongs.length}</div>
-              <div className="text-sm opacity-90">선택한 곡</div>
+              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>{selectedSongs.length}</div>
+              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>선택한 곡</div>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-3xl font-bold">
-                12
-              </div>
-              <div className="text-sm opacity-90">Key</div>
+              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>12</div>
+              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>Key</div>
             </div>
           </div>
         </div>
@@ -1819,6 +1851,7 @@ const sanitizeFilename = (filename: string): string => {
                       themes: [],
                       theme: '',
                       key: '',
+                      isMinor: false,  // ← 추가!
                       timeSignature: '',
                       tempo: '',
                       searchText: '',
@@ -1895,163 +1928,176 @@ const sanitizeFilename = (filename: string): string => {
                       </button>
                     ))}
                   </div>
-                </div>
 
-                {/* 박자 필터 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Clock className="inline w-4 h-4 mr-1" />
-                    박자
-                  </label>
-                  <select
-                    value={filters.timeSignature}
-                    onChange={(e) => setFilters({ ...filters, timeSignature: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">전체</option>
-                    {timeSignatures.map(ts => (
-                      <option key={ts} value={ts}>{ts}</option>
-                    ))}
-                  </select>
-                </div>
+                  {/* Minor 버튼 추가 */}
+<button
+  onClick={() => setFilters({ ...filters, isMinor: !filters.isMinor })}
+  className={`w-full mt-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
+    filters.isMinor
+      ? 'bg-purple-500 text-white'
+      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+  }`}
+>
+  minor
+</button>
+</div>  {/* Key 필터 div 닫기 */}
 
-                {/* 템포 필터 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Activity className="inline w-4 h-4 mr-1" />
-                    템포
-                  </label>
-                  <div className="flex gap-2">
-                    {tempos.map(tempo => (
-                      <button
-                        key={tempo}
-                        onClick={() => setFilters({ 
-                          ...filters, 
-                          tempo: filters.tempo === tempo ? '' : tempo 
-                        })}
-                        className={`flex-1 px-3 py-2 rounded text-sm transition ${
-                          filters.tempo === tempo
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
-                      >
-                        {tempo}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+{/* 박자 필터 */}
+<div className="mb-6">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    <Clock className="inline w-4 h-4 mr-1" />
+    박자
+  </label>
+  <select
+    value={filters.timeSignature}
+    onChange={(e) => setFilters({ ...filters, timeSignature: e.target.value })}
+    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+  >
+    <option value="">전체</option>
+    {timeSignatures.map(ts => (
+      <option key={ts} value={ts}>{ts}</option>
+    ))}
+  </select>
+</div>
 
-                {/* 👇 BPM 범위 필터 추가 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Activity className="inline w-4 h-4 mr-1" />
-                    BPM 범위
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      placeholder="최소"
-                      value={filters.bpmMin}
-                      onChange={(e) => setFilters({ ...filters, bpmMin: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0"
-                    />
-                    <span className="text-gray-500">~</span>
-                    <input
-                      type="number"
-                      placeholder="최대"
-                      value={filters.bpmMax}
-                      onChange={(e) => setFilters({ ...filters, bpmMax: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0"
-                    />
-                  </div>
-                  {/* 빠른 선택 버튼 (선택사항) */}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '80' })}
-                      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                    >
-                      느림 (~80)
-                    </button>
-                    <button
-                      onClick={() => setFilters({ ...filters, bpmMin: '80', bpmMax: '120' })}
-                      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                    >
-                      보통 (80-120)
-                    </button>
-                    <button
-                      onClick={() => setFilters({ ...filters, bpmMin: '120', bpmMax: '' })}
-                      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                    >
-                      빠름 (120~)
-                    </button>
-                  </div>
-                  {/* 초기화 버튼 */}
-                  {(filters.bpmMin || filters.bpmMax) && (
-                    <button
-                      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '' })}
-                      className="w-full mt-2 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
-                    >
-                      BPM 필터 초기화
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+{/* 템포 필터 */}
+<div className="mb-6">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    <Activity className="inline w-4 h-4 mr-1" />
+    템포
+  </label>
+  <div className="flex gap-2">
+    {tempos.map(tempo => (
+      <button
+        key={tempo}
+        onClick={() => setFilters({ 
+          ...filters, 
+          tempo: filters.tempo === tempo ? '' : tempo 
+        })}
+        className={`flex-1 px-3 py-2 rounded text-sm transition ${
+          filters.tempo === tempo
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-100 hover:bg-gray-200'
+        }`}
+      >
+        {tempo}
+      </button>
+    ))}
+  </div>
+</div>
 
-          {/* 오른쪽: 곡 목록 */}
-          <div className="flex-1">
-            {/* 툴바 */}
-            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setShowFilterPanel(!showFilterPanel)}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
-                  >
-                    <Filter size={20} />
-                  </button>
-                  <span className="text-gray-600">
-                    {filteredSongs.length}개의 찬양
-                  </span>
-                </div>
+{/* BPM 범위 필터 */}
+<div className="mb-6">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    <Activity className="inline w-4 h-4 mr-1" />
+    BPM 범위
+  </label>
+  <div className="flex items-center gap-2">
+    <input
+      type="number"
+      placeholder="최소"
+      value={filters.bpmMin}
+      onChange={(e) => setFilters({ ...filters, bpmMin: e.target.value })}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      min="0"
+    />
+    <span className="text-gray-500">~</span>
+    <input
+      type="number"
+      placeholder="최대"
+      value={filters.bpmMax}
+      onChange={(e) => setFilters({ ...filters, bpmMax: e.target.value })}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      min="0"
+    />
+  </div>
+  {/* 빠른 선택 버튼 */}
+  <div className="flex gap-2 mt-2">
+    <button
+      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '80' })}
+      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+    >
+      느림 (~80)
+    </button>
+    <button
+      onClick={() => setFilters({ ...filters, bpmMin: '80', bpmMax: '120' })}
+      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+    >
+      보통 (80-120)
+    </button>
+    <button
+      onClick={() => setFilters({ ...filters, bpmMin: '120', bpmMax: '' })}
+      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+    >
+      빠름 (120~)
+    </button>
+  </div>
+  {/* 초기화 버튼 */}
+  {(filters.bpmMin || filters.bpmMax) && (
+    <button
+      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '' })}
+      className="w-full mt-2 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
+    >
+      BPM 필터 초기화
+    </button>
+  )}
+</div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded-lg transition ${
-                      viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <Grid size={20} />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition ${
-                      viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <List size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
+</div>  
+)}
+</div>  {/* 필터 패널 전체 div 닫기 */}
 
-            {/* 곡 목록 */}
-            <div className="bg-white rounded-lg shadow-md">
-              {loading ? (
-                <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                  <p className="mt-4 text-gray-600">불러오는 중...</p>
-                </div>
-              ) : filteredSongs.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Music size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p>검색 결과가 없습니다.</p>
-                </div>
-              ) : viewMode === 'grid' ? (
+{/* 오른쪽: 곡 목록 */}
+<div className="flex-1">
+  {/* 툴바 */}
+  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => setShowFilterPanel(!showFilterPanel)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <Filter size={20} />
+        </button>
+        <span className="text-gray-600">
+          {filteredSongs.length}개의 찬양
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setViewMode('grid')}
+          className={`p-2 rounded-lg transition ${
+            viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+          }`}
+        >
+          <Grid size={20} />
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`p-2 rounded-lg transition ${
+            viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+          }`}
+        >
+          <List size={20} />
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {/* 곡 목록 */}
+  <div className="bg-white rounded-lg shadow-md">
+    {loading ? (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <p className="mt-4 text-gray-600">불러오는 중...</p>
+      </div>
+    ) : filteredSongs.length === 0 ? (
+      <div className="text-center py-12 text-gray-500">
+        <Music size={48} className="mx-auto mb-4 text-gray-300" />
+        <p>검색 결과가 없습니다.</p>
+      </div>
+    ) : viewMode === 'grid' ? (
   
   // 그리드 뷰
   <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2551,20 +2597,57 @@ const sanitizeFilename = (filename: string): string => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Key */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
-                  <select
-                    value={newSong.key}
-                    onChange={(e) => setNewSong({ ...newSong, key: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">선택</option>
-                    {keys.map(key => (
-                      <option key={key} value={key}>{key}</option>
-                    ))}
-                  </select>
-                </div>
+  {/* Key */}
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+    
+    {/* Major/Minor 토글 추가 */}
+    <div className="flex gap-2 mb-2">
+      <button
+        type="button"
+        onClick={() => setNewSong({ ...newSong, key: newSong.key.replace('m', '') })}
+        className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+          !newSong.key.includes('m')
+            ? 'bg-blue-500 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        Major
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (!newSong.key.includes('m') && newSong.key) {
+            setNewSong({ ...newSong, key: newSong.key + 'm' })
+          }
+        }}
+        className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+          newSong.key.includes('m')
+            ? 'bg-purple-500 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        Minor
+      </button>
+    </div>
+  
+    
+    <select
+      value={newSong.key.replace('m', '')}
+      onChange={(e) => {
+        const baseKey = e.target.value
+        const isMinor = newSong.key.includes('m')
+        setNewSong({ ...newSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
+      }}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+    >
+      <option value="">선택</option>
+      {keys.map(key => (
+        <option key={key} value={key}>{key}{newSong.key.includes('m') ? 'm' : ''}</option>
+      ))}
+    </select>
+  </div>  {/* ← Key div 닫기 */}
+
 
                 {/* 박자 */}
                 <div>
@@ -3064,7 +3147,8 @@ const sanitizeFilename = (filename: string): string => {
                         className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
                       >
                         <span>{section}</span>
-                        <span className="text-sm bg-blue-200 px-2 py-1 rounded">{abbr}</span>
+                        <span className="text-sm bg-blue-200 px-2 py-1 
+rounded text-blue-900">{abbr}</span>
                       </button>
                     )
                   })}

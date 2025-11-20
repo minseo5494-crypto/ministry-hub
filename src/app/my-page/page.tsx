@@ -678,10 +678,6 @@ export default function MyPagePage() {
     onClick={() => router.push('/my-page/settings')}
     className="pb-3 px-4 font-medium text-gray-600 hover:text-gray-900 transition-colors"
   >
-    <div className="flex items-center gap-2">
-      <Settings size={18} />
-      계정 설정
-    </div>
   </button>
 </div>
 

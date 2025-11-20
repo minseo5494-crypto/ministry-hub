@@ -38,16 +38,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   const [selectedPositions, setSelectedPositions] = useState<{ [key: string]: PositionType }>({})
   const [selectedSizes, setSelectedSizes] = useState<{ [key: string]: SizeType }>({})
   const containerRef = useRef<HTMLDivElement>(null)
-  const imageRef = useRef<HTMLImageElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   
-  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 })
   const [imageDisplaySize, setImageDisplaySize] = useState({ width: 0, height: 0 })
-  const [pdfLoading, setPdfLoading] = useState(false)
-  
-  // 🆕 렌더링 작업 추적을 위한 ref
-  const renderTaskRef = useRef<any>(null)
-  const isRenderingRef = useRef(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     if (songsWithForms.length === 0) {
@@ -62,7 +55,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   const currentSong = songsWithForms[currentSongIndex]
   const currentForms = songForms[currentSong.id] || currentSong.selectedForm || []
 
-  // 각 곡의 초기 위치
+  // 각 곡의 초기 위치 설정
   useEffect(() => {
     const initialPositions: { [key: string]: SongFormPosition } = {}
     const initialSelected: { [key: string]: PositionType } = {}
@@ -79,178 +72,32 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     setSelectedSizes(prev => ({ ...initialSizes, ...prev }))
   }, [songsWithForms.length])
 
-  // 🆕 PDF 파일의 첫 페이지를 canvas에 렌더링 (중복 방지)
+  // 컨테이너 크기 계산
   useEffect(() => {
-    let isMounted = true
-    
-    const renderPDF = async () => {
-      if (!currentSong.file_url || !canvasRef.current) return
+    if (containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth
+      const containerHeight = containerRef.current.clientHeight
       
-      const isPDF = currentSong.file_type === 'pdf' || currentSong.file_url.toLowerCase().endsWith('.pdf')
+      // A4 비율로 표시 크기 계산
+      const scale = Math.min(
+        containerWidth * 0.9 / 210,
+        containerHeight * 0.9 / 297
+      )
       
-      if (!isPDF) return
-      
-      // 🔧 이미 렌더링 중이면 취소
-      if (isRenderingRef.current) {
-        console.log('⚠️ 렌더링 중... 대기')
-        return
-      }
-      
-      // 🔧 이전 렌더링 작업이 있으면 취소
-      if (renderTaskRef.current) {
-        try {
-          await renderTaskRef.current.cancel()
-          console.log('✅ 이전 렌더링 작업 취소됨')
-        } catch (e) {
-          // 이미 완료된 작업은 무시
-        }
-        renderTaskRef.current = null
-      }
-
-      isRenderingRef.current = true
-      setPdfLoading(true)
-      
-      try {
-        // pdfjs-dist 동적 import
-        const pdfjsLib = await import('pdfjs-dist')
-        
-        if (!isMounted) return
-        
-        // PDF.js worker 설정
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 
-            `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-        }
-        
-        console.log('📄 PDF.js 버전:', pdfjsLib.version)
-        console.log('🔧 Worker URL:', pdfjsLib.GlobalWorkerOptions.workerSrc)
-        console.log('🎵 렌더링 시작:', currentSong.song_name)
-        
-        // PDF 로드
-        const loadingTask = pdfjsLib.getDocument(currentSong.file_url)
-        const pdf = await loadingTask.promise
-        
-        if (!isMounted) return
-        
-        // 첫 페이지 가져오기
-        const page = await pdf.getPage(1)
-        
-        if (!isMounted || !canvasRef.current) return
-        
-        const canvas = canvasRef.current
-        const context = canvas.getContext('2d')
-        
-        if (!context || !containerRef.current) return
-        
-        // 🔧 Canvas 초기화
-        context.clearRect(0, 0, canvas.width, canvas.height)
-        
-        // 컨테이너 크기에 맞춰 scale 계산
-        const containerWidth = containerRef.current.clientWidth
-        const containerHeight = containerRef.current.clientHeight
-        
-        const viewport = page.getViewport({ scale: 1 })
-        
-        // 🔧 적절한 스케일 계산 (여백 포함)
-        const scale = Math.min(
-          (containerWidth * 0.85) / viewport.width,
-          (containerHeight * 0.85) / viewport.height
-        )
-        
-        const scaledViewport = page.getViewport({ scale })
-        
-        // Canvas 크기 설정
-        canvas.width = scaledViewport.width
-        canvas.height = scaledViewport.height
-        
-        console.log(`📐 Canvas 크기: ${canvas.width} x ${canvas.height}`)
-        console.log(`📐 Scale: ${scale}`)
-        
-        // 실제 표시 크기 저장
-        setImageDisplaySize({
-          width: scaledViewport.width,
-          height: scaledViewport.height
-        })
-        
-        setImageNaturalSize({
-          width: viewport.width,
-          height: viewport.height
-        })
-        
-        // PDF 페이지 렌더링
-        const renderTask = page.render({
-          canvasContext: context as any,
-          viewport: scaledViewport
-        } as any)
-        
-        // 🔧 렌더링 작업 저장
-        renderTaskRef.current = renderTask
-        
-        await renderTask.promise
-        
-        if (!isMounted) return
-        
-        console.log('✅ PDF 렌더링 완료:', currentSong.song_name)
-        setPdfLoading(false)
-        isRenderingRef.current = false
-        renderTaskRef.current = null
-        
-      } catch (error: any) {
-        if (error?.name === 'RenderingCancelledException') {
-          console.log('ℹ️ 렌더링이 취소되었습니다.')
-        } else {
-          console.error('❌ PDF 렌더링 오류:', error)
-        }
-        if (isMounted) {
-          setPdfLoading(false)
-          isRenderingRef.current = false
-          renderTaskRef.current = null
-        }
-      }
+      setImageDisplaySize({
+        width: 210 * scale,
+        height: 297 * scale
+      })
     }
-    
-    renderPDF()
-    
-    // 🔧 Cleanup: 컴포넌트 언마운트 또는 곡 변경 시 렌더링 취소
-    return () => {
-      isMounted = false
-      if (renderTaskRef.current) {
-        renderTaskRef.current.cancel().catch(() => {})
-        renderTaskRef.current = null
-      }
-      isRenderingRef.current = false
-    }
-  }, [currentSong.file_url, currentSong.file_type, currentSong.id])
+  }, [currentSong.id])
 
-  // 이미지 로드 시 실제 크기 계산 (이미지 파일용)
+  // 파일 로드 상태 관리
   useEffect(() => {
-    if (imageRef.current && currentSong.file_url) {
-      const isPDF = currentSong.file_type === 'pdf' || currentSong.file_url.toLowerCase().endsWith('.pdf')
-      
-      if (!isPDF) {
-        const img = new Image()
-        img.onload = () => {
-          setImageNaturalSize({ width: img.width, height: img.height })
-          
-          if (containerRef.current) {
-            const containerWidth = containerRef.current.clientWidth
-            const containerHeight = containerRef.current.clientHeight
-            
-            const scale = Math.min(
-              containerWidth / img.width,
-              containerHeight / img.height
-            ) * 0.9
-            
-            setImageDisplaySize({
-              width: img.width * scale,
-              height: img.height * scale
-            })
-          }
-        }
-        img.src = currentSong.file_url
-      }
-    }
-  }, [currentSong.file_url, currentSong.id, currentSong.file_type])
+    setIsLoading(true)
+    // iframe이나 이미지가 로드되면 로딩 상태 해제
+    const timer = setTimeout(() => setIsLoading(false), 1500)
+    return () => clearTimeout(timer)
+  }, [currentSong.id])
 
   const currentPosition = positions[currentSong.id] || { x: 50, y: 95, size: 'medium' }
   const currentSelectedPosition = selectedPositions[currentSong.id] || 'top-center'
@@ -307,11 +154,10 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   }
 
   const getSizeStyles = (size: SizeType) => {
-    // 🔧 실제 PDF 크기와 비율 맞춤 (더 작게 표시)
     const sizeMap = {
-      small: { fontSize: '0.7rem', padding: '0.5rem 0.75rem' },      // 16pt → 약 11px
-      medium: { fontSize: '1rem', padding: '0.625rem 1rem' },        // 22pt → 약 16px
-      large: { fontSize: '1.3rem', padding: '0.875rem 1.25rem' }     // 28pt → 약 21px
+      small: { fontSize: '0.7rem', padding: '0.5rem 0.75rem' },
+      medium: { fontSize: '1rem', padding: '0.625rem 1rem' },
+      large: { fontSize: '1.3rem', padding: '0.875rem 1.25rem' }
     }
     return sizeMap[size]
   }
@@ -336,7 +182,73 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     alert('✅ 모든 곡에 적용되었습니다!')
   }
 
+  // 파일 타입 확인
   const isPDF = currentSong.file_type === 'pdf' || currentSong.file_url?.toLowerCase().endsWith('.pdf')
+  const isImage = currentSong.file_type === 'image' || 
+    currentSong.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+
+  // PDF Viewer 렌더링 함수
+  const renderFileViewer = () => {
+    if (!currentSong.file_url) {
+      return (
+        <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="text-center">
+            <div className="text-6xl mb-4">📄</div>
+            <p>악보 미리보기</p>
+          </div>
+        </div>
+      )
+    }
+
+    if (isPDF) {
+      // Google Docs Viewer 사용 (Supabase URL도 지원)
+      const encodedUrl = encodeURIComponent(currentSong.file_url)
+      const googleViewerUrl = `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`
+      
+      return (
+        <iframe
+          src={googleViewerUrl}
+          className="w-full h-full bg-white"
+          title={`${currentSong.song_name} PDF`}
+          onLoad={() => setIsLoading(false)}
+          style={{ border: 'none' }}
+        />
+      )
+    }
+
+    if (isImage) {
+      return (
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <img
+            src={currentSong.file_url}
+            alt={currentSong.song_name}
+            className="max-w-full max-h-full object-contain"
+            onLoad={() => setIsLoading(false)}
+            draggable={false}
+            style={{ userSelect: 'none' }}
+          />
+        </div>
+      )
+    }
+
+    // 지원하지 않는 파일 형식
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="text-6xl mb-4">⚠️</div>
+          <p className="text-gray-600 mb-4">미리보기를 지원하지 않는 파일 형식입니다</p>
+          <a
+            href={currentSong.file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            파일 열기
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
@@ -481,7 +393,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             </button>
           </div>
 
-          {/* 악보 미리보기 */}
+          {/* 악보 미리보기 컨테이너 */}
           <div
             ref={containerRef}
             className="relative w-full bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden"
@@ -491,92 +403,63 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               margin: '0 auto'
             }}
           >
-            {currentSong.file_url ? (
-              <div 
-                className="absolute inset-0 flex items-center justify-center bg-gray-100"
-                style={{ padding: '5%' }}
-              >
-                {isPDF ? (
-                  <div className="relative flex items-center justify-center w-full h-full">
-                    {pdfLoading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-2"></div>
-                          <p className="text-sm text-gray-600">PDF 로딩 중...</p>
-                        </div>
-                      </div>
-                    )}
-                    <canvas
-                      ref={canvasRef}
-                      className="max-w-full max-h-full object-contain"
-                      style={{ 
-                        userSelect: 'none'
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <img
-                    ref={imageRef}
-                    src={currentSong.file_url}
-                    alt={currentSong.song_name}
-                    className="max-w-full max-h-full object-contain"
-                    draggable={false}
-                    style={{ 
-                      userSelect: 'none',
-                      maxWidth: '90%',
-                      maxHeight: '90%'
-                    }}
-                  />
-                )}
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
+            {/* 로딩 표시 */}
+            {isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-20">
                 <div className="text-center">
-                  <div className="text-6xl mb-4">📄</div>
-                  <p>악보 미리보기</p>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">파일 로딩 중...</p>
                 </div>
               </div>
             )}
 
-            {/* 송폼 박스 */}
-            {!pdfLoading && imageDisplaySize.width > 0 && (
+            {/* 파일 뷰어 */}
+            {renderFileViewer()}
+
+            {/* 송폼 박스 오버레이 */}
+            {!isLoading && imageDisplaySize.width > 0 && (
               <div
                 className="absolute bg-white border-3 rounded-lg shadow-xl border-purple-600 transition-all"
                 style={{
-                  // 🔧 실제 이미지/PDF 표시 영역 내로 위치 제한
                   left: `calc(50% + ${((currentPosition.x - 50) / 100) * imageDisplaySize.width}px)`,
-                  bottom: `calc(50% + ${((currentPosition.y - 50) / 100) * imageDisplaySize.height}px)`,  // 🔧 부호 수정!
+                  bottom: `calc(50% + ${((currentPosition.y - 50) / 100) * imageDisplaySize.height}px)`,
                   transform: 'translate(-50%, 50%)',
                   userSelect: 'none',
                   borderWidth: '3px',
                   pointerEvents: 'none',
+                  zIndex: 10,
                   ...getSizeStyles(currentSelectedSize)
                 }}
               >
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
-                    {/* 🔧 점 크기를 더 작게 조정 */}
                     <div 
                       className="bg-purple-600 rounded-full"
                       style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
+                        width: currentSelectedSize === 'small' ? '0.25rem' : 
+                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
+                        height: currentSelectedSize === 'small' ? '0.25rem' : 
+                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
                       }}
-                    ></div>
+                    />
                     <div 
                       className="bg-purple-600 rounded-full"
                       style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
+                        width: currentSelectedSize === 'small' ? '0.25rem' : 
+                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
+                        height: currentSelectedSize === 'small' ? '0.25rem' : 
+                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
                       }}
-                    ></div>
+                    />
                     <div 
                       className="bg-purple-600 rounded-full"
                       style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
+                        width: currentSelectedSize === 'small' ? '0.25rem' : 
+                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
+                        height: currentSelectedSize === 'small' ? '0.25rem' : 
+                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
                       }}
-                    ></div>
+                    />
                   </div>
                   <span className="font-bold text-purple-900 whitespace-nowrap">
                     {currentForms.join(' - ')}
