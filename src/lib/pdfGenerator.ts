@@ -18,9 +18,9 @@ type SizeType = 'small' | 'medium' | 'large'
 
 // 송폼 위치를 퍼센트로 저장 (0~100)
 export interface SongFormPosition {
-  x: number  // 0~100 (왼쪽 0%, 오른쪽 100%)
-  y: number  // 0~100 (위쪽 100%, 아래쪽 0%)
-  size?: SizeType  // 🆕 크기 정보
+  x: number // 0~100 (왼쪽 0%, 오른쪽 100%)
+  y: number // 0~100 (위쪽 100%, 아래쪽 0%) 
+  size?: SizeType // 크기 정보
 }
 
 export interface PDFGenerateOptions {
@@ -32,19 +32,19 @@ export interface PDFGenerateOptions {
 }
 
 /**
- * 🆕 크기에 따른 폰트 크기와 패딩 반환
+ * 크기에 따른 폰트 크기와 패딩 반환 - 일관성 있게 수정
  */
 const getSizeConfig = (size: SizeType = 'medium') => {
   const sizeMap = {
-    small: { fontSize: 16, padding: 12 },    // 작게 (더 크게!)
-    medium: { fontSize: 22, padding: 14 },   // 보통 (더 크게!)
-    large: { fontSize: 28, padding: 18 }     // 크게 (훨씬 크게!)
+    small: { fontSize: 14, padding: 10 },   // 더 일관성 있는 크기
+    medium: { fontSize: 18, padding: 12 },  // 표준 크기
+    large: { fontSize: 24, padding: 16 }    // 큰 크기
   }
   return sizeMap[size]
 }
 
 /**
- * 퍼센트 좌표를 실제 좌표로 변환
+ * 퍼센트 좌표를 실제 좌표로 변환 - 전체 A4 페이지 기준으로 수정
  */
 const calculatePositionFromPercent = (
   percentX: number,
@@ -54,12 +54,18 @@ const calculatePositionFromPercent = (
   textWidth: number,
   fontSize: number
 ): { x: number; y: number } => {
-  const margin = 20
-  const maxX = pageWidth - textWidth - margin
-  const maxY = pageHeight - fontSize - margin
+  // X 좌표: 전체 A4 페이지 기준으로 계산
+  let x
+  if (percentX <= 20) { // 왼쪽
+    x = 40 // 페이지 왼쪽 여백
+  } else if (percentX >= 80) { // 오른쪽
+    x = pageWidth - textWidth - 40 // 페이지 오른쪽 여백
+  } else { // 가운데
+    x = (pageWidth - textWidth) / 2 // 페이지 정중앙
+  }
   
-  const x = Math.max(margin, Math.min(maxX, (percentX / 100) * pageWidth))
-  const y = Math.max(margin + fontSize, Math.min(maxY, (percentY / 100) * pageHeight))
+  // Y 좌표: 상단에서 15포인트만 떨어진 위치 (더 상단으로)
+  const y = pageHeight - fontSize - 15 // 상단에서 15포인트만 아래
   
   return { x, y }
 }
@@ -87,6 +93,10 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     const html2canvas = (await import('html2canvas')).default
 
     const mergedPdf = await PDFDocument.create()
+    
+    // A4 크기 정의
+    const A4_WIDTH = 595.28
+    const A4_HEIGHT = 841.89
 
     // fontkit 등록
     const fontkit = await import('@pdf-lib/fontkit')
@@ -128,7 +138,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           ${date}
         </p>
       </div>
-
+      
       <div style="margin-top: 80px;">
         <h2 style="font-size: 24px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
           곡 목록
@@ -163,7 +173,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     // 각 곡별 악보 페이지 추가
     for (let i = 0; i < songs.length; i++) {
       const song = songs[i]
-      console.log(`\n🎵 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
+      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
 
       if (!song.file_url) {
         console.warn(`⚠️ "${song.song_name}"에 악보 파일이 없습니다. 건너뜁니다.`)
@@ -177,10 +187,10 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
         // 송폼 정보 가져오기
         const selectedForms = songForms[song.id] || song.selectedForm || []
         const songPosition = songFormPositions?.[song.id]
-        const formSize = songPosition?.size || 'medium'  // 🆕 크기 정보
-        
+        const formSize = songPosition?.size || 'medium' // 크기 정보
+
         console.log(`📍 송폼 위치 정보:`, songPosition)
-        console.log(`📏 송폼 크기:`, formSize)
+        console.log(`📐 송폼 크기:`, formSize)
 
         // PDF 파일 처리
         if (song.file_type === 'pdf' || song.file_url.toLowerCase().endsWith('.pdf')) {
@@ -188,53 +198,74 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           const pageCount = sheetPdf.getPageCount()
           console.log(`📄 PDF 페이지 수: ${pageCount}`)
 
-          const copiedPages = await mergedPdf.copyPages(sheetPdf, Array.from({ length: pageCount }, (_, i) => i))
-
           for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
-            const page = copiedPages[pageIdx]
-            mergedPdf.addPage(page)
+            const srcPage = sheetPdf.getPage(pageIdx)
+            const { width: srcWidth, height: srcHeight } = srcPage.getSize()
+            
+            // A4 크기로 새 페이지 생성
+            const newPage = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+            
+            // 원본 페이지를 A4에 맞게 스케일 조정
+            const scale = Math.min(
+              A4_WIDTH / srcWidth,
+              A4_HEIGHT / srcHeight
+            ) * 0.95 // 95%로 여백 확보
+            
+            const scaledWidth = srcWidth * scale
+            const scaledHeight = srcHeight * scale
+            
+            // 중앙 정렬
+            const x = (A4_WIDTH - scaledWidth) / 2
+            const y = (A4_HEIGHT - scaledHeight) / 2
+            
+            // PDF 페이지 임베드
+            const embeddedPage = await mergedPdf.embedPage(srcPage)
+            
+            // 스케일된 PDF 그리기
+            newPage.drawPage(embeddedPage, {
+              x: x,
+              y: y,
+              width: scaledWidth,
+              height: scaledHeight,
+            })
 
-            // 송폼 오버레이 (각 곡의 첫 페이지에)
+            // 송폼 오버레이 (각 곡의 첫 페이지에만)
             if (pageIdx === 0 && selectedForms.length > 0 && koreanFont) {
               console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name}`)
-              console.log(`   송폼 내용: ${selectedForms.join(' - ')}`)
+              console.log(` 송폼 내용: ${selectedForms.join(' - ')}`)
 
-              const pages = mergedPdf.getPages()
-              const currentPage = pages[pages.length - 1]
-              
               const formText = selectedForms.join(' - ')
-              const { width, height } = currentPage.getSize()
-
-              // 🆕 크기에 따른 설정 가져오기
               const { fontSize, padding } = getSizeConfig(formSize)
               const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
 
-              console.log(`   📏 폰트 크기: ${fontSize}, 패딩: ${padding}`)
+              console.log(` 📐 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
-              // 위치 계산
-              let x, y
+              // 전체 A4 페이지 기준으로 위치 계산
+              let textX, textY
               if (songPosition) {
                 const position = calculatePositionFromPercent(
                   songPosition.x,
                   songPosition.y,
-                  width,
-                  height,
+                  A4_WIDTH,
+                  A4_HEIGHT,
                   textWidth,
                   fontSize
                 )
-                x = position.x
-                y = position.y
-                console.log(`   📍 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
+                textX = position.x
+                textY = position.y
+                console.log(` 📍 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
+                console.log(` 📍 실제 좌표: x=${textX}, y=${textY}`)
               } else {
-                x = width - textWidth - 30
-                y = height - 30
-                console.log(`   📍 기본 위치 사용: 우측 상단`)
+                // 기본값: 우측 상단
+                textX = A4_WIDTH - textWidth - 40
+                textY = A4_HEIGHT - fontSize - 15
+                console.log(` 📍 기본 위치 사용: 우측 상단`)
               }
 
               // 배경 박스
-              currentPage.drawRectangle({
-                x: x - padding,
-                y: y - (padding * 0.5),
+              newPage.drawRectangle({
+                x: textX - padding,
+                y: textY - (padding * 0.5),
                 width: textWidth + (padding * 2),
                 height: fontSize + padding,
                 color: rgb(1, 1, 1),
@@ -242,9 +273,9 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
               })
 
               // 텍스트
-              currentPage.drawText(formText, {
-                x: x,
-                y: y,
+              newPage.drawText(formText, {
+                x: textX,
+                y: textY,
                 size: fontSize,
                 font: koreanFont,
                 color: rgb(0.4, 0.2, 0.8),
@@ -255,11 +286,11 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           }
 
           console.log(`✅ PDF 악보 처리 완료: ${song.song_name}`)
-        } 
+        }
         // 이미지 파일 처리
         else {
           console.log('🖼️ 이미지 파일 처리 중...')
-          
+
           let image
           if (song.file_url.toLowerCase().endsWith('.png')) {
             image = await mergedPdf.embedPng(arrayBuffer)
@@ -267,18 +298,18 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             image = await mergedPdf.embedJpg(arrayBuffer)
           }
 
-          const page = mergedPdf.addPage([595.28, 841.89])
-          const { width, height } = page.getSize()
+          // A4 크기로 페이지 생성
+          const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
 
           const imgWidth = image.width
           const imgHeight = image.height
-          const scale = Math.min(width / imgWidth, height / imgHeight) * 0.9
+          const scale = Math.min(A4_WIDTH / imgWidth, A4_HEIGHT / imgHeight) * 0.95 // 95%로 여백 확보
 
           const scaledWidth = imgWidth * scale
           const scaledHeight = imgHeight * scale
 
-          const x = (width - scaledWidth) / 2
-          const y = (height - scaledHeight) / 2
+          const x = (A4_WIDTH - scaledWidth) / 2
+          const y = (A4_HEIGHT - scaledHeight) / 2
 
           page.drawImage(image, {
             x: x,
@@ -290,31 +321,31 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           // 송폼 오버레이
           if (selectedForms.length > 0 && koreanFont) {
             const formText = selectedForms.join(' - ')
-            
-            // 🆕 크기에 따른 설정 가져오기
             const { fontSize, padding } = getSizeConfig(formSize)
             const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
 
-            console.log(`   📏 이미지: 폰트 크기: ${fontSize}, 패딩: ${padding}`)
+            console.log(` 📐 이미지: 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
-            // 위치 계산
+            // 전체 A4 페이지 기준으로 위치 계산
             let textX, textY
             if (songPosition) {
               const position = calculatePositionFromPercent(
                 songPosition.x,
                 songPosition.y,
-                width,
-                height,
+                A4_WIDTH,
+                A4_HEIGHT,
                 textWidth,
                 fontSize
               )
               textX = position.x
               textY = position.y
-              console.log(`   📍 이미지: 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
+              console.log(` 📍 이미지: 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
+              console.log(` 📍 이미지: 실제 좌표: x=${textX}, y=${textY}`)
             } else {
-              textX = width - textWidth - 30
-              textY = height - 30
-              console.log(`   📍 이미지: 기본 위치 사용: 우측 상단`)
+              // 기본값: 우측 상단
+              textX = A4_WIDTH - textWidth - 40
+              textY = A4_HEIGHT - fontSize - 15
+              console.log(` 📍 이미지: 기본 위치 사용: 우측 상단`)
             }
 
             // 배경 박스

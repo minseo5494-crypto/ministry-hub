@@ -62,7 +62,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     const initialSizes: { [key: string]: SizeType } = {}
     songsWithForms.forEach(song => {
       if (!positions[song.id]) {
-        initialPositions[song.id] = { x: 50, y: 95, size: 'medium' }
+        initialPositions[song.id] = { x: 50, y: 95, size: 'medium' } // Y값 95로 유지 (상단)
         initialSelected[song.id] = 'top-center'
         initialSizes[song.id] = 'medium'
       }
@@ -118,10 +118,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   }
 
   const setPosition = (positionType: PositionType) => {
+    // X 좌표를 더 넓게 분포시킴 (전체 페이지 기준)
     const presets: Record<PositionType, { x: number; y: number }> = {
-      'top-left': { x: 15, y: 95 },
-      'top-center': { x: 50, y: 95 },
-      'top-right': { x: 85, y: 95 }
+      'top-left': { x: 10, y: 95 },    // 왼쪽
+      'top-center': { x: 50, y: 95 },  // 가운데
+      'top-right': { x: 90, y: 95 }    // 오른쪽
     }
     
     setPositions(prev => ({
@@ -187,11 +188,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   const isImage = currentSong.file_type === 'image' || 
     currentSong.file_url?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
 
-  // PDF Viewer 렌더링 함수
+  // PDF Viewer 렌더링 함수 - A4 크기로 표준화
   const renderFileViewer = () => {
     if (!currentSong.file_url) {
       return (
-        <div className="w-full h-full flex items-center justify-center text-gray-400">
+        <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
           <div className="text-center">
             <div className="text-6xl mb-4">📄</div>
             <p>악보 미리보기</p>
@@ -200,40 +201,54 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
       )
     }
 
-    if (isPDF) {
-      // Google Docs Viewer 사용 (Supabase URL도 지원)
-      const encodedUrl = encodeURIComponent(currentSong.file_url)
-      const googleViewerUrl = `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`
-      
+    if (isPDF || isImage) {
+      // 모든 파일을 A4 크기의 컨테이너 안에 표시
       return (
-        <iframe
-          src={googleViewerUrl}
-          className="w-full h-full bg-white"
-          title={`${currentSong.song_name} PDF`}
-          onLoad={() => setIsLoading(false)}
-          style={{ border: 'none' }}
-        />
-      )
-    }
-
-    if (isImage) {
-      return (
-        <div className="w-full h-full flex items-center justify-center p-4">
-          <img
-            src={currentSong.file_url}
-            alt={currentSong.song_name}
-            className="max-w-full max-h-full object-contain"
-            onLoad={() => setIsLoading(false)}
-            draggable={false}
-            style={{ userSelect: 'none' }}
-          />
+        <div className="w-full h-full flex items-center justify-center p-4 bg-gray-50">
+          {isPDF ? (
+            // PDF는 Google Docs Viewer 사용
+            <iframe
+              src={`https://docs.google.com/viewer?url=${encodeURIComponent(currentSong.file_url)}&embedded=true`}
+              className="w-full h-full bg-white shadow-inner"
+              title={`${currentSong.song_name} PDF`}
+              onLoad={() => setIsLoading(false)}
+              style={{ 
+                border: '1px solid #e5e7eb',
+                maxWidth: '100%',
+                maxHeight: '100%'
+              }}
+            />
+          ) : (
+            // 이미지는 A4 비율에 맞게 표시
+            <div 
+              className="bg-white shadow-inner flex items-center justify-center"
+              style={{
+                width: '100%',
+                height: '100%',
+                border: '1px solid #e5e7eb'
+              }}
+            >
+              <img
+                src={currentSong.file_url}
+                alt={currentSong.song_name}
+                className="object-contain"
+                onLoad={() => setIsLoading(false)}
+                draggable={false}
+                style={{ 
+                  maxWidth: '95%',
+                  maxHeight: '95%',
+                  userSelect: 'none'
+                }}
+              />
+            </div>
+          )}
         </div>
       )
     }
 
     // 지원하지 않는 파일 형식
     return (
-      <div className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
         <div className="text-center p-8">
           <div className="text-6xl mb-4">⚠️</div>
           <p className="text-gray-600 mb-4">미리보기를 지원하지 않는 파일 형식입니다</p>
@@ -287,7 +302,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 <ul className="text-sm text-gray-600 space-y-1">
                   <li>• 악보 상단의 왼쪽, 가운데, 오른쪽 중 선택할 수 있습니다</li>
                   <li>• 송폼 박스의 크기를 작게/보통/크게 조절할 수 있습니다</li>
-                  <li>• 미리보기는 실제 PDF와 동일한 비율로 표시됩니다</li>
+                  <li>• 모든 악보가 A4 크기로 표준화되어 표시됩니다</li>
                   <li>• "모든 곡에 적용" 버튼으로 한 번에 설정할 수 있습니다</li>
                 </ul>
               </div>
@@ -393,12 +408,12 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             </button>
           </div>
 
-          {/* 악보 미리보기 컨테이너 */}
+          {/* 악보 미리보기 컨테이너 - A4 크기로 표준화 */}
           <div
             ref={containerRef}
-            className="relative w-full bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden"
+            className="relative w-full bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden"
             style={{
-              aspectRatio: '210 / 297',
+              aspectRatio: '210 / 297', // A4 비율
               maxHeight: '650px',
               margin: '0 auto'
             }}
@@ -413,58 +428,35 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               </div>
             )}
 
-            {/* 파일 뷰어 */}
+            {/* 파일 뷰어 - A4 크기로 표준화 */}
             {renderFileViewer()}
 
-            {/* 송폼 박스 오버레이 */}
-            {!isLoading && imageDisplaySize.width > 0 && (
+            {/* 송폼 박스 오버레이 - 전체 페이지 기준 위치 */}
+            {!isLoading && imageDisplaySize.width > 0 && currentForms.length > 0 && (
               <div
-                className="absolute bg-white border-3 rounded-lg shadow-xl border-purple-600 transition-all"
+                className="absolute bg-white bg-opacity-95 text-purple-700 rounded-lg shadow-xl font-bold transition-all duration-200"
                 style={{
-                  left: `calc(50% + ${((currentPosition.x - 50) / 100) * imageDisplaySize.width}px)`,
-                  bottom: `calc(50% + ${((currentPosition.y - 50) / 100) * imageDisplaySize.height}px)`,
-                  transform: 'translate(-50%, 50%)',
-                  userSelect: 'none',
-                  borderWidth: '3px',
-                  pointerEvents: 'none',
+                  // 위치를 정확하게 계산
+                  left: currentSelectedPosition === 'top-left' 
+                    ? '5%' 
+                    : currentSelectedPosition === 'top-center'
+                    ? '50%'
+                    : '95%', // 우측은 95%
+                  top: '5%', // 상단 5%
+                  transform: currentSelectedPosition === 'top-center' 
+                    ? 'translateX(-50%)' 
+                    : currentSelectedPosition === 'top-right'
+                    ? 'translateX(-100%)' // 우측은 박스 너비만큼 왼쪽으로 이동
+                    : 'translateX(0)',
+                  border: '2px solid rgba(147, 51, 234, 0.5)',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
                   zIndex: 10,
+                  pointerEvents: 'none',
+                  whiteSpace: 'nowrap', // 텍스트 줄바꿈 방지 - 가로로 한 줄 표시
                   ...getSizeStyles(currentSelectedSize)
                 }}
               >
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    <div 
-                      className="bg-purple-600 rounded-full"
-                      style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : 
-                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : 
-                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
-                      }}
-                    />
-                    <div 
-                      className="bg-purple-600 rounded-full"
-                      style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : 
-                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : 
-                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
-                      }}
-                    />
-                    <div 
-                      className="bg-purple-600 rounded-full"
-                      style={{
-                        width: currentSelectedSize === 'small' ? '0.25rem' : 
-                               currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem',
-                        height: currentSelectedSize === 'small' ? '0.25rem' : 
-                                currentSelectedSize === 'medium' ? '0.375rem' : '0.5rem'
-                      }}
-                    />
-                  </div>
-                  <span className="font-bold text-purple-900 whitespace-nowrap">
-                    {currentForms.join(' - ')}
-                  </span>
-                </div>
+                {currentForms.join(' - ')}
               </div>
             )}
           </div>
