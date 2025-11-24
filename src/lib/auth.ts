@@ -6,12 +6,12 @@ import { logActivity } from './activityLogger';
 // ============================================
 
 // 회원가입
-export const signUp = async (email: string, password: string, name: string) => {
+export const signUp = async (email: string, password: string, name: string, churchName?: string) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { 
+      data: {
         name: name,
       },
       emailRedirectTo: `${window.location.origin}/auth/callback`
@@ -28,6 +28,7 @@ export const signUp = async (email: string, password: string, name: string) => {
         id: data.user.id,
         email: data.user.email,
         name: name,
+        church_name: churchName || null,
         auth_provider: 'email',
         email_verified: false,
         created_at: new Date().toISOString()
@@ -36,7 +37,7 @@ export const signUp = async (email: string, password: string, name: string) => {
     if (insertError) {
       console.error('Error inserting user:', insertError);
     }
-
+    
     // 📊 회원가입 로깅
     logActivity({ 
       actionType: 'user_signup', 
@@ -46,6 +47,7 @@ export const signUp = async (email: string, password: string, name: string) => {
 
   return data;
 };
+
 
 // 로그인
 export const signIn = async (email: string, password: string) => {

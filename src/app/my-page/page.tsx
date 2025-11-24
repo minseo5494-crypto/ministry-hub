@@ -95,12 +95,85 @@ export default function MyPagePage() {
     season: '',
     youtube_url: '',
     lyrics: '',
-    visibility: 'public' as 'public' | 'private' | 'teams',
+    visibility: 'teams' as 'public' | 'teams' | 'private',
     shared_with_teams: [] as string[]
   })
   const [uploadingFile, setUploadingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [teamNameSuggestions, setTeamNameSuggestions] = useState<string[]>([])
+  const [showTeamSuggestions, setShowTeamSuggestions] = useState(false)
+  // ✅ 팀명 자동완성 검색
+const searchTeamNames = async (query: string) => {
+  if (!query.trim()) {
+    setTeamNameSuggestions([])
+    setShowTeamSuggestions(false)
+    return
+  }
+
+  
+
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('team_name')
+      .ilike('team_name', `%${query}%`)
+      .not('team_name', 'is', null)
+      .limit(50)
+
+    if (error) throw error
+
+    // 중복 제거 및 정렬
+    const uniqueTeams = [...new Set(data?.map(d => d.team_name).filter(Boolean))] as string[]
+    setTeamNameSuggestions(uniqueTeams.slice(0, 10))
+    setShowTeamSuggestions(uniqueTeams.length > 0)
+  } catch (error) {
+    console.error('Error searching team names:', error)
+  }
+}
+
+// ✅ 곡 삭제
+  const handleDeleteSong = async (song: any) => {
+  if (!confirm(`"${song.song_name}" 곡을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+    return
+  }
+
+  setDeleting(song.id)
+
+  try {
+    // 1. Storage에서 파일 삭제 (있는 경우)
+    if (song.file_url) {
+      const filePath = song.file_url.split('/song-sheets/')[1]
+      if (filePath) {
+        const { error: storageError } = await supabase.storage
+          .from('song-sheets')
+          .remove([filePath])
+
+        if (storageError) {
+          console.warn('파일 삭제 실패:', storageError)
+        }
+      }
+    }
+
+    // 2. DB에서 곡 삭제
+    const { error: deleteError } = await supabase
+      .from('songs')
+      .delete()
+      .eq('id', song.id)
+      .eq('uploaded_by', user.id)  // 본인이 업로드한 곡만 삭제 가능
+
+    if (deleteError) throw deleteError
+
+    alert(`✅ "${song.song_name}"이(가) 삭제되었습니다.`)
+    fetchUploadedSongs()  // 목록 새로고침
+  } catch (error: any) {
+    console.error('Error deleting song:', error)
+    alert(`삭제 실패: ${error.message}`)
+  } finally {
+    setDeleting(null)
+  }
+}
 
   useEffect(() => {
     checkUser()
@@ -292,7 +365,7 @@ export default function MyPagePage() {
           file_url: fileUrl || null,
           file_type: fileType || null,
           requester_id: user.id,
-          visibility: 'public',
+          visibility: 'teams',
           status: 'pending'
         })
 
@@ -606,16 +679,28 @@ export default function MyPagePage() {
                     </div>
 
                     <div className="flex gap-2 ml-4">
-                      {song.file_url && (
-                        <button
-                          onClick={() => setPreviewSong(song)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-                          title="미리보기"
-                        >
-                          <Eye size={20} />
-                        </button>
-                      )}
-                    </div>
+{song.file_url && (
+<button
+onClick={() => setPreviewSong(song)}
+className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+title="미리보기"
+>
+<Eye size={20} />
+</button>
+)}
+<button
+onClick={() => handleDeleteSong(song)}
+disabled={deleting === song.id}
+className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
+title="삭제"
+>
+{deleting === song.id ? (
+  <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+) : (
+  <Trash2 size={20} />
+)}
+</button>
+</div>
                   </div>
                 </div>
               ))}
@@ -695,18 +780,48 @@ export default function MyPagePage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  팀명 / 아티스트
-                </label>
-                <input
-                  type="text"
-                  value={newSong.team_name}
-                  onChange={(e) => setNewSong({ ...newSong, team_name: e.target.value })}
-                  placeholder="예: 위러브(Welove)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
+              <div className="relative">
+<label className="block text-sm font-medium text-gray-700 mb-1">
+팀명 / 아티스트
+</label>
+<input
+type="text"
+value={newSong.team_name}
+onChange={(e) => {
+  setNewSong({ ...newSong, team_name: e.target.value })
+  searchTeamNames(e.target.value)
+}}
+onFocus={() => {
+  if (teamNameSuggestions.length > 0) setShowTeamSuggestions(true)
+}}
+onBlur={() => {
+  // 약간의 딜레이를 줘서 클릭 이벤트가 먼저 처리되도록
+  setTimeout(() => setShowTeamSuggestions(false), 200)
+}}
+placeholder="예: 위러브(Welove)"
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+autoComplete="off"
+/>
+{/* 자동완성 드롭다운 */}
+{showTeamSuggestions && teamNameSuggestions.length > 0 && (
+  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+    {teamNameSuggestions.map((team, index) => (
+      <button
+        key={index}
+        type="button"
+        onClick={() => {
+          setNewSong({ ...newSong, team_name: team })
+          setShowTeamSuggestions(false)
+        }}
+        className="w-full px-4 py-2 text-left hover:bg-blue-50 text-gray-900 text-sm"
+      >
+        {team}
+      </button>
+    ))}
+  </div>
+)}
+</div>
+
 
               {/* 🆕 공유 범위 선택 */}
               <div className="border-t pt-4">

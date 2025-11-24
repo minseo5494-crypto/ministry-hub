@@ -8,7 +8,8 @@ import { canEditSetlist } from '@/lib/teamOperations'
 import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
 import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
-  Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy
+  Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
+  Pin, Eye, Presentation, Youtube, Download, X, Check
 } from 'lucide-react'
 
 interface TeamInfo {
@@ -31,6 +32,22 @@ interface Setlist {
   created_at: string
   creator_email?: string
   canEdit?: boolean
+}
+
+interface FixedSong {
+  id: string
+  song_id: string
+  category: string
+  order_number: number
+  song: {
+    id: string
+    song_name: string
+    team_name: string
+    key: string
+    file_url: string
+    file_type: string
+    youtube_url?: string
+  }
 }
 
 export default function TeamDetailPage() {
@@ -85,15 +102,32 @@ export default function TeamDetailPage() {
   // ✅ 복사 중 상태
   const [copying, setCopying] = useState(false)
 
+  // ✅ 고정곡 관련 상태
+const [fixedSongs, setFixedSongs] = useState<FixedSong[]>([])
+const [selectedFixedSongs, setSelectedFixedSongs] = useState<FixedSong[]>([])
+const [showAddFixedSongModal, setShowAddFixedSongModal] = useState(false)
+const [fixedSongSearch, setFixedSongSearch] = useState('')
+const [availableSongs, setAvailableSongs] = useState<any[]>([])
+const [selectedCategory, setSelectedCategory] = useState('여는찬양')
+const [customCategory, setCustomCategory] = useState('')
+const [previewFixedSong, setPreviewFixedSong] = useState<FixedSong | null>(null)
+const [showFixedSongSheet, setShowFixedSongSheet] = useState(false)
+const [currentSheetSong, setCurrentSheetSong] = useState<any>(null)
+const [youtubeModalSong, setYoutubeModalSong] = useState<any>(null)
+const [downloadingFixed, setDownloadingFixed] = useState(false)
+
+const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉헌찬양', '직접입력']
+
   useEffect(() => {
     checkUser()
   }, [])
 
   useEffect(() => {
-    if (user && teamId) {
-      fetchTeamInfo()
-      fetchSetlists()
-    }
+  if (user && teamId) {
+    fetchTeamInfo()
+    fetchSetlists()
+    fetchFixedSongs()
+  }
   }, [user, teamId])
 
   const checkUser = async () => {
@@ -213,6 +247,178 @@ export default function TeamDetailPage() {
       console.error('Error fetching setlists:', error)
     }
   }
+
+  // ✅ 고정곡 가져오기
+const fetchFixedSongs = async () => {
+  try {
+    // 1. 고정곡 목록 가져오기
+    const { data: fixedData, error: fixedError } = await supabase
+      .from('team_fixed_songs')
+      .select('id, song_id, category, order_number')
+      .eq('team_id', teamId)
+      .order('category')
+      .order('order_number')
+
+    if (fixedError) throw fixedError
+    if (!fixedData || fixedData.length === 0) {
+      setFixedSongs([])
+      return
+    }
+
+    // 2. 곡 정보 별도로 가져오기
+    const songIds = fixedData.map(f => f.song_id)
+    const { data: songsData, error: songsError } = await supabase
+      .from('songs')
+      .select('id, song_name, team_name, key, file_url, file_type, youtube_url')
+      .in('id', songIds)
+
+    if (songsError) throw songsError
+
+    // 3. 데이터 합치기
+    const combined = fixedData.map(fixed => ({
+      ...fixed,
+      song: songsData?.find(s => s.id === fixed.song_id) || {
+        id: fixed.song_id,
+        song_name: '알 수 없는 곡',
+        team_name: '',
+        key: '',
+        file_url: '',
+        file_type: '',
+        youtube_url: ''
+      }
+    }))
+
+    setFixedSongs(combined as any)
+  } catch (error) {
+    console.error('Error fetching fixed songs:', error)
+  }
+}
+
+// ✅ 고정곡 추가
+const handleAddFixedSong = async (song: any) => {
+  // 직접입력인 경우 검증
+  if (selectedCategory === '직접입력' && !customCategory.trim()) {
+    alert('카테고리를 입력하세요.')
+    return
+  }
+
+  const finalCategory = selectedCategory === '직접입력' ? customCategory.trim() : selectedCategory
+
+  try {
+    const { error } = await supabase
+      .from('team_fixed_songs')
+      .insert({
+        team_id: teamId,
+        song_id: song.id,
+        category: finalCategory,
+        created_by: user.id
+      })
+
+    if (error) {
+      if (error.code === '23505') {
+        alert('이미 추가된 고정곡입니다.')
+      } else {
+        throw error
+      }
+      return
+    }
+
+    alert('✅ 고정곡이 추가되었습니다!')
+    setShowAddFixedSongModal(false)
+    setFixedSongSearch('')
+    fetchFixedSongs()
+  } catch (error) {
+    console.error('Error adding fixed song:', error)
+    alert('고정곡 추가에 실패했습니다.')
+  }
+}
+
+// ✅ 고정곡 삭제
+const handleDeleteFixedSong = async (fixedSongId: string) => {
+  if (!confirm('이 고정곡을 삭제하시겠습니까?')) return
+
+  try {
+    const { error } = await supabase
+      .from('team_fixed_songs')
+      .delete()
+      .eq('id', fixedSongId)
+
+    if (error) throw error
+
+    alert('✅ 고정곡이 삭제되었습니다.')
+    fetchFixedSongs()
+  } catch (error) {
+    console.error('Error deleting fixed song:', error)
+    alert('고정곡 삭제에 실패했습니다.')
+  }
+}
+
+// ✅ 고정곡 선택 토글
+const toggleFixedSongSelection = (fixedSong: FixedSong) => {
+  if (selectedFixedSongs.find(s => s.id === fixedSong.id)) {
+    setSelectedFixedSongs(selectedFixedSongs.filter(s => s.id !== fixedSong.id))
+  } else {
+    setSelectedFixedSongs([...selectedFixedSongs, fixedSong])
+  }
+}
+
+// ✅ 고정곡 검색용 곡 목록 가져오기
+const searchSongsForFixed = async (query: string) => {
+  if (!query.trim()) {
+    setAvailableSongs([])
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('id, song_name, team_name, key, file_url, file_type, youtube_url')
+      .or(`song_name.ilike.%${query}%,team_name.ilike.%${query}%`)
+      .limit(20)
+
+    if (error) throw error
+    setAvailableSongs(data || [])
+  } catch (error) {
+    console.error('Error searching songs:', error)
+  }
+}
+
+// ✅ 고정곡 다운로드 (선택된 곡들)
+const downloadSelectedFixedSongs = async () => {
+  if (selectedFixedSongs.length === 0) {
+    alert('다운로드할 곡을 선택하세요.')
+    return
+  }
+
+  setDownloadingFixed(true)
+
+  try {
+    for (const fixedSong of selectedFixedSongs) {
+      const song = fixedSong.song
+      if (!song.file_url) continue
+
+      const response = await fetch(song.file_url)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${song.song_name}.${song.file_type || 'pdf'}`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      // 다음 파일 다운로드 전 0.3초 대기
+      await new Promise(resolve => setTimeout(resolve, 300))
+    }
+
+    alert(`✅ ${selectedFixedSongs.length}개 곡이 다운로드되었습니다!`)
+    setSelectedFixedSongs([])
+  } catch (error) {
+    console.error('Download error:', error)
+    alert('다운로드 중 오류가 발생했습니다.')
+  } finally {
+    setDownloadingFixed(false)
+  }
+}
 
   const handleCreateSetlist = async () => {
     if (!newSetlist.title.trim()) {
@@ -555,6 +761,153 @@ export default function TeamDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* ✅ 고정곡 섹션 */}
+<div className="bg-white rounded-lg shadow-md mb-6">
+  <div className="p-6 border-b">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Pin className="w-5 h-5 text-orange-500" />
+        <h2 className="text-xl font-bold text-gray-900">고정곡</h2>
+        <span className="text-sm text-gray-500">({fixedSongs.length}곡)</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {selectedFixedSongs.length > 0 && (
+          <button
+            onClick={downloadSelectedFixedSongs}
+            disabled={downloadingFixed}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center disabled:bg-gray-400"
+          >
+            <Download className="mr-2" size={18} />
+            {downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}
+          </button>
+        )}
+        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+          <button
+            onClick={() => setShowAddFixedSongModal(true)}
+            className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
+          >
+            <Plus className="mr-2" size={18} />
+            고정곡 추가
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div className="p-6">
+    {fixedSongs.length === 0 ? (
+      <p className="text-center text-gray-500 py-8">
+        아직 등록된 고정곡이 없습니다.
+        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+          <><br /><span className="text-sm">위의 "고정곡 추가" 버튼을 눌러 추가하세요.</span></>
+        )}
+      </p>
+    ) : (
+      <div className="space-y-3">
+        {/* 카테고리별로 그룹화 */}
+        {fixedSongCategories.map(category => {
+          const songsInCategory = fixedSongs.filter(fs => fs.category === category)
+          if (songsInCategory.length === 0) return null
+
+          return (
+            <div key={category} className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-600 mb-2 flex items-center gap-2">
+                <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">{category}</span>
+              </h3>
+              <div className="space-y-2">
+                {songsInCategory.map(fixedSong => (
+                  <div
+                    key={fixedSong.id}
+                    className={`flex items-center justify-between p-4 rounded-lg border transition ${
+                      selectedFixedSongs.find(s => s.id === fixedSong.id)
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* 선택 체크박스 */}
+                      <button
+                        onClick={() => toggleFixedSongSelection(fixedSong)}
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
+                          selectedFixedSongs.find(s => s.id === fixedSong.id)
+                            ? 'border-orange-500 bg-[#C5D7F2] text-white'
+                            : 'border-gray-300 hover:border-orange-400'
+                        }`}
+                      >
+                        {selectedFixedSongs.find(s => s.id === fixedSong.id) && (
+                          <Check size={14} />
+                        )}
+                      </button>
+
+                      {/* 곡 정보 */}
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{fixedSong.song.song_name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {fixedSong.song.team_name} {fixedSong.song.key && `| Key: ${fixedSong.song.key}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 액션 버튼들 */}
+                    <div className="flex items-center gap-2">
+                      {/* 악보 미리보기 */}
+                      {fixedSong.song.file_url && (
+                        <button
+                          onClick={() => setPreviewFixedSong(fixedSong)}
+                          className="p-2 hover:bg-gray-100 rounded-lg"
+                          title="악보 미리보기"
+                        >
+                          <Eye size={20} className="text-gray-600" />
+                        </button>
+                      )}
+
+                      {/* 악보보기 전용모드 */}
+                      {fixedSong.song.file_url && (
+                        <button
+                          onClick={() => {
+                            setCurrentSheetSong(fixedSong.song)
+                            setShowFixedSongSheet(true)
+                          }}
+                          className="p-2 hover:bg-gray-100 rounded-lg"
+                          title="악보보기 전용모드"
+                        >
+                          <Presentation size={20} className="text-gray-600" />
+                        </button>
+                      )}
+
+                      {/* 유튜브 */}
+                      {fixedSong.song.youtube_url && (
+                        <button
+                          onClick={() => setYoutubeModalSong(fixedSong.song)}
+                          className="p-2 hover:bg-gray-100 rounded-lg"
+                          title="YouTube"
+                        >
+                          <Youtube size={20} className="text-red-500" />
+                        </button>
+                      )}
+
+                      {/* 삭제 버튼 (리더만) */}
+                      {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+                        <button
+                          onClick={() => handleDeleteFixedSong(fixedSong.id)}
+                          className="p-2 hover:bg-red-100 rounded-lg"
+                          title="삭제"
+                        >
+                          <Trash2 size={20} className="text-red-500" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )}
+  </div>
+</div>
 
         {/* 콘티 목록 */}
         <div className="bg-white rounded-lg shadow-md">
@@ -945,6 +1298,202 @@ export default function TeamDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ✅ 고정곡 추가 모달 */}
+{showAddFixedSongModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+      <div className="p-6 border-b flex items-center justify-between">
+        <h3 className="text-xl font-bold">고정곡 추가</h3>
+        <button
+          onClick={() => {
+  setShowAddFixedSongModal(false)
+  setFixedSongSearch('')
+  setAvailableSongs([])
+  setCustomCategory('')
+}}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="p-6">
+        {/* 카테고리 선택 */}
+<div className="mb-4">
+  <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
+  <select
+    value={selectedCategory}
+    onChange={(e) => setSelectedCategory(e.target.value)}
+    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+  >
+    {fixedSongCategories.map(cat => (
+      <option key={cat} value={cat}>{cat}</option>
+    ))}
+  </select>
+</div>
+
+{/* 직접입력 필드 */}
+{selectedCategory === '직접입력' && (
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 mb-2">카테고리 직접입력</label>
+    <input
+      type="text"
+      value={customCategory}
+      onChange={(e) => setCustomCategory(e.target.value)}
+      placeholder="예: 특송, 헌금찬양 등"
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+    />
+  </div>
+)}
+
+        {/* 곡 검색 */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">곡 검색</label>
+          <input
+            type="text"
+            value={fixedSongSearch}
+            onChange={(e) => {
+              setFixedSongSearch(e.target.value)
+              searchSongsForFixed(e.target.value)
+            }}
+            placeholder="곡 이름 또는 아티스트 검색..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+          />
+        </div>
+
+        {/* 검색 결과 */}
+        <div className="max-h-60 overflow-y-auto">
+          {availableSongs.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">
+              {fixedSongSearch ? '검색 결과가 없습니다.' : '곡 이름을 검색하세요.'}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {availableSongs.map(song => (
+                <div
+                  key={song.id}
+                  className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                >
+                  <div>
+                    <h4 className="font-medium text-gray-900">{song.song_name}</h4>
+                    <p className="text-sm text-gray-600">{song.team_name}</p>
+                  </div>
+                  <button
+                    onClick={() => handleAddFixedSong(song)}
+                    className="px-3 py-1 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#C5D7F2] text-sm"
+                  >
+                    추가
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* ✅ 고정곡 미리보기 모달 */}
+{previewFixedSong && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+      <div className="p-4 border-b flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold">{previewFixedSong.song.song_name}</h3>
+          <p className="text-sm text-gray-600">{previewFixedSong.song.team_name}</p>
+        </div>
+        <button
+          onClick={() => setPreviewFixedSong(null)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      <div className="p-4 overflow-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+        {previewFixedSong.song.file_type === 'pdf' ? (
+          <iframe
+            src={previewFixedSong.song.file_url}
+            className="w-full h-[70vh]"
+            title={previewFixedSong.song.song_name}
+          />
+        ) : (
+          <img
+            src={previewFixedSong.song.file_url}
+            alt={previewFixedSong.song.song_name}
+            className="max-w-full mx-auto"
+          />
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* ✅ 악보보기 전용모드 모달 */}
+{showFixedSongSheet && currentSheetSong && (
+  <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+    <div className="absolute top-4 right-4 z-10">
+      <button
+        onClick={() => {
+          setShowFixedSongSheet(false)
+          setCurrentSheetSong(null)
+        }}
+        className="p-3 bg-white/20 hover:bg-white/30 rounded-full text-white"
+      >
+        <X size={24} />
+      </button>
+    </div>
+    <div className="absolute top-4 left-4 z-10 text-white">
+      <h3 className="text-xl font-bold">{currentSheetSong.song_name}</h3>
+      <p className="text-sm text-gray-300">{currentSheetSong.team_name}</p>
+    </div>
+    <div className="w-full h-full flex items-center justify-center p-8">
+      {currentSheetSong.file_type === 'pdf' ? (
+        <iframe
+          src={currentSheetSong.file_url}
+          className="w-full h-full bg-white"
+          title={currentSheetSong.song_name}
+        />
+      ) : (
+        <img
+          src={currentSheetSong.file_url}
+          alt={currentSheetSong.song_name}
+          className="max-w-full max-h-full object-contain"
+        />
+      )}
+    </div>
+  </div>
+)}
+
+{/* ✅ 유튜브 모달 */}
+{youtubeModalSong && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl overflow-hidden">
+      <div className="p-4 border-b flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold">{youtubeModalSong.song_name}</h3>
+          <p className="text-sm text-gray-600">{youtubeModalSong.team_name}</p>
+        </div>
+        <button
+          onClick={() => setYoutubeModalSong(null)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      <div className="aspect-video">
+        <iframe
+          src={youtubeModalSong.youtube_url?.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={youtubeModalSong.song_name}
+        />
+      </div>
+    </div>
+  </div>
+)}
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signUp, signInWithGoogle } from '@/lib/auth'
-import { Mail, Lock, User, AlertCircle, Chrome, CheckCircle } from 'lucide-react'
+import { Mail, Lock, User, AlertCircle, Chrome, CheckCircle, Building } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SignupPage() {
@@ -12,7 +12,8 @@ export default function SignupPage() {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    churchName: ''
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,7 +39,7 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      await signUp(formData.email, formData.password, formData.name)
+      await signUp(formData.email, formData.password, formData.name, formData.churchName)
       setSuccess(true)
       
       // 3초 후 로그인 페이지로 이동
@@ -162,6 +163,22 @@ export default function SignupPage() {
               />
             </div>
           </div>
+
+          <div>
+<label className="block text-sm font-medium text-gray-700 mb-1">
+교회 <span className="text-gray-400 font-normal">(선택)</span>
+</label>
+<div className="relative">
+<Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+<input
+  type="text"
+  value={formData.churchName}
+  onChange={(e) => setFormData({ ...formData, churchName: e.target.value })}
+  placeholder="출석 교회명"
+  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+/>
+</div>
+</div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

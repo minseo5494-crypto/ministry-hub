@@ -83,6 +83,7 @@ export default function AdminDashboard() {
   const [dailyTrends, setDailyTrends] = useState<DailyTrend[]>([]);
   const [copyrightStats, setCopyrightStats] = useState<CopyrightStat[]>([]);
   const [churchStats, setChurchStats] = useState<ChurchStat[]>([]);
+  const [recentUsers, setRecentUsers] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<7 | 30 | 90>(30);
 
   useEffect(() => {
@@ -192,6 +193,9 @@ export default function AdminDashboard() {
 
       // 최근 활동 로그
       await loadRecentActivities();
+
+      // 최근 가입자
+      await loadRecentUsers();
 
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -352,6 +356,16 @@ export default function AdminDashboard() {
 
     setChurchStats(churchArray);
   };
+
+  const loadRecentUsers = async () => {
+  const { data } = await supabase
+    .from('users')
+    .select('id, email, name, church_name, created_at')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  setRecentUsers(data || []);
+};
 
   const loadRecentActivities = async () => {
     const { data: activitiesData } = await supabase
@@ -759,6 +773,62 @@ export default function AdminDashboard() {
             )}
           </div>
         </div>
+
+        {/* 최근 가입자 */}
+<div className="bg-white rounded-lg shadow mb-8">
+  <div className="p-6 border-b">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold text-gray-900">
+        👤 최근 가입자 (최신 20명)
+      </h3>
+      <span className="text-sm text-gray-500">
+        총 {stats.totalUsers}명
+      </span>
+    </div>
+  </div>
+  <div className="p-6">
+    {recentUsers.length === 0 ? (
+      <p className="text-center text-gray-500 py-8">아직 가입자가 없습니다.</p>
+    ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">이름</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">이메일</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">교회</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">가입일</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentUsers.map((user) => (
+              <tr key={user.id} className="border-b hover:bg-gray-50">
+                <td className="py-3 px-4 text-sm text-gray-900">
+                  {user.name || '-'}
+                </td>
+                <td className="py-3 px-4 text-sm text-gray-600">
+                  {user.email}
+                </td>
+                <td className="py-3 px-4 text-sm text-gray-600">
+                  {user.church_name || '-'}
+                </td>
+                <td className="py-3 px-4 text-sm text-gray-500">
+                  {new Date(user.created_at).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</div>
 
         {/* 최근 활동 로그 */}
         <div className="bg-white rounded-lg shadow">

@@ -113,25 +113,54 @@ export default function Home() {
   // 곡 추가 모달 상태
   const [showAddSongModal, setShowAddSongModal] = useState(false)
   const [newSong, setNewSong] = useState({
-    song_name: '',
-    team_name: '',
-    key: '',
-    time_signature: '',
-    tempo: '',
-    bpm: '',
-    themes: [] as string[], // 🆕 배열로 변경
-    season: '', // 🆕 추가
-    youtube_url: '', // 🆕 추가
-    lyrics: '',
-    visibility: 'public' as 'public' | 'teams' | 'private', // 🆕 추가
-    shared_with_teams: [] as string[] // 🆕 추가
-  })
+  song_name: '',
+  team_name: '',
+  key: '',
+  time_signature: '',
+  tempo: '',
+  bpm: '',
+  themes: [] as string[],
+  season: '',
+  youtube_url: '',
+  lyrics: '',
+  visibility: 'teams' as 'public' | 'teams' | 'private',
+  shared_with_teams: [] as string[]
+})
 
   // 🆕 사용자의 팀 목록 상태 추가
   const [uploadingFile, setUploadingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [userTeams, setUserTeams] = useState<any[]>([])
+  const [teamNameSuggestions, setTeamNameSuggestions] = useState<string[]>([])
+  const [showTeamSuggestions, setShowTeamSuggestions] = useState(false)
+
+  // ✅ 팀명 자동완성 검색
+const searchTeamNames = async (query: string) => {
+  if (!query.trim()) {
+    setTeamNameSuggestions([])
+    setShowTeamSuggestions(false)
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('team_name')
+      .ilike('team_name', `%${query}%`)
+      .not('team_name', 'is', null)
+      .limit(50)
+
+    if (error) throw error
+
+    // 중복 제거 및 정렬
+    const uniqueTeams = [...new Set(data?.map(d => d.team_name).filter(Boolean))] as string[]
+    setTeamNameSuggestions(uniqueTeams.slice(0, 10))
+    setShowTeamSuggestions(uniqueTeams.length > 0)
+  } catch (error) {
+    console.error('Error searching team names:', error)
+  }
+}
   
   // 필터 상태 (개선된 버전)
   const [filters, setFilters] = useState<{
@@ -2501,18 +2530,46 @@ const sanitizeFilename = (filename: string): string => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  팀명 / 아티스트
-                </label>
-                <input
-                  type="text"
-                  value={newSong.team_name}
-                  onChange={(e) => setNewSong({ ...newSong, team_name: e.target.value })}
-                  placeholder="예: 위러브(Welove)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
+              <div className="relative">
+<label className="block text-sm font-medium text-gray-700 mb-1">
+팀명 / 아티스트
+</label>
+<input
+type="text"
+value={newSong.team_name}
+onChange={(e) => {
+  setNewSong({ ...newSong, team_name: e.target.value })
+  searchTeamNames(e.target.value)
+}}
+onFocus={() => {
+  if (teamNameSuggestions.length > 0) setShowTeamSuggestions(true)
+}}
+onBlur={() => {
+  setTimeout(() => setShowTeamSuggestions(false), 200)
+}}
+placeholder="예: 위러브(Welove)"
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+autoComplete="off"
+/>
+{/* 자동완성 드롭다운 */}
+{showTeamSuggestions && teamNameSuggestions.length > 0 && (
+  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+    {teamNameSuggestions.map((team, index) => (
+      <button
+        key={index}
+        type="button"
+        onClick={() => {
+          setNewSong({ ...newSong, team_name: team })
+          setShowTeamSuggestions(false)
+        }}
+        className="w-full px-4 py-2 text-left hover:bg-blue-50 text-gray-900 text-sm"
+      >
+        {team}
+      </button>
+    ))}
+  </div>
+)}
+</div>
 
               {/* 🆕 공유 범위 선택 */}
               <div className="border-t pt-4">
