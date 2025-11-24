@@ -340,7 +340,7 @@ export default function TeamDetailPage() {
               <h2 className="text-xl font-bold text-gray-900">콘티 목록</h2>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
               >
                 <Plus className="mr-2" size={18} />
                 새 콘티 만들기
@@ -399,7 +399,7 @@ export default function TeamDetailPage() {
               {!searchTerm && serviceTypeFilter === 'all' && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
                 >
                   첫 콘티 만들기
                 </button>
@@ -527,7 +527,7 @@ export default function TeamDetailPage() {
               <button
                 onClick={handleCreateSetlist}
                 disabled={creating}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                className="flex-1 px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] disabled:bg-gray-400"
               >
                 {creating ? '생성 중...' : '생성'}
               </button>

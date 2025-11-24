@@ -169,14 +169,14 @@ export default function MyTeamPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => router.push('/teams/join')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                  className="px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] flex items-center"
                 >
                   <UserPlus className="mr-2" size={18} />
                   팀 참여
                 </button>
                 <button
                   onClick={() => router.push('/teams/create')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                  className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
                 >
                   <Plus className="mr-2" size={18} />
                   팀 만들기

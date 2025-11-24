@@ -227,7 +227,7 @@ export default function SongApprovalsPage() {
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 filter === 'all'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-[#C5D7F2] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -248,7 +248,7 @@ export default function SongApprovalsPage() {
               onClick={() => setFilter('approved')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 filter === 'approved'
-                  ? 'bg-green-600 text-white'
+                  ? 'bg-[#84B9C0] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -259,7 +259,7 @@ export default function SongApprovalsPage() {
               onClick={() => setFilter('rejected')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 filter === 'rejected'
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-[#E26559] text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -341,7 +341,7 @@ export default function SongApprovalsPage() {
                         <button
                           onClick={() => handleApprove(request)}
                           disabled={processing === request.id}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                          className="px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
                         >
                           <CheckCircle className="mr-2" size={18} />
                           승인
@@ -349,7 +349,7 @@ export default function SongApprovalsPage() {
                         <button
                           onClick={() => handleReject(request)}
                           disabled={processing === request.id}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                          className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
                         >
                           <XCircle className="mr-2" size={18} />
                           거부

@@ -13,7 +13,7 @@ import {
 import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
-import { logSongSearch, logPPTDownload } from '@/lib/activityLogger'
+import { logSongSearch, logPPTDownload, logSongView, logPDFDownload } from '@/lib/activityLogger'
 // 🆕 추가
 import SongFormPositionModal from '@/components/SongFormPositionModal'
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
@@ -384,6 +384,11 @@ export default function Home() {
   // 🆕 악보보기 모드 열기
   const openSheetViewerForSong = (song: Song) => {
     console.log('🎵 악보보기 모드 열기:', song.song_name);
+
+    // 📊 곡 조회 로깅 추가
+  if (user) {
+    logSongView(song.id, user.id).catch(err => console.error('로깅 실패:', err));
+  }
     setCurrentSheetSong(song);
     setCurrentPDFPage(1);
     setPdfDoc(null);
@@ -1106,6 +1111,14 @@ const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
       songFormPositions: positions  // 🆕 위치 정보 추가
     })
 
+    // 📊 PDF 다운로드 로깅 추가
+if (user) {
+  const songIds = selectedSongs.map(s => s.id);
+  await logPDFDownload(songIds, undefined, user.id).catch(err => 
+    console.error('PDF 로깅 실패:', err)
+  );
+}
+
     alert('✅ PDF가 생성되었습니다!')
   } catch (error) {
     console.error('PDF 생성 오류:', error)
@@ -1659,7 +1672,7 @@ const sanitizeFilename = (filename: string): string => {
                   
                   <button
                     onClick={handleSignOut}
-                    className="px-3 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                    className="px-3 py-2 text-sm bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] transition"
                   >
                     로그아웃
                   </button>
@@ -1674,7 +1687,7 @@ const sanitizeFilename = (filename: string): string => {
                   </button>
                   <button
                     onClick={() => router.push('/signup')}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] transition"
                   >
                     회원가입
                   </button>
@@ -1783,7 +1796,7 @@ const sanitizeFilename = (filename: string): string => {
                     }
                     setShowSaveModal(true)
                   }}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm flex items-center"
+                  className="px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] text-sm flex items-center"
                 >
                   <FolderOpen className="mr-2" size={16} />
                   콘티 저장
@@ -1791,7 +1804,7 @@ const sanitizeFilename = (filename: string): string => {
                 <button
                   onClick={handleDownload}  // 🆕 함수명 변경
                   disabled={downloadingPDF}
-                  className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
+                  className={`px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
                   {downloadingPDF ? (
                     <>
@@ -1894,7 +1907,7 @@ const sanitizeFilename = (filename: string): string => {
                         onClick={() => toggleThemeFilter(theme)}
                         className={`px-3 py-1 rounded-full text-sm transition ${
                           filters.themes.includes(theme)
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-[#C5D7F2] text-white'
                             : 'bg-gray-100 hover:bg-gray-200'
                         }`}
                       >
@@ -1920,7 +1933,7 @@ const sanitizeFilename = (filename: string): string => {
                         })}
                         className={`px-3 py-2 rounded text-sm font-medium transition ${
                           filters.key === key
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-[#C5D7F2] text-white'
                             : 'bg-gray-100 hover:bg-gray-200'
                         }`}
                       >
@@ -1934,7 +1947,7 @@ const sanitizeFilename = (filename: string): string => {
   onClick={() => setFilters({ ...filters, isMinor: !filters.isMinor })}
   className={`w-full mt-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
     filters.isMinor
-      ? 'bg-purple-500 text-white'
+      ? 'bg-[#C4BEE2] text-white'
       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
   }`}
 >
@@ -1976,7 +1989,7 @@ const sanitizeFilename = (filename: string): string => {
         })}
         className={`flex-1 px-3 py-2 rounded text-sm transition ${
           filters.tempo === tempo
-            ? 'bg-blue-600 text-white'
+            ? 'bg-[#C5D7F2] text-white'
             : 'bg-gray-100 hover:bg-gray-200'
         }`}
       >
@@ -2398,7 +2411,7 @@ const sanitizeFilename = (filename: string): string => {
         e.stopPropagation()
         openFormModal(song)
       }}
-      className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600"
+      className="px-3 py-1 bg-[#C4BEE2] text-white text-sm rounded hover:bg-[#C4BEE2]"
     >
       송폼 설정
     </button>
@@ -2608,7 +2621,7 @@ const sanitizeFilename = (filename: string): string => {
         onClick={() => setNewSong({ ...newSong, key: newSong.key.replace('m', '') })}
         className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
           !newSong.key.includes('m')
-            ? 'bg-blue-500 text-white'
+            ? 'bg-[#C5D7F2] text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}
       >
@@ -2623,7 +2636,7 @@ const sanitizeFilename = (filename: string): string => {
         }}
         className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
           newSong.key.includes('m')
-            ? 'bg-purple-500 text-white'
+            ? 'bg-[#C4BEE2] text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}
       >
@@ -2732,7 +2745,7 @@ const sanitizeFilename = (filename: string): string => {
                       }}
                       className={`px-3 py-1 rounded-full text-sm transition ${
                         newSong.themes.includes(theme)
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-[#C5D7F2] text-white'
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
                     >
@@ -2836,7 +2849,7 @@ const sanitizeFilename = (filename: string): string => {
               <button
                 onClick={addNewSong}
                 disabled={uploading || !newSong.song_name.trim()}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
+                className="flex-1 px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {uploading ? (
                   <>
@@ -3031,7 +3044,7 @@ const sanitizeFilename = (filename: string): string => {
               </button>
               <button
                 onClick={saveSetlist}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                className="flex-1 px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
               >
                 저장
               </button>
@@ -3200,20 +3213,20 @@ rounded text-blue-900">{abbr}</span>
               <button
                 onClick={() => moveSectionUp(index)}
                 disabled={index === 0}
-                className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 ↑
               </button>
               <button
                 onClick={() => moveSectionDown(index)}
                 disabled={index === tempSelectedForm.length - 1}
-                className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 ↓
               </button>
               <button
                 onClick={() => removeSection(index)}
-                className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                className="px-2 py-1 bg-[#E26559] text-white rounded hover:bg-[#D14E42]"
               >
                 ✕
               </button>
@@ -3249,7 +3262,7 @@ rounded text-blue-900">{abbr}</span>
               </button>
               <button
                 onClick={saveSongForm}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
+                className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold"
               >
                 저장
               </button>
@@ -3328,9 +3341,9 @@ rounded text-blue-900">{abbr}</span>
             
             {/* 바운스 애니메이션 점들 */}
             <div className="mt-6 flex justify-center gap-2">
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
             </div>
           </div>
         </div>
@@ -3362,7 +3375,7 @@ rounded text-blue-900">{abbr}</span>
       {/* 닫기 버튼 - 더 잘 보이게 개선 */}
       <button
         onClick={closeSheetViewer}
-        className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+        className="px-4 py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-2"
         title="닫기 (ESC)"
       >
         <X size={20} />
@@ -3465,7 +3478,7 @@ rounded text-blue-900">{abbr}</span>
         </button>
         
         {/* 현재 위치 - 더 크고 명확하게 */}
-        <span className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">
+        <span className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg font-bold">
           {filteredSongs.findIndex(s => s.id === currentSheetSong?.id) + 1} / {filteredSongs.filter(s => s.file_url).length}
         </span>
         

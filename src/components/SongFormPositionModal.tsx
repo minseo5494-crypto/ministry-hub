@@ -256,7 +256,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             href={currentSong.file_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="inline-flex items-center px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
           >
             파일 열기
           </a>
@@ -319,7 +319,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setPosition('top-left')}
               className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                 currentSelectedPosition === 'top-left'
-                  ? 'bg-purple-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#C4BEE2] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-purple-400 hover:bg-purple-50'
               }`}
             >
@@ -332,7 +332,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setPosition('top-center')}
               className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                 currentSelectedPosition === 'top-center'
-                  ? 'bg-purple-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#C4BEE2] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-purple-400 hover:bg-purple-50'
               }`}
             >
@@ -345,7 +345,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setPosition('top-right')}
               className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
                 currentSelectedPosition === 'top-right'
-                  ? 'bg-purple-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#C4BEE2] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-purple-400 hover:bg-purple-50'
               }`}
             >
@@ -357,7 +357,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             <div className="ml-2">
               <button
                 onClick={applyToAll}
-                className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap shadow-md"
+                className="px-4 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] transition-colors font-medium whitespace-nowrap shadow-md"
               >
                 📋 모든 곡에 적용
               </button>
@@ -371,7 +371,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setSize('small')}
               className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
                 currentSelectedSize === 'small'
-                  ? 'bg-green-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#84B9C0] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-green-400 hover:bg-green-50'
               }`}
             >
@@ -384,7 +384,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setSize('medium')}
               className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
                 currentSelectedSize === 'medium'
-                  ? 'bg-green-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#84B9C0] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-green-400 hover:bg-green-50'
               }`}
             >
@@ -397,7 +397,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               onClick={() => setSize('large')}
               className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
                 currentSelectedSize === 'large'
-                  ? 'bg-green-600 text-white shadow-lg scale-105'
+                  ? 'bg-[#84B9C0] text-white shadow-lg scale-105'
                   : 'bg-white border-2 border-gray-300 hover:border-green-400 hover:bg-green-50'
               }`}
             >
@@ -531,9 +531,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   key={index}
                   className={`flex-1 h-1.5 rounded-full transition-all ${
                     index === currentSongIndex
-                      ? 'bg-purple-600'
+                      ? 'bg-[#C4BEE2]'
                       : index < currentSongIndex
-                      ? 'bg-green-500'
+                      ? 'bg-[#84B9C0]'
                       : 'bg-gray-300'
                   }`}
                 />

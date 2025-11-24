@@ -221,7 +221,7 @@ export default function MyPageSettingsPage() {
             <button
               onClick={handleSaveProfile}
               disabled={saving}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400 flex items-center justify-center"
+              className="w-full px-4 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-medium disabled:bg-gray-400 flex items-center justify-center"
             >
               <Save className="mr-2" size={18} />
               {saving ? '저장 중...' : '프로필 저장'}
@@ -279,7 +279,7 @@ export default function MyPageSettingsPage() {
             <button
               onClick={handleChangePassword}
               disabled={changingPassword}
-              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-gray-400 flex items-center justify-center"
+              className="w-full px-4 py-3 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] font-medium disabled:bg-gray-400 flex items-center justify-center"
             >
               <Lock className="mr-2" size={18} />
               {changingPassword ? '변경 중...' : '비밀번호 변경'}
@@ -295,7 +295,7 @@ export default function MyPageSettingsPage() {
           </p>
           <button
             onClick={handleDeleteAccount}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center"
+            className="px-6 py-3 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] font-medium flex items-center"
           >
             <Trash2 className="mr-2" size={18} />
             계정 삭제

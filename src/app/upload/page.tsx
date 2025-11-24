@@ -449,7 +449,7 @@ export default function UploadPage() {
             
             <button
               onClick={testDBConnection}
-              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+              className="px-4 py-2 bg-[#C4BEE2] text-white rounded hover:bg-[#C4BEE2] text-sm"
               disabled={uploading}
             >
               DB 연결 테스트
@@ -457,7 +457,7 @@ export default function UploadPage() {
             
             <button
               onClick={checkTableSchema}
-              className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-sm"
+              className="px-4 py-2 bg-[#C4BEE2] text-white rounded hover:bg-[#A9A1D1] text-sm"
               disabled={uploading}
             >
               테이블 구조 확인
@@ -465,7 +465,7 @@ export default function UploadPage() {
 
             <button
               onClick={syncStorageToDatabase}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-bold"
+              className="px-4 py-2 bg-[#E26559] text-white rounded hover:bg-[#D14E42] text-sm font-bold"
               disabled={uploading}
             >
               🔄 Storage → DB 일괄 동기화
@@ -494,7 +494,7 @@ export default function UploadPage() {
               className={`inline-block px-6 py-3 ${
                 uploading 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-500 hover:bg-blue-600 cursor-pointer'
+                  : 'bg-[#C5D7F2] hover:bg-[#A8C4E8] cursor-pointer'
               } text-white rounded-lg transition`}
             >
               {uploading ? '업로드 중...' : '엑셀/CSV 파일 선택'}
@@ -535,7 +535,7 @@ export default function UploadPage() {
               className={`inline-block px-6 py-3 ${
                 uploading 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-green-500 hover:bg-green-600 cursor-pointer'
+                  : 'bg-[#84B9C0] hover:bg-[#6FA5AC] cursor-pointer'
               } text-white rounded-lg transition`}
             >
               {uploading ? '업로드 중...' : '악보 파일 선택 (여러 개 가능)'}
@@ -576,7 +576,7 @@ export default function UploadPage() {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                className="bg-[#C5D7F2] h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>

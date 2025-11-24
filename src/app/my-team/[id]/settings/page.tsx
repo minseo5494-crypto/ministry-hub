@@ -499,7 +499,7 @@ export default function TeamSettingsPage() {
                 {(userRole === 'leader' || isSystemAdmin) && (
                   <button
                     onClick={handleRegenerateCode}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                    className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
                   >
                     <RefreshCw size={18} className="mr-2" />
                     재생성
@@ -511,7 +511,7 @@ export default function TeamSettingsPage() {
             <button
               onClick={handleSaveTeamInfo}
               disabled={saving}
-              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400 flex items-center justify-center"
+              className="w-full px-4 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-medium disabled:bg-gray-400 flex items-center justify-center"
             >
               <Save className="mr-2" size={18} />
               {saving ? '저장 중...' : '저장'}
@@ -582,7 +582,7 @@ export default function TeamSettingsPage() {
             </p>
             <button
               onClick={handleDeleteTeam}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center"
+              className="px-6 py-3 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] font-medium flex items-center"
             >
               <Trash2 className="mr-2" size={18} />
               팀 삭제

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logActivity } from './activityLogger';
 
 // ============================================
 // 기존 함수들 (그대로 유지)
@@ -35,6 +36,12 @@ export const signUp = async (email: string, password: string, name: string) => {
     if (insertError) {
       console.error('Error inserting user:', insertError);
     }
+
+    // 📊 회원가입 로깅
+    logActivity({ 
+      actionType: 'user_signup', 
+      userId: data.user.id 
+    }).catch(err => console.error('회원가입 로깅 실패:', err));
   }
 
   return data;
@@ -55,6 +62,11 @@ export const signIn = async (email: string, password: string) => {
       .from('users')
       .update({ last_login: new Date().toISOString() })
       .eq('id', data.user.id);
+  // 📊 로그인 로깅
+    logActivity({ 
+      actionType: 'user_login', 
+      userId: data.user.id 
+    }).catch(err => console.error('로그인 로깅 실패:', err));
   }
 
   return data;

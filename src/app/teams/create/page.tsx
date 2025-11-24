@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
+import { logActivity } from '@/lib/activityLogger'
 import { ArrowLeft, Users } from 'lucide-react'
 
 export default function CreateTeamPage() {
@@ -80,6 +81,13 @@ export default function CreateTeamPage() {
         })
 
       if (memberError) throw memberError
+
+      // 📊 팀 생성 로깅
+    logActivity({ 
+      actionType: 'team_create', 
+      userId: user.id,
+      teamId: teamData.id 
+    }).catch(err => console.error('팀 생성 로깅 실패:', err))
 
       alert('✅ 팀이 생성되었습니다!')
       router.push(`/my-team/${teamData.id}`)
@@ -225,7 +233,7 @@ export default function CreateTeamPage() {
               <button
                 onClick={handleCreateTeam}
                 disabled={creating}
-                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400"
+                className="flex-1 px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-medium disabled:bg-gray-400"
               >
                 {creating ? '생성 중...' : '팀 만들기'}
               </button>

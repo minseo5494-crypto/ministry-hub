@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
+import { logActivity } from '@/lib/activityLogger'
 import { ArrowLeft, UserPlus } from 'lucide-react'
 
 export default function JoinTeamPage() {
@@ -89,6 +90,13 @@ export default function JoinTeamPage() {
         .eq('id', teamData.id)
 
       if (updateError) throw updateError
+
+      // 📊 팀 가입 로깅
+    logActivity({ 
+      actionType: 'team_join', 
+      userId: user.id,
+      teamId: teamData.id 
+    }).catch(err => console.error('팀 가입 로깅 실패:', err))
 
       alert(`✅ "${teamData.name}" 팀에 참여했습니다!`)
       router.push(`/my-team/${teamData.id}`)
@@ -189,7 +197,7 @@ export default function JoinTeamPage() {
               <button
                 onClick={handleJoinTeam}
                 disabled={joining || !inviteCode.trim()}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {joining ? '참여 중...' : '팀 참여하기'}
               </button>

@@ -4,13 +4,18 @@ import { supabase } from './supabase';
 // 타입 정의
 // ============================================
 
-export type ActionType = 
-  | 'song_search'      // 곡 검색
-  | 'song_view'        // 곡 조회
-  | 'ppt_download'     // PPT 다운로드
-  | 'pdf_download'     // PDF 다운로드
-  | 'setlist_create'   // 콘티 생성
-  | 'setlist_view';    // 콘티 조회
+export type ActionType =
+  | 'song_search'      // 곡 검색 ✅ 있음
+  | 'song_view'        // 곡 조회 (클릭) ⚠️ 호출 안됨
+  | 'ppt_download'     // PPT 다운로드 ✅ 있음
+  | 'pdf_download'     // PDF 다운로드 ⚠️ 일부만
+  | 'setlist_create'   // 콘티 생성 ✅ 있음
+  | 'setlist_view'     // 콘티 조회 ⚠️ 일부만
+  | 'user_login'       // 🆕 로그인
+  | 'user_signup'      // 🆕 회원가입
+  | 'team_join'        // 🆕 팀 가입
+  | 'team_create'      // 🆕 팀 생성
+  | 'song_upload';     // 🆕 곡 업로드
 
 export interface LogActivityParams {
   actionType: ActionType;
@@ -101,7 +106,7 @@ export const logSongView = async (
 };
 
 /**
- * PPT 다운로드 로깅
+ * PPT 다운로드 로깅 (배치 처리)
  */
 export const logPPTDownload = async (
   songIds: string[],
@@ -109,23 +114,39 @@ export const logPPTDownload = async (
   userId?: string,
   teamId?: string
 ) => {
-  // 각 곡마다 개별 로그 생성
-  for (const songId of songIds) {
-    await logActivity({
-      actionType: 'ppt_download',
-      songId,
-      setlistId,
-      userId,
-      teamId,
-      metadata: {
-        total_songs: songIds.length
-      }
-    });
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const finalUserId = userId || user?.id;
+
+    if (!finalUserId) {
+      console.warn('⚠️ No user ID for PPT download logging');
+      return;
+    }
+
+    // 배치로 한 번에 insert
+    const logs = songIds.map(songId => ({
+      action_type: 'ppt_download',
+      user_id: finalUserId,
+      team_id: teamId || null,
+      song_id: songId,
+      setlist_id: setlistId || null,
+      metadata: { total_songs: songIds.length }
+    }));
+
+    const { error } = await supabase.from('activity_logs').insert(logs);
+
+    if (error) {
+      console.error('❌ PPT download batch log error:', error);
+    } else {
+      console.log(`✅ Batch logged: ${songIds.length} PPT downloads`);
+    }
+  } catch (error) {
+    console.error('💥 PPT download logging failed:', error);
   }
 };
 
 /**
- * PDF 다운로드 로깅
+ * PDF 다운로드 로깅 (배치 처리)
  */
 export const logPDFDownload = async (
   songIds: string[],
@@ -133,20 +154,37 @@ export const logPDFDownload = async (
   userId?: string,
   teamId?: string
 ) => {
-  // 각 곡마다 개별 로그 생성
-  for (const songId of songIds) {
-    await logActivity({
-      actionType: 'pdf_download',
-      songId,
-      setlistId,
-      userId,
-      teamId,
-      metadata: {
-        total_songs: songIds.length
-      }
-    });
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const finalUserId = userId || user?.id;
+
+    if (!finalUserId) {
+      console.warn('⚠️ No user ID for PDF download logging');
+      return;
+    }
+
+    // 배치로 한 번에 insert
+    const logs = songIds.map(songId => ({
+      action_type: 'pdf_download',
+      user_id: finalUserId,
+      team_id: teamId || null,
+      song_id: songId,
+      setlist_id: setlistId || null,
+      metadata: { total_songs: songIds.length }
+    }));
+
+    const { error } = await supabase.from('activity_logs').insert(logs);
+
+    if (error) {
+      console.error('❌ PDF download batch log error:', error);
+    } else {
+      console.log(`✅ Batch logged: ${songIds.length} PDF downloads`);
+    }
+  } catch (error) {
+    console.error('💥 PDF download logging failed:', error);
   }
 };
+
 
 /**
  * 콘티 생성 로깅

@@ -1162,7 +1162,7 @@ const handleSharePlaylist = () => {
                   {/* 편집 모드: 저장/취소 버튼 */}
                   <button
                     onClick={handleSaveEdit}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                    className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
                   >
                     <Save className="mr-2" size={18} />
                     저장
@@ -1180,7 +1180,7 @@ const handleSharePlaylist = () => {
                   <button
                     onClick={generatePPTFile}
                     disabled={downloadingPPT || songs.length === 0}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center disabled:opacity-50"
+                    className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center disabled:opacity-50"
                     title="PPT 다운로드"
                   >
                     <Download className="mr-2" size={18} />
@@ -1192,7 +1192,7 @@ const handleSharePlaylist = () => {
               <button
                 onClick={handleSharePlaylist}
                 disabled={songs.length === 0}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+                className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50"
                 title="유튜브 플레이리스트 공유"
               >
                 <Youtube className="mr-2" size={18} />
@@ -1201,7 +1201,7 @@ const handleSharePlaylist = () => {
                   <button
                     onClick={handleDownloadPDF}
                     disabled={downloadingPDF || songs.length === 0}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center disabled:opacity-50"
+                    className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50"
                     title="PDF 다운로드"
                   >
                     <FileDown className="mr-2" size={18} />
@@ -1213,14 +1213,14 @@ const handleSharePlaylist = () => {
                     <>
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                        className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
                       >
                         <Edit className="mr-2" size={18} />
                         수정
                       </button>
                       <button
                         onClick={handleDeleteSetlist}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
+                        className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center"
                       >
                         <Trash2 className="mr-2" size={18} />
                         삭제
@@ -1270,7 +1270,7 @@ const handleSharePlaylist = () => {
             {canEdit() && (
               <button
                 onClick={openAddSongModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
               >
                 <Plus className="mr-2" size={18} />
                 곡 추가
@@ -1285,7 +1285,7 @@ const handleSharePlaylist = () => {
               {canEdit() && (
                 <button
                   onClick={openAddSongModal}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
                 >
                   첫 곡 추가하기
                 </button>
@@ -1441,20 +1441,20 @@ const handleSharePlaylist = () => {
                       <button
                         onClick={() => moveSongForm(index, 'up')}
                         disabled={index === 0}
-                        className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         ↑
                       </button>
                       <button
                         onClick={() => moveSongForm(index, 'down')}
                         disabled={index === tempSongForm.length - 1}
-                        className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
                         ↓
                       </button>
                       <button
                         onClick={() => removeSongForm(index)}
-                        className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                        className="px-2 py-1 bg-[#E26559] text-white rounded hover:bg-[#D14E42]"
                       >
                         ✕
                       </button>
@@ -1486,7 +1486,7 @@ const handleSharePlaylist = () => {
         </button>
         <button
           onClick={saveSongForm}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
+          className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold"
         >
           저장
         </button>
@@ -1581,7 +1581,7 @@ const handleSharePlaylist = () => {
             {/* 닫기 버튼 */}
             <button
               onClick={closeSheetViewer}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-2"
               title="닫기 (ESC)"
             >
               <X size={20} />
@@ -1684,7 +1684,7 @@ const handleSharePlaylist = () => {
               </button>
 
               {/* 현재 위치 */}
-              <span className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">
+              <span className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg font-bold">
                 {songs.findIndex(s => s.songs.id === currentSheetSong?.id) + 1} / {songs.filter(s => s.songs.file_url).length}
               </span>
 

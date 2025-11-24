@@ -448,7 +448,7 @@ export default function MyPagePage() {
   
             <button
                 onClick={() => router.push('/')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
             >
                 메인으로
             </button>
@@ -534,7 +534,7 @@ export default function MyPagePage() {
 
             <button
               onClick={() => setShowAddSongModal(true)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center whitespace-nowrap"
+              className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center whitespace-nowrap"
             >
               <Plus className="mr-2" size={18} />
               곡 추가
@@ -561,7 +561,7 @@ export default function MyPagePage() {
               {!searchText && visibilityFilter === 'all' && (
                 <button
                   onClick={() => setShowAddSongModal(true)}
-                  className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"
+                  className="mt-4 px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] inline-flex items-center"
                 >
                   <Plus className="mr-2" size={18} />
                   첫 곡 업로드하기
@@ -670,7 +670,7 @@ export default function MyPagePage() {
       내가 추가한 곡
     </div>
     {activeTab === 'songs' && (
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#C5D7F2]"></div>
     )}
   </button>
 
@@ -902,7 +902,7 @@ export default function MyPagePage() {
                       }}
                       className={`px-3 py-1 rounded-full text-sm transition ${
                         newSong.themes.includes(theme)
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-[#C5D7F2] text-white'
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
                     >
@@ -1005,7 +1005,7 @@ export default function MyPagePage() {
               <button
                 onClick={addNewSong}
                 disabled={uploading || !newSong.song_name.trim() || (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0)}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-[#C5D7F2] hover:bg-[#A8C4E8] text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {uploading ? '추가 중...' : '곡 추가'}
               </button>

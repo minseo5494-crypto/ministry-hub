@@ -115,7 +115,7 @@ export default function PersonalPage() {
               <span className="text-sm text-gray-600">{user?.email}</span>
               
               <Link href="/teams">
-                <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center">
+                <button className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center">
                   <Users className="mr-2" size={18} />
                   내 팀
                 </button>
@@ -173,7 +173,7 @@ export default function PersonalPage() {
             </select>
 
             <Link href="/personal/upload">
-              <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+              <button className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center">
                 <Upload className="mr-2" size={18} />
                 악보 추가
               </button>

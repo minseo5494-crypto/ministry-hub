@@ -77,7 +77,7 @@ export default function AuthCallbackPage() {
               </p>
               <button
                 onClick={() => router.push('/login')}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
               >
                 로그인 페이지로 돌아가기
               </button>
