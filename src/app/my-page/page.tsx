@@ -13,10 +13,36 @@ import {
 const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
 const THEMES = ['경배', '찬양', '회개', '감사', '헌신', '선교', '구원', '사랑', '소망', '믿음', '은혜', '성령', '치유', '회복', '십자가']
 
+// BPM에 따른 템포 자동 선택 상수
+const TEMPO_RANGES: { [key: string]: { min: number; max: number } } = {
+  '느림': { min: 0, max: 65 },
+  '조금느림': { min: 66, max: 79 },
+  '보통': { min: 80, max: 100 },
+  '조금빠름': { min: 101, max: 120 },
+  '빠름': { min: 121, max: 150 },
+  '매우빠름': { min: 151, max: 200 },
+}
+
+// BPM에서 템포 자동 선택 함수
+const getTempoFromBPM = (bpm: number): string => {
+  if (bpm <= 65) return '느림'
+  if (bpm <= 79) return '조금느림'
+  if (bpm <= 100) return '보통'
+  if (bpm <= 120) return '조금빠름'
+  if (bpm <= 150) return '빠름'
+  if (bpm <= 200) return '매우빠름'
+  return ''
+}
+
+// 템포에 따른 BPM 범위 반환 함수
+const getBPMRangeFromTempo = (tempo: string): { min: number; max: number } | null => {
+  return TEMPO_RANGES[tempo] || null
+}
+
 // 상수
 const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 const timeSignatures = ['3/4', '4/4', '6/8', '12/8']
-const tempos = ['느림', '보통', '빠름']
+const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
 interface UploadedSong {
   id: string
@@ -290,6 +316,31 @@ const searchTeamNames = async (query: string) => {
       setUploadingFile(file)
     }
   }
+
+  // BPM 입력 시 템포 자동 선택
+const handleBPMChange = (bpmValue: string) => {
+const bpm = parseInt(bpmValue)
+if (!isNaN(bpm) && bpm > 0) {
+const autoTempo = getTempoFromBPM(bpm)
+setNewSong({ ...newSong, bpm: bpmValue, tempo: autoTempo })
+} else {
+setNewSong({ ...newSong, bpm: bpmValue })
+}
+}
+
+// 템포 선택 시 BPM 범위 검증
+const handleTempoChange = (tempoValue: string) => {
+const range = getBPMRangeFromTempo(tempoValue)
+const currentBPM = parseInt(newSong.bpm)
+
+if (range && !isNaN(currentBPM)) {
+if (currentBPM < range.min || currentBPM > range.max) {
+setNewSong({ ...newSong, tempo: tempoValue, bpm: '' })
+return
+}
+}
+setNewSong({ ...newSong, tempo: tempoValue })
+}
 
   const addNewSong = async () => {
   if (!newSong.song_name.trim()) {
@@ -920,19 +971,54 @@ autoComplete="off"
 
               <div className="grid grid-cols-2 gap-4">
                 {/* Key */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
-                  <select
-                    value={newSong.key}
-                    onChange={(e) => setNewSong({ ...newSong, key: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">선택</option>
-                    {keys.map(key => (
-                      <option key={key} value={key}>{key}</option>
-                    ))}
-                  </select>
-                </div>
+<div>
+<label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+
+{/* Major/Minor 토글 추가 */}
+<div className="flex gap-2 mb-2">
+<button
+type="button"
+onClick={() => setNewSong({ ...newSong, key: newSong.key.replace('m', '') })}
+className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+!newSong.key.includes('m')
+? 'bg-[#C5D7F2] text-white'
+: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+}`}
+>
+Major
+</button>
+<button
+type="button"
+onClick={() => {
+if (!newSong.key.includes('m') && newSong.key) {
+setNewSong({ ...newSong, key: newSong.key + 'm' })
+}
+}}
+className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+newSong.key.includes('m')
+? 'bg-[#C4BEE2] text-white'
+: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+}`}
+>
+Minor
+</button>
+</div>
+
+<select
+value={newSong.key.replace('m', '')}
+onChange={(e) => {
+const baseKey = e.target.value
+const isMinor = newSong.key.includes('m')
+setNewSong({ ...newSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
+}}
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+>
+<option value="">선택</option>
+{keys.map(key => (
+<option key={key} value={key}>{key}{newSong.key.includes('m') ? 'm' : ''}</option>
+))}
+</select>
+</div>
 
                 {/* 박자 */}
                 <div>
@@ -950,31 +1036,42 @@ autoComplete="off"
                 </div>
 
                 {/* 템포 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
-                  <select
-                    value={newSong.tempo}
-                    onChange={(e) => setNewSong({ ...newSong, tempo: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">선택</option>
-                    {tempos.map(tempo => (
-                      <option key={tempo} value={tempo}>{tempo}</option>
-                    ))}
-                  </select>
-                </div>
+<div>
+<label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+<select
+value={newSong.tempo}
+onChange={(e) => handleTempoChange(e.target.value)}
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+>
+<option value="">선택</option>
+{tempos.map(tempo => (
+<option key={tempo} value={tempo}>{tempo}</option>
+))}
+</select>
+</div>
 
                 {/* BPM */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">BPM</label>
-                  <input
-                    type="number"
-                    value={newSong.bpm}
-                    onChange={(e) => setNewSong({ ...newSong, bpm: e.target.value })}
-                    placeholder="예: 120"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
+<div>
+<label className="block text-sm font-medium text-gray-700 mb-1">
+BPM
+{newSong.tempo && getBPMRangeFromTempo(newSong.tempo) && (
+<span className="text-xs text-gray-500 ml-2">
+({getBPMRangeFromTempo(newSong.tempo)?.min} ~ {getBPMRangeFromTempo(newSong.tempo)?.max})
+</span>
+)}
+</label>
+<input
+type="number"
+value={newSong.bpm}
+onChange={(e) => handleBPMChange(e.target.value)}
+placeholder={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) 
+? `${getBPMRangeFromTempo(newSong.tempo)?.min} ~ ${getBPMRangeFromTempo(newSong.tempo)?.max}` 
+: "예: 120"}
+min={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.min : 1}
+max={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.max : 300}
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+/>
+</div>
               </div>
 
               {/* 절기 선택 */}

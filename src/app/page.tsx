@@ -29,6 +29,38 @@ declare global {
 const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
 const THEMES = ['경배', '찬양', '회개', '감사', '헌신', '선교', '구원', '사랑', '소망', '믿음', '은혜', '성령', '치유', '회복', '십자가']
 
+// BPM에 따른 템포 자동 선택 상수
+const TEMPO_RANGES: { [key: string]: { min: number; max: number } } = {
+  '느림': { min: 0, max: 65 },
+  '조금느림': { min: 66, max: 79 },
+  '보통': { min: 80, max: 100 },
+  '조금빠름': { min: 101, max: 120 },
+  '빠름': { min: 121, max: 150 },
+  '매우빠름': { min: 151, max: 200 },
+}
+
+// BPM에서 템포 자동 선택 함수
+const getTempoFromBPM = (bpm: number): string => {
+  if (bpm <= 65) return '느림'
+  if (bpm <= 79) return '조금느림'
+  if (bpm <= 100) return '보통'
+  if (bpm <= 120) return '조금빠름'
+  if (bpm <= 150) return '빠름'
+  if (bpm <= 200) return '매우빠름'
+  return ''
+}
+
+// 템포에 따른 BPM 범위 반환 함수
+const getBPMRangeFromTempo = (tempo: string): { min: number; max: number } | null => {
+  return TEMPO_RANGES[tempo] || null
+}
+
+// 모바일 기기 감지 함수
+const isMobileDevice = () => {
+  if (typeof navigator === 'undefined') return false
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+}
+
 export default function Home() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -195,8 +227,10 @@ const searchTeamNames = async (query: string) => {
   // 사용 가능한 옵션들
   const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
   const timeSignatures = ['4/4', '3/4', '6/8', '12/8', '6/4', '2/4']
-  const tempos = ['느림', '보통', '빠름']
+  const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
   const themes = THEMES  // 새로운 테마 배열 사용
+
+  
 
   // 사용자 정보 확인
   useEffect(() => {
@@ -700,6 +734,31 @@ const fetchSongs = async () => {
     return null
   }
 
+  // BPM 입력 시 템포 자동 선택
+const handleBPMChange = (bpmValue: string) => {
+  const bpm = parseInt(bpmValue)
+  if (!isNaN(bpm) && bpm > 0) {
+    const autoTempo = getTempoFromBPM(bpm)
+    setNewSong({ ...newSong, bpm: bpmValue, tempo: autoTempo })
+  } else {
+    setNewSong({ ...newSong, bpm: bpmValue })
+  }
+}
+
+// 템포 선택 시 BPM 범위 검증
+const handleTempoChange = (tempoValue: string) => {
+  const range = getBPMRangeFromTempo(tempoValue)
+  const currentBPM = parseInt(newSong.bpm)
+  
+  if (range && !isNaN(currentBPM)) {
+    if (currentBPM < range.min || currentBPM > range.max) {
+      setNewSong({ ...newSong, tempo: tempoValue, bpm: '' })
+      return
+    }
+  }
+  setNewSong({ ...newSong, tempo: tempoValue })
+}
+  
   const addNewSong = async () => {
   if (!newSong.song_name.trim()) {
     alert('곡 제목을 입력하세요.')
@@ -1177,6 +1236,16 @@ if (user) {
 // 🆕 사진파일로 다운로드 (각 곡을 개별 파일로)
 const downloadAsImageFiles = async () => {
   setDownloadingPDF(true)
+
+  // 모바일에서 시작 전 안내
+if (isMobileDevice()) {
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+if (isIOS) {
+alert('📱 iOS에서 이미지 저장 안내\n\n공유 화면이 나타나면 "이미지 저장"을 선택해주세요.')
+} else {
+alert('📱 모바일에서 이미지 저장 안내\n\n공유 화면이 나타나면 갤러리에 저장하거나,\n이미지를 길게 눌러서 저장해주세요.')
+}
+}
   
   try {
     let downloadCount = 0
@@ -1222,194 +1291,214 @@ const downloadAsImageFiles = async () => {
   }
 }
 
-// 🆕 이미지 파일에 송폼 추가해서 다운로드
+// 🖼️ 이미지 파일에 송폼 추가해서 다운로드 (모바일 사진첩 지원)
 const downloadImageWithForm = async (song: Song, index: number) => {
-  return new Promise<void>((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    
-    img.onload = () => {
-      try {
-        // Canvas 생성
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          reject(new Error('Canvas context를 가져올 수 없습니다'))
-          return
-        }
-        
-        // 1. 원본 이미지 그리기
-        ctx.drawImage(img, 0, 0)
-        
-        // 2. 송폼 오버레이
-        const selectedForms = songForms[song.id] || []
-        if (selectedForms.length > 0) {
-          const formText = selectedForms.join(' - ')
-          
-          // 폰트 크기 설정 (이미지 크기에 비례)
-          const fontSize = Math.max(24, Math.floor(canvas.height / 30))
-          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-          
-          const textWidth = ctx.measureText(formText).width
-          const padding = fontSize * 0.6
-          
-          // 우측 상단 위치
-          const x = canvas.width - textWidth - padding * 2 - 30
-          const y = 50
-          
-          // 배경 박스
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-          ctx.fillRect(
-            x - padding,
-            y - fontSize - padding / 2,
-            textWidth + padding * 2,
-            fontSize + padding
-          )
-          
-          // 텍스트
-          ctx.fillStyle = 'rgb(102, 51, 204)'
-          ctx.fillText(formText, x, y - padding / 2)
-          
-          console.log(`✅ 송폼 추가: ${formText}`)
-        }
-        
-        // 3. 원본 형식으로 다운로드
-        const mimeType = song.file_type === 'png' ? 'image/png' : 'image/jpeg'
-        const extension = song.file_type === 'png' ? 'png' : 'jpg'
-        
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error('Blob 생성 실패'))
-            return
-          }
-          
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `${index + 1}_${sanitizeFilename(song.song_name)}.${extension}`
-          link.click()
-          URL.revokeObjectURL(url)
-          
-          console.log(`✅ 다운로드 완료: ${link.download}`)
-          resolve()
-        }, mimeType, 0.95)
-      } catch (error) {
-        reject(error)
-      }
-    }
-    
-    img.onerror = () => {
-      reject(new Error(`이미지 로드 실패: ${song.file_url}`))
-    }
-    
-    img.src = song.file_url
-  })
+return new Promise<void>((resolve, reject) => {
+const img = new Image()
+img.crossOrigin = 'anonymous'
+
+img.onload = async () => {
+try {
+const canvas = document.createElement('canvas')
+canvas.width = img.width
+canvas.height = img.height
+
+const ctx = canvas.getContext('2d')
+if (!ctx) {
+reject(new Error('Canvas context를 가져올 수 없습니다'))
+return
 }
 
-// 🆕 PDF를 JPG로 변환해서 다운로드
+ctx.drawImage(img, 0, 0)
+
+const selectedForms = songForms[song.id] || []
+if (selectedForms.length > 0) {
+const formText = selectedForms.join(' - ')
+const fontSize = Math.max(24, Math.floor(canvas.height / 30))
+ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+
+const textWidth = ctx.measureText(formText).width
+const padding = fontSize * 0.6
+const x = canvas.width - textWidth - padding * 2 - 30
+const y = 50
+
+ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+ctx.fillRect(x - padding, y - fontSize - padding / 2, textWidth + padding * 2, fontSize + padding)
+
+ctx.fillStyle = 'rgb(102, 51, 204)'
+ctx.fillText(formText, x, y - padding / 2)
+}
+
+const mimeType = song.file_type === 'png' ? 'image/png' : 'image/jpeg'
+const extension = song.file_type === 'png' ? 'png' : 'jpg'
+const filename = `${index + 1}_${sanitizeFilename(song.song_name)}.${extension}`
+
+// 모바일에서는 Web Share API 사용
+if (isMobileDevice()) {
+canvas.toBlob(async (blob) => {
+if (!blob) {
+reject(new Error('Blob 생성 실패'))
+return
+}
+
+if (navigator.share && navigator.canShare) {
+try {
+const file = new File([blob], filename, { type: mimeType })
+if (navigator.canShare({ files: [file] })) {
+await navigator.share({ files: [file], title: song.song_name })
+console.log(`✅ 공유 완료: ${filename}`)
+resolve()
+return
+}
+} catch (shareError: any) {
+if (shareError.name !== 'AbortError') {
+console.log('Share API 실패:', shareError)
+} else {
+resolve()
+return
+}
+}
+}
+
+const url = URL.createObjectURL(blob)
+window.open(url, '_blank')
+setTimeout(() => URL.revokeObjectURL(url), 1000)
+resolve()
+}, mimeType, 0.95)
+} else {
+// PC 다운로드
+canvas.toBlob((blob) => {
+if (!blob) {
+reject(new Error('Blob 생성 실패'))
+return
+}
+
+const url = URL.createObjectURL(blob)
+const link = document.createElement('a')
+link.href = url
+link.download = filename
+link.click()
+URL.revokeObjectURL(url)
+resolve()
+}, mimeType, 0.95)
+}
+} catch (error) {
+reject(error)
+}
+}
+
+img.onerror = () => reject(new Error(`이미지 로드 실패: ${song.file_url}`))
+img.src = song.file_url!
+})
+}
+
+// 📑 PDF를 JPG로 변환해서 다운로드 (모바일 사진첩 지원)
 const downloadPdfAsJpg = async (song: Song, index: number) => {
-  if (!window.pdfjsLib) {
-    throw new Error('PDF.js가 로드되지 않았습니다')
-  }
-  
-  try {
-    // PDF 로드
-    const loadingTask = window.pdfjsLib.getDocument(song.file_url)
-    const pdf = await loadingTask.promise
-    const pageCount = pdf.numPages
-    
-    console.log(`📄 PDF 페이지 수: ${pageCount}`)
-    
-    // 각 페이지를 JPG로 변환
-    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      
-      // Canvas에 렌더링
-      const viewport = page.getViewport({ scale: 2.0 }) // 고화질을 위해 scale 2.0
-      const canvas = document.createElement('canvas')
-      const context = canvas.getContext('2d')
-      
-      if (!context) continue
-      
-      canvas.height = viewport.height
-      canvas.width = viewport.width
-      
-      // PDF 페이지 렌더링
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise
-      
-      // 송폼 오버레이 (첫 페이지에만)
-      if (pageNum === 1) {
-        const selectedForms = songForms[song.id] || []
-        if (selectedForms.length > 0) {
-          const formText = selectedForms.join(' - ')
-          
-          const fontSize = Math.max(32, Math.floor(canvas.height / 30))
-          context.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-          
-          const textWidth = context.measureText(formText).width
-          const padding = fontSize * 0.6
-          
-          const x = canvas.width - textWidth - padding * 2 - 30
-          const y = 50
-          
-          // 배경 박스
-          context.fillStyle = 'rgba(255, 255, 255, 0.95)'
-          context.fillRect(
-            x - padding,
-            y - fontSize - padding / 2,
-            textWidth + padding * 2,
-            fontSize + padding
-          )
-          
-          // 텍스트
-          context.fillStyle = 'rgb(102, 51, 204)'
-          context.fillText(formText, x, y - padding / 2)
-          
-          console.log(`✅ PDF 첫 페이지에 송폼 추가: ${formText}`)
-        }
-      }
-      
-      // JPG로 다운로드
-      await new Promise<void>((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error('Blob 생성 실패'))
-            return
-          }
-          
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          
-          // 파일명: 페이지가 여러 개면 _page1, _page2 추가
-          const filename = pageCount > 1
-            ? `${index + 1}_${sanitizeFilename(song.song_name)}_page${pageNum}.jpg`
-            : `${index + 1}_${sanitizeFilename(song.song_name)}.jpg`
-          
-          link.download = filename
-          link.click()
-          URL.revokeObjectURL(url)
-          
-          console.log(`✅ PDF > JPG 다운로드 완료: ${filename}`)
-          resolve()
-        }, 'image/jpeg', 0.95)
-      })
-      
-      // 페이지가 여러 개면 0.3초 간격으로 다운로드
-      if (pageNum < pageCount) {
-        await new Promise(resolve => setTimeout(resolve, 300))
-      }
-    }
-  } catch (error) {
-    console.error('PDF 변환 오류:', error)
-    throw error
-  }
+if (!window.pdfjsLib) {
+throw new Error('PDF.js가 로드되지 않았습니다')
+}
+
+try {
+const loadingTask = window.pdfjsLib.getDocument(song.file_url)
+const pdf = await loadingTask.promise
+const pageCount = pdf.numPages
+
+for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+const page = await pdf.getPage(pageNum)
+const viewport = page.getViewport({ scale: 2.0 })
+const canvas = document.createElement('canvas')
+const context = canvas.getContext('2d')
+
+if (!context) continue
+
+canvas.height = viewport.height
+canvas.width = viewport.width
+
+await page.render({ canvasContext: context, viewport: viewport }).promise
+
+if (pageNum === 1) {
+const selectedForms = songForms[song.id] || []
+if (selectedForms.length > 0) {
+const formText = selectedForms.join(' - ')
+const fontSize = Math.max(32, Math.floor(canvas.height / 30))
+context.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
+
+const textWidth = context.measureText(formText).width
+const padding = fontSize * 0.6
+const x = canvas.width - textWidth - padding * 2 - 30
+const y = 50
+
+context.fillStyle = 'rgba(255, 255, 255, 0.95)'
+context.fillRect(x - padding, y - fontSize - padding / 2, textWidth + padding * 2, fontSize + padding)
+
+context.fillStyle = 'rgb(102, 51, 204)'
+context.fillText(formText, x, y - padding / 2)
+}
+}
+
+const filename = pageCount > 1
+? `${index + 1}_${sanitizeFilename(song.song_name)}_page${pageNum}.jpg`
+: `${index + 1}_${sanitizeFilename(song.song_name)}.jpg`
+
+if (isMobileDevice()) {
+await new Promise<void>((resolve, reject) => {
+canvas.toBlob(async (blob) => {
+if (!blob) {
+reject(new Error('Blob 생성 실패'))
+return
+}
+
+if (navigator.share && navigator.canShare) {
+try {
+const file = new File([blob], filename, { type: 'image/jpeg' })
+if (navigator.canShare({ files: [file] })) {
+await navigator.share({ files: [file], title: song.song_name })
+resolve()
+return
+}
+} catch (shareError: any) {
+if (shareError.name !== 'AbortError') {
+console.log('Share API 실패:', shareError)
+} else {
+resolve()
+return
+}
+}
+}
+
+const url = URL.createObjectURL(blob)
+window.open(url, '_blank')
+setTimeout(() => URL.revokeObjectURL(url), 1000)
+resolve()
+}, 'image/jpeg', 0.95)
+})
+} else {
+await new Promise<void>((resolve, reject) => {
+canvas.toBlob((blob) => {
+if (!blob) {
+reject(new Error('Blob 생성 실패'))
+return
+}
+
+const url = URL.createObjectURL(blob)
+const link = document.createElement('a')
+link.href = url
+link.download = filename
+link.click()
+URL.revokeObjectURL(url)
+resolve()
+}, 'image/jpeg', 0.95)
+})
+}
+
+if (pageNum < pageCount) {
+await new Promise(resolve => setTimeout(resolve, 300))
+}
+}
+} catch (error) {
+console.error('PDF 변환 오류:', error)
+throw error
+}
 }
 
 // 🆕 파일명에서 사용 불가능한 문자 제거
@@ -2103,14 +2192,39 @@ const sanitizeFilename = (filename: string): string => {
         </div>
       )}
 
+      {/* 모바일 필터 배경 오버레이 */}
+{isMobile && showFilterPanel && (
+<div 
+className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+onClick={() => setShowFilterPanel(false)}
+/>
+)}
+
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row gap-3 md:gap-6">
           {/* 왼쪽: 필터 패널 */}
 <div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'}
-transition-all duration-300 overflow-hidden`}>
-  {showFilterPanel && (
-    <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20">
-                <div className="flex items-center justify-between mb-4">
+transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
+{showFilterPanel && (
+<div 
+className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] overflow-y-auto"
+onTouchStart={(e) => e.stopPropagation()}
+onTouchMove={(e) => e.stopPropagation()}
+onClick={(e) => e.stopPropagation()}
+>
+{/* 모바일 닫기 버튼 */}
+{isMobile && (
+<div className="flex items-center justify-between mb-4 pb-2 border-b md:hidden">
+<h3 className="font-bold text-lg">필터</h3>
+<button
+onClick={() => setShowFilterPanel(false)}
+className="p-2 hover:bg-gray-100 rounded-lg"
+>
+<X size={20} />
+</button>
+</div>
+)}
+<div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-lg">필터</h3>
                   <button
                     onClick={() => setFilters({
@@ -2960,31 +3074,42 @@ autoComplete="off"
                 </div>
 
                 {/* 템포 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
-                  <select
-                    value={newSong.tempo}
-                    onChange={(e) => setNewSong({ ...newSong, tempo: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">선택</option>
-                    {tempos.map(tempo => (
-                      <option key={tempo} value={tempo}>{tempo}</option>
-                    ))}
-                  </select>
-                </div>
+<div>
+<label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+<select
+value={newSong.tempo}
+onChange={(e) => handleTempoChange(e.target.value)}
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+>
+<option value="">선택</option>
+{tempos.map(tempo => (
+<option key={tempo} value={tempo}>{tempo}</option>
+))}
+</select>
+</div>
 
                 {/* BPM */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">BPM</label>
-                  <input
-                    type="number"
-                    value={newSong.bpm}
-                    onChange={(e) => setNewSong({ ...newSong, bpm: e.target.value })}
-                    placeholder="예: 120"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
+<div>
+<label className="block text-sm font-medium text-gray-700 mb-1">
+BPM
+{newSong.tempo && getBPMRangeFromTempo(newSong.tempo) && (
+<span className="text-xs text-gray-500 ml-2">
+({getBPMRangeFromTempo(newSong.tempo)?.min} ~ {getBPMRangeFromTempo(newSong.tempo)?.max})
+</span>
+)}
+</label>
+<input
+type="number"
+value={newSong.bpm}
+onChange={(e) => handleBPMChange(e.target.value)}
+placeholder={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) 
+? `${getBPMRangeFromTempo(newSong.tempo)?.min} ~ ${getBPMRangeFromTempo(newSong.tempo)?.max}` 
+: "예: 120"}
+min={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.min : 1}
+max={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.max : 300}
+className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+/>
+</div>
               </div>
 
               {/* 🆕 절기 선택 */}
