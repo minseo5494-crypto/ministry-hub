@@ -8,7 +8,7 @@ import { parseLyrics } from '@/lib/lyricParser'
 import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
-  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2
+  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2, Menu
 } from 'lucide-react'
 import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
@@ -38,6 +38,8 @@ export default function Home() {
   // UI 상태 추가
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   const [showFilterPanel, setShowFilterPanel] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)  // ← 이 줄 추가!
+  const [showMobileMenu, setShowMobileMenu] = useState(false)  // ← 🆕 추가!
   
   // 임시 사용자 ID
   const USER_ID = user?.id || '00000000-0000-0000-0000-000000000001'
@@ -200,6 +202,21 @@ const searchTeamNames = async (query: string) => {
   useEffect(() => {
     checkUser()
   }, [])
+
+  // 화면 크기 감지 (모바일 대응)
+useEffect(() => {
+  const checkMobile = () => {
+    const mobile = window.innerWidth < 768
+    setIsMobile(mobile)
+    if (mobile) {
+      setShowFilterPanel(false)  // 모바일이면 필터 닫기
+    }
+  }
+  
+  checkMobile()  // 첫 로드 시 체크
+  window.addEventListener('resize', checkMobile)
+  return () => window.removeEventListener('resize', checkMobile)
+}, [])
 
   // 🆕 PDF.js 초기화
   useEffect(() => {
@@ -1555,177 +1572,382 @@ const sanitizeFilename = (filename: string): string => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* 로고 */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
               <Music className="w-8 h-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">Ministry Hub</h1>
             </div>
 
             {/* 네비게이션 */}
-            <div className="flex items-center gap-2">
-               {/* 새로운 스트리밍 허브 버튼 추가 */}
+<div className="flex items-center gap-2">
+  {/* 🆕 모바일: 햄버거 메뉴 버튼 */}
   <button
-    onClick={() => router.push('/streaming')}
-    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+    onClick={() => setShowMobileMenu(true)}
+    className="md:hidden p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+    title="메뉴"
   >
-    <Music size={18} />
-    <span className="text-sm font-medium">PraiseHub</span>
+    <Menu size={24} />
   </button>
-  
-  {/* 기존 버튼들은 그대로 유지 */}
-  <Link href="/setlists">
-  </Link>
-              {user ? (
+
+  {/* 🆕 데스크톱: 기존 버튼들 */}
+  <div className="hidden md:flex items-center gap-2">
+    {/* PraiseHub 버튼 */}
+    <button
+      onClick={() => router.push('/streaming')}
+      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+    >
+      <Music size={18} />
+      <span className="text-sm font-medium">PraiseHub</span>
+    </button>
+
+    {user ? (
+      <>
+        <button
+          onClick={() => router.push('/my-team')}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap"
+        >
+          My Team
+        </button>
+
+        <button
+          onClick={() => router.push('/my-page')}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap"
+        >
+          My Page
+        </button>
+
+        <div className="w-px h-8 bg-gray-300 mx-2"></div>
+
+        {/* 더보기 메뉴 */}
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(!showMenu)
+            }}
+            className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            title="더보기"
+          >
+            <MoreVertical size={20} />
+          </button>
+          
+          {showMenu && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border py-1 z-50">
+              <button
+                onClick={() => {
+                  setShowAddSongModal(true)
+                  setShowMenu(false)
+                }}
+                className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
+              >
+                <Plus className="mr-2" size={18} />
+                곡 추가
+              </button>
+              <button
+                onClick={() => {
+                  router.push('/teams/create')
+                  setShowMenu(false)
+                }}
+                className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
+              >
+                <Users className="mr-2" size={18} />
+                팀 만들기
+              </button>
+              <button
+                onClick={() => {
+                  router.push('/teams/join')
+                  setShowMenu(false)
+                }}
+                className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
+              >
+                <UserPlus className="mr-2" size={18} />
+                팀 참여
+              </button>
+
+              {user?.is_admin && (
                 <>
+                  <div className="border-t my-1"></div>
                   <button
-                    onClick={() => router.push('/my-team')}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                    onClick={() => {
+                      router.push('/admin/song-approvals')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
                   >
-                    My Team
+                    <Music className="mr-2" size={18} />
+                    곡 승인 관리
                   </button>
-
                   <button
-                    onClick={() => router.push('/my-page')}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                    onClick={() => {
+                      router.push('/admin/user-songs')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
                   >
-                    My Page
+                    <Trash2 className="mr-2" size={18} />
+                    사용자 곡 관리
                   </button>
-
-                  <div className="w-px h-8 bg-gray-300 mx-2"></div>
-
-                  {/* 더보기 메뉴 */}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setShowMenu(!showMenu)
-                      }}
-                      className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                      title="더보기"
-                    >
-                      <MoreVertical size={20} />
-                    </button>
-                    
-                    {showMenu && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border py-1 z-50">
-                        <button
-                          onClick={() => {
-                            setShowAddSongModal(true)
-                            setShowMenu(false)
-                          }}
-                          className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
-                        >
-                          <Plus className="mr-2" size={18} />
-                          곡 추가
-                        </button>
-                        <button
-                          onClick={() => {
-                            router.push('/teams/create')
-                            setShowMenu(false)
-                          }}
-                          className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
-                        >
-                          <Users className="mr-2" size={18} />
-                          팀 만들기
-                        </button>
-                        <button
-                          onClick={() => {
-                            router.push('/teams/join')
-                            setShowMenu(false)
-                          }}
-                          className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 flex items-center"
-                        >
-                          <UserPlus className="mr-2" size={18} />
-                          팀 참여
-                        </button>
-
-                        {/* ✨ 여기부터 새로 추가하는 부분 ✨ */}
-{user?.is_admin && (
-  <>
-    <div className="border-t my-1"></div>
-    {/* 🆕 곡 승인 관리 버튼 */}
-    <button
-      onClick={() => {
-        router.push('/admin/song-approvals')
-        setShowMenu(false)
-      }}
-      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-    >
-      <Music className="mr-2" size={18} />
-      곡 승인 관리
-    </button>
-    {/* 🆕 사용자 곡 관리 버튼 (새로 추가!) */}
-    <button
-      onClick={() => {
-        router.push('/admin/user-songs')
-        setShowMenu(false)
-      }}
-      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-    >
-      <Trash2 className="mr-2" size={18} />
-      사용자 곡 관리
-    </button>
-    {/* 팀 승인 관리 버튼 */}
-    <button
-      onClick={() => {
-        router.push('/admin/approvals')
-        setShowMenu(false)
-      }}
-      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-    >
-      <Activity className="mr-2" size={18} />
-      팀 승인 관리
-    </button>
-    {/* 통계 대시보드 버튼 */}
-    <button
-      onClick={() => {
-        router.push('/admin/dashboard')
-        setShowMenu(false)
-      }}
-      className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-    >
-      <BarChart3 className="mr-2" size={18} />
-      통계 대시보드
-    </button>
-  </>
-)}
-{/* ✨ 여기까지 새로 추가하는 부분 ✨ */}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="w-px h-8 bg-gray-300 mx-2"></div>
-
-                  <span className="text-sm text-gray-600 px-2">
-                    {user.email}
-                  </span>
-                  
                   <button
-                    onClick={handleSignOut}
-                    className="px-3 py-2 text-sm bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] transition"
+                    onClick={() => {
+                      router.push('/admin/approvals')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
                   >
-                    로그아웃
+                    <Activity className="mr-2" size={18} />
+                    팀 승인 관리
+                  </button>
+                  <button
+                    onClick={() => {
+                      router.push('/admin/dashboard')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                  >
+                    <BarChart3 className="mr-2" size={18} />
+                    통계 대시보드
                   </button>
                 </>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => router.push('/login')}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                  >
-                    로그인
-                  </button>
-                  <button
-                    onClick={() => router.push('/signup')}
-                    className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] transition"
-                  >
-                    회원가입
-                  </button>
-                </div>
               )}
             </div>
+          )}
+        </div>
+
+        <div className="w-px h-8 bg-gray-300 mx-2"></div>
+
+        <span className="text-sm text-gray-600 px-2">
+          {user.email}
+        </span>
+        
+        <button
+          onClick={handleSignOut}
+          className="px-3 py-2 text-sm bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] transition whitespace-nowrap"
+        >
+          로그아웃
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap"
+        >
+          로그인
+        </button>
+        <button
+          onClick={() => router.push('/signup')}
+          className="px-4 py-2 text-sm bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] transition whitespace-nowrap"
+        >
+          회원가입
+        </button>
+      </>
+    )}
+  </div>
+</div>
           </div>
         </div>
       </div>
+
+      {/* 🆕 모바일 메뉴 사이드바 */}
+{showMobileMenu && (
+  <>
+    {/* 배경 오버레이 */}
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 z-50"
+      onClick={() => setShowMobileMenu(false)}
+    />
+    
+    {/* 사이드바 메뉴 */}
+    <div className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-500 to-blue-500">
+        <h2 className="text-xl font-bold text-white">메뉴</h2>
+        <button
+          onClick={() => setShowMobileMenu(false)}
+          className="p-2 text-white hover:bg-white/20 rounded-lg transition"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      {/* 메뉴 아이템들 */}
+      <div className="p-4 space-y-2">
+        {user ? (
+          <>
+            {/* PraiseHub */}
+            <button
+              onClick={() => {
+                router.push('/streaming')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition"
+            >
+              <Music size={20} />
+              <span className="font-medium">PraiseHub</span>
+            </button>
+
+            {/* My Team */}
+            <button
+              onClick={() => {
+                router.push('/my-team')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <Users size={20} />
+              <span>My Team</span>
+            </button>
+
+            {/* My Page */}
+            <button
+              onClick={() => {
+                router.push('/my-page')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <UserPlus size={20} />
+              <span>My Page</span>
+            </button>
+
+            <div className="border-t my-2"></div>
+
+            {/* 곡 추가 */}
+            <button
+              onClick={() => {
+                setShowAddSongModal(true)
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <Plus size={20} />
+              <span>곡 추가</span>
+            </button>
+
+            {/* 팀 만들기 */}
+            <button
+              onClick={() => {
+                router.push('/teams/create')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <Users size={20} />
+              <span>팀 만들기</span>
+            </button>
+
+            {/* 팀 참여 */}
+            <button
+              onClick={() => {
+                router.push('/teams/join')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <UserPlus size={20} />
+              <span>팀 참여</span>
+            </button>
+
+            {/* 관리자 메뉴 */}
+            {user?.is_admin && (
+              <>
+                <div className="border-t my-2"></div>
+                <p className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">관리자</p>
+                
+                <button
+                  onClick={() => {
+                    router.push('/admin/song-approvals')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Music size={20} />
+                  <span>곡 승인 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/user-songs')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Trash2 size={20} />
+                  <span>사용자 곡 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/approvals')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Activity size={20} />
+                  <span>팀 승인 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/dashboard')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <BarChart3 size={20} />
+                  <span>통계 대시보드</span>
+                </button>
+              </>
+            )}
+
+            <div className="border-t my-2"></div>
+
+            {/* 사용자 정보 */}
+            <div className="px-4 py-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-500">로그인 계정</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
+            </div>
+
+            {/* 로그아웃 */}
+            <button
+              onClick={() => {
+                handleSignOut()
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] transition"
+            >
+              <X size={20} />
+              <span className="font-medium">로그아웃</span>
+            </button>
+          </>
+        ) : (
+          <>
+            {/* 로그인 */}
+            <button
+              onClick={() => {
+                router.push('/login')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <span className="font-medium">로그인</span>
+            </button>
+
+            {/* 회원가입 */}
+            <button
+              onClick={() => {
+                router.push('/signup')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] transition"
+            >
+              <span className="font-medium">회원가입</span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  </>
+)}
 
       {/* 🎨 히어로 섹션 (Figma 디자인) */}
       <div 
@@ -1795,13 +2017,13 @@ const sanitizeFilename = (filename: string): string => {
       {/* 선택된 곡 상단바 */}
       {selectedSongs.length > 0 && (
         <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600">
+          <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
                   {selectedSongs.length}곡 선택됨
                 </span>
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2 overflow-x-auto">
                   {selectedSongs.slice(0, 3).map(song => (
                     <span key={song.id} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
                       {song.song_name}
@@ -1815,64 +2037,66 @@ const sanitizeFilename = (filename: string): string => {
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
+  <button
+  onClick={() => {
+    if (!user) {
+      alert('콘티 저장은 로그인 후 이용 가능합니다.')
+      router.push('/login')
+      return
+    }
+    setShowSaveModal(true)
+  }}
+  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] text-xs sm:text-sm flex items-center justify-center whitespace-nowrap"
+>
+  <FolderOpen className="mr-1 sm:mr-2" size={14} />
+  콘티 저장
+</button>
                 <button
-                  onClick={() => {
-                    if (!user) {
-                      alert('콘티 저장은 로그인 후 이용 가능합니다.')
-                      router.push('/login')
-                      return
-                    }
-                    setShowSaveModal(true)
-                  }}
-                  className="px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] text-sm flex items-center"
-                >
-                  <FolderOpen className="mr-2" size={16} />
-                  콘티 저장
-                </button>
+  onClick={handleDownload}
+  disabled={downloadingPDF}
+  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] text-xs sm:text-sm flex items-center justify-center whitespace-nowrap ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
+>
+  {downloadingPDF ? (
+    <>
+      <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-1 sm:mr-2"></div>
+      <span className="hidden sm:inline">PDF 생성 중...</span>
+      <span className="sm:hidden">생성중</span>
+    </>
+  ) : (
+    <>
+      <FileText className="mr-1 sm:mr-2" size={14} />
+      다운로드
+    </>
+  )}
+</button>
                 <button
-                  onClick={handleDownload}  // 🆕 함수명 변경
-                  disabled={downloadingPDF}
-                  className={`px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] text-sm flex items-center ${downloadingPDF ? 'opacity-75 cursor-not-allowed' : ''}`}
-                >
-                  {downloadingPDF ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      PDF 생성 중...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2" size={16} />
-                      다운로드
-                    </>
-                  )}
-                </button>
+  onClick={startPPTDownload}
+  disabled={downloadingPPT}
+  className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-xs sm:text-sm flex items-center justify-center whitespace-nowrap ${downloadingPPT ? 'opacity-75 cursor-not-allowed' : ''}`}
+>
+  {downloadingPPT ? (
+    <>
+      <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-1 sm:mr-2"></div>
+      <span className="hidden sm:inline">PPT 생성 중...</span>
+      <span className="sm:hidden">생성중</span>
+    </>
+  ) : (
+    <>
+      <Presentation className="mr-1 sm:mr-2" size={14} />
+      PPT
+    </>
+  )}
+</button>
                 <button
-                  onClick={startPPTDownload}
-                  disabled={downloadingPPT}
-                  className={`px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm flex items-center ${downloadingPPT ? 'opacity-75 cursor-not-allowed' : ''}`}
-                >
-                    {downloadingPPT ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      PPT 생성 중...
-                    </>
-                  ) : (
-                    <>
-                      <Presentation className="mr-2" size={16} />
-                      PPT
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedSongs([])
-                    setSongForms({})
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
-                >
-                  초기화
-                </button>
+  onClick={() => {
+    setSelectedSongs([])
+    setSongForms({})
+  }}
+  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-xs sm:text-sm whitespace-nowrap"
+>
+  초기화
+</button>
               </div>
             </div>
           </div>
@@ -1880,11 +2104,12 @@ const sanitizeFilename = (filename: string): string => {
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex gap-6">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-6">
           {/* 왼쪽: 필터 패널 */}
-          <div className={`${showFilterPanel ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden`}>
-            {showFilterPanel && (
-              <div className="bg-white rounded-lg shadow-md p-6 sticky top-20">
+<div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'}
+transition-all duration-300 overflow-hidden`}>
+  {showFilterPanel && (
+    <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-lg">필터</h3>
                   <button
@@ -2142,7 +2367,7 @@ const sanitizeFilename = (filename: string): string => {
     ) : viewMode === 'grid' ? (
   
   // 그리드 뷰
-  <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div className="p-3 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
     {filteredSongs.map((song, index) => (
       <div
         key={song.id}
@@ -3414,7 +3639,7 @@ rounded text-blue-900">{abbr}</span>
     {/* 상단 바 */}
     <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <span className="text-lg font-bold">
+        <span className="text-base md:text-lg font-bold">
           {currentSheetSong.song_name}
         </span>
         {currentSheetSong.team_name && (

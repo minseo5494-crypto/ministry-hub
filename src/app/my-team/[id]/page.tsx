@@ -9,7 +9,7 @@ import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
 import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
   Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
-  Pin, Eye, Presentation, Youtube, Download, X, Check
+  Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon
 } from 'lucide-react'
 
 interface TeamInfo {
@@ -116,10 +116,28 @@ const [currentSheetSong, setCurrentSheetSong] = useState<any>(null)
 const [youtubeModalSong, setYoutubeModalSong] = useState<any>(null)
 const [downloadingFixed, setDownloadingFixed] = useState(false)
 
+// 🆕 모바일 상태 추가
+const [showFilters, setShowFilters] = useState(true)
+const [isMobile, setIsMobile] = useState(false)
+
 const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉헌찬양', '직접입력']
 
   useEffect(() => {
     checkUser()
+  }, [])
+
+  // 🆕 모바일 감지
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) {
+        setShowFilters(false)
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
@@ -692,36 +710,77 @@ const downloadSelectedFixedSongs = async () => {
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          {/* 상단: 뒤로가기 + 팀명 + 햄버거 */}
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
               <button
                 onClick={() => router.push('/my-team')}
-                className="mr-4 p-2 hover:bg-gray-100 rounded-lg"
+                className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
               >
                 <ArrowLeft size={20} />
               </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{team.name}</h1>
-                <p className="text-sm text-gray-600">
-                  {team.church_name && `${team.church_name} • `}
-                  {team.member_count}명
-                  {team.my_role === 'leader' && (
-                    <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded">
-                      <Crown className="inline w-3 h-3 mr-1" />
-                      리더
-                    </span>
-                  )}
-                </p>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
+                  {team.name}
+                </h1>
+                {team.church_name && (
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">
+                    {team.church_name}
+                  </p>
+                )}
               </div>
             </div>
 
+            {/* 데스크톱: 설정 버튼 */}
             <button
               onClick={() => router.push(`/my-team/${teamId}/settings`)}
-              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="hidden md:block p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
               title="팀 설정"
             >
               <Settings size={20} />
+            </button>
+
+            {/* 모바일: 햄버거 메뉴 */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+              title="메뉴"
+            >
+              <Menu size={20} />
+            </button>
+          </div>
+
+          {/* 통계 정보 */}
+          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="font-medium">{team.member_count}명</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full">
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="font-medium">{setlists.length}개 콘티</span>
+            </div>
+            {team.my_role === 'leader' && (
+              <div className="flex items-center gap-1 px-2.5 py-1 bg-yellow-50 rounded-full">
+                <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-600" />
+                <span className="font-medium text-yellow-700">리더</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full">
+              <span className="text-gray-600">코드:</span>
+              <span className="font-mono font-bold">{team.invite_code}</span>
+            </div>
+          </div>
+
+          {/* 모바일: 설정 버튼 */}
+          <div className="md:hidden mt-3">
+            <button
+              onClick={() => router.push(`/my-team/${teamId}/settings`)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
+            >
+              <Settings size={18} />
+              <span>팀 설정</span>
             </button>
           </div>
         </div>
@@ -729,66 +788,36 @@ const downloadSelectedFixedSongs = async () => {
 
       {/* 메인 콘텐츠 */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* 통계 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">총 콘티</p>
-                <p className="text-3xl font-bold text-gray-900">{setlists.length}</p>
-              </div>
-              <FileText className="w-12 h-12 text-blue-600" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">팀 멤버</p>
-                <p className="text-3xl font-bold text-gray-900">{team.member_count}</p>
-              </div>
-              <Users className="w-12 h-12 text-green-600" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">초대 코드</p>
-                <p className="text-2xl font-mono font-bold text-gray-900">{team.invite_code}</p>
-              </div>
-              <Music className="w-12 h-12 text-purple-600" />
-            </div>
-          </div>
-        </div>
 
         {/* ✅ 고정곡 섹션 */}
-<div className="bg-white rounded-lg shadow-md mb-6">
-  <div className="p-6 border-b">
-    <div className="flex items-center justify-between">
+<div className="bg-white rounded-lg shadow-md mb-4 sm:mb-6">
+  <div className="p-4 sm:p-6 border-b">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Pin className="w-5 h-5 text-orange-500" />
-        <h2 className="text-xl font-bold text-gray-900">고정곡</h2>
-        <span className="text-sm text-gray-500">({fixedSongs.length}곡)</span>
+        <Pin className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 flex-shrink-0" />
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900">고정곡</h2>
+        <span className="text-xs sm:text-sm text-gray-500">({fixedSongs.length}곡)</span>
       </div>
       <div className="flex items-center gap-2">
         {selectedFixedSongs.length > 0 && (
           <button
             onClick={downloadSelectedFixedSongs}
             disabled={downloadingFixed}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center disabled:bg-gray-400"
+            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:bg-gray-400 text-sm"
           >
-            <Download className="mr-2" size={18} />
-            {downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}
+            <Download size={16} className="flex-shrink-0" />
+            <span className="hidden sm:inline">{downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}</span>
+            <span className="sm:hidden">{selectedFixedSongs.length}</span>
           </button>
         )}
         {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
           <button
             onClick={() => setShowAddFixedSongModal(true)}
-            className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
+            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center gap-2 text-sm"
           >
-            <Plus className="mr-2" size={18} />
-            고정곡 추가
+            <Plus size={16} className="flex-shrink-0" />
+            <span className="hidden sm:inline">고정곡 추가</span>
+            <span className="sm:hidden">추가</span>
           </button>
         )}
       </div>
@@ -819,84 +848,111 @@ const downloadSelectedFixedSongs = async () => {
                 {songsInCategory.map(fixedSong => (
                   <div
                     key={fixedSong.id}
-                    className={`flex items-center justify-between p-4 rounded-lg border transition ${
+                    className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 rounded-lg border transition ${
                       selectedFixedSongs.find(s => s.id === fixedSong.id)
                         ? 'border-orange-500 bg-orange-50'
                         : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1">
                       {/* 선택 체크박스 */}
                       <button
                         onClick={() => toggleFixedSongSelection(fixedSong)}
-                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded border-2 flex items-center justify-center transition flex-shrink-0 ${
                           selectedFixedSongs.find(s => s.id === fixedSong.id)
                             ? 'border-orange-500 bg-[#C5D7F2] text-white'
                             : 'border-gray-300 hover:border-orange-400'
                         }`}
                       >
                         {selectedFixedSongs.find(s => s.id === fixedSong.id) && (
-                          <Check size={14} />
+                          <Check size={12} />
                         )}
                       </button>
 
                       {/* 곡 정보 */}
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{fixedSong.song.song_name}</h4>
-                        <p className="text-sm text-gray-600">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{fixedSong.song.song_name}</h4>
+                        <p className="text-xs sm:text-sm text-gray-600 truncate">
                           {fixedSong.song.team_name} {fixedSong.song.key && `| Key: ${fixedSong.song.key}`}
                         </p>
                       </div>
                     </div>
 
                     {/* 액션 버튼들 */}
-                    <div className="flex items-center gap-2">
-                      {/* 악보 미리보기 */}
-                      {fixedSong.song.file_url && (
-                        <button
-                          onClick={() => setPreviewFixedSong(fixedSong)}
-                          className="p-2 hover:bg-gray-100 rounded-lg"
-                          title="악보 미리보기"
-                        >
-                          <Eye size={20} className="text-gray-600" />
-                        </button>
-                      )}
+                    <div className="flex items-center gap-1 sm:gap-2 ml-8 sm:ml-0">
+                      {/* 데스크톱 버튼 */}
+                      <div className="hidden sm:flex items-center gap-2">
+                        {fixedSong.song.file_url && (
+                          <>
+                            <button
+                              onClick={() => setPreviewFixedSong(fixedSong)}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                              title="악보 미리보기"
+                            >
+                              <Eye size={20} className="text-gray-600" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCurrentSheetSong(fixedSong.song)
+                                setShowFixedSongSheet(true)
+                              }}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                              title="악보보기 전용모드"
+                            >
+                              <Presentation size={20} className="text-gray-600" />
+                            </button>
+                          </>
+                        )}
+                        {fixedSong.song.youtube_url && (
+                          <button
+                            onClick={() => setYoutubeModalSong(fixedSong.song)}
+                            className="p-2 hover:bg-gray-100 rounded-lg"
+                            title="YouTube"
+                          >
+                            <Youtube size={20} className="text-red-500" />
+                          </button>
+                        )}
+                        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+                          <button
+                            onClick={() => handleDeleteFixedSong(fixedSong.id)}
+                            className="p-2 hover:bg-red-100 rounded-lg"
+                            title="삭제"
+                          >
+                            <Trash2 size={20} className="text-red-500" />
+                          </button>
+                        )}
+                      </div>
 
-                      {/* 악보보기 전용모드 */}
-                      {fixedSong.song.file_url && (
-                        <button
-                          onClick={() => {
-                            setCurrentSheetSong(fixedSong.song)
-                            setShowFixedSongSheet(true)
-                          }}
-                          className="p-2 hover:bg-gray-100 rounded-lg"
-                          title="악보보기 전용모드"
-                        >
-                          <Presentation size={20} className="text-gray-600" />
-                        </button>
-                      )}
-
-                      {/* 유튜브 */}
-                      {fixedSong.song.youtube_url && (
-                        <button
-                          onClick={() => setYoutubeModalSong(fixedSong.song)}
-                          className="p-2 hover:bg-gray-100 rounded-lg"
-                          title="YouTube"
-                        >
-                          <Youtube size={20} className="text-red-500" />
-                        </button>
-                      )}
-
-                      {/* 삭제 버튼 (리더만) */}
-                      {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
-                        <button
-                          onClick={() => handleDeleteFixedSong(fixedSong.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg"
-                          title="삭제"
-                        >
-                          <Trash2 size={20} className="text-red-500" />
-                        </button>
-                      )}
+                      {/* 모바일 버튼 (아이콘만) */}
+                      <div className="flex sm:hidden items-center gap-1">
+                        {fixedSong.song.file_url && (
+                          <button
+                            onClick={() => setPreviewFixedSong(fixedSong)}
+                            className="p-2 hover:bg-gray-100 rounded-lg"
+                            title="미리보기"
+                          >
+                            <Eye size={18} className="text-gray-600" />
+                          </button>
+                        )}
+                        {fixedSong.song.youtube_url && (
+                          <button
+                            onClick={() => setYoutubeModalSong(fixedSong.song)}
+                            className="p-2 hover:bg-gray-100 rounded-lg"
+                            title="YouTube"
+                          >
+                            <Youtube size={18} className="text-red-500" />
+                          </button>
+                        )}
+                        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+                          <button
+                            onClick={() => handleDeleteFixedSong(fixedSong.id)}
+                            className="p-2 hover:bg-red-100 rounded-lg"
+                            title="삭제"
+                          >
+                            <Trash2 size={18} className="text-red-500" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -911,29 +967,44 @@ const downloadSelectedFixedSongs = async () => {
 
         {/* 콘티 목록 */}
         <div className="bg-white rounded-lg shadow-md">
-          <div className="p-6 border-b">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">콘티 목록</h2>
+          <div className="p-4 sm:p-6 border-b">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">콘티 목록</h2>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
+                className="w-full sm:w-auto px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center gap-2 text-sm"
               >
-                <Plus className="mr-2" size={18} />
-                새 콘티 만들기
+                <Plus size={18} className="flex-shrink-0" />
+                <span>새 콘티 만들기</span>
               </button>
             </div>
+
+            {/* 필터 토글 버튼 (모바일) */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="md:hidden w-full flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg mb-3 text-sm"
+            >
+              <div className="flex items-center gap-2">
+                <FilterIcon size={18} />
+                <span className="font-medium">필터 및 검색</span>
+                <span className="text-gray-500">({filteredSetlists.length}개)</span>
+              </div>
+              <ChevronRight
+                className={`w-5 h-5 transition-transform ${showFilters ? 'rotate-90' : ''}`}
+              />
+            </button>
 
             {/* 검색 및 필터 */}
             <div className="flex flex-col md:flex-row gap-3 mt-4">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="콘티 제목으로 검색..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="콘티 제목 검색..."
+                    className="w-full pl-9 sm:pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -941,7 +1012,7 @@ const downloadSelectedFixedSongs = async () => {
               <select
                 value={serviceTypeFilter}
                 onChange={(e) => setServiceTypeFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-auto px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">모든 예배</option>
                 <option value="주일집회">주일집회</option>
@@ -952,10 +1023,10 @@ const downloadSelectedFixedSongs = async () => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-auto px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="date_desc">날짜 최신순</option>
-                <option value="date_asc">날짜 오래된순</option>
+                <option value="date_desc">최신순</option>
+                <option value="date_asc">오래된순</option>
                 <option value="created">생성일순</option>
               </select>
             </div>
@@ -983,40 +1054,36 @@ const downloadSelectedFixedSongs = async () => {
               {filteredSetlists.map((setlist) => (
                 <div
                   key={setlist.id}
-                  className="p-6 hover:bg-gray-50 transition group"
+                  className="p-4 sm:p-6 hover:bg-gray-50 transition group"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     {/* ✅ 클릭 가능한 영역 - 콘티 상세 페이지로 이동 */}
                     <div 
                       className="flex-1 cursor-pointer"
                       onClick={() => {
                         if (user) {
-                          logSetlistView(
-                            setlist.id,
-                            teamId,
-                            user.id
-                          ).catch(error => {
+                          logSetlistView(setlist.id, teamId, user.id).catch(error => {
                             console.error('Error logging setlist view:', error)
                           })
                         }
                         router.push(`/my-team/${teamId}/setlist/${setlist.id}`)
                       }}
                     >
-                      <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">
                         {setlist.title}
                       </h3>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                        <span className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           {new Date(setlist.service_date).toLocaleDateString('ko-KR')}
                         </span>
                         <span>{setlist.service_type}</span>
-                        <span className="flex items-center">
-                          <Music className="w-4 h-4 mr-1" />
+                        <span className="flex items-center gap-1">
+                          <Music className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           {setlist.song_count}곡
                         </span>
                         {setlist.creator_email && (
-                          <span className="text-gray-500">
+                          <span className="hidden sm:inline text-gray-500">
                             by {setlist.creator_email}
                           </span>
                         )}
@@ -1024,54 +1091,95 @@ const downloadSelectedFixedSongs = async () => {
                     </div>
 
                     {/* ✅ 버튼 영역 */}
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       {setlist.canEdit && (
                         <>
-                          {/* ✅ 빠른 편집 버튼 */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openQuickEditModal(setlist)
-                            }}
-                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition flex items-center gap-1"
-                            title="빠른 편집"
-                          >
-                            <Edit size={16} />
-                            <span>편집</span>
-                          </button>
-                          
-                          {/* ✅ 복사 버튼 */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleCopySetlist(setlist)
-                            }}
-                            disabled={copying}
-                            className="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition flex items-center gap-1 disabled:opacity-50"
-                            title="콘티 복사"
-                          >
-                            <Copy size={16} />
-                            <span>복사</span>
-                          </button>
-                          
-                          {/* 삭제 버튼 */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteConfirm({
-                                show: true,
-                                setlistId: setlist.id,
-                                title: setlist.title
-                              })
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                            title="삭제"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          {/* 데스크톱: 텍스트 포함 버튼 */}
+                          <div className="hidden sm:flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openQuickEditModal(setlist)
+                              }}
+                              className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition flex items-center gap-1"
+                              title="빠른 편집"
+                            >
+                              <Edit size={16} />
+                              <span>편집</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCopySetlist(setlist)
+                              }}
+                              disabled={copying}
+                              className="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg transition flex items-center gap-1 disabled:opacity-50"
+                              title="콘티 복사"
+                            >
+                              <Copy size={16} />
+                              <span>복사</span>
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteConfirm({
+                                  show: true,
+                                  setlistId: setlist.id,
+                                  title: setlist.title
+                                })
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="삭제"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+
+                          {/* 모바일: 아이콘만 */}
+                          <div className="flex sm:hidden items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openQuickEditModal(setlist)
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              title="편집"
+                            >
+                              <Edit size={18} />
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCopySetlist(setlist)
+                              }}
+                              disabled={copying}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
+                              title="복사"
+                            >
+                              <Copy size={18} />
+                            </button>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteConfirm({
+                                  show: true,
+                                  setlistId: setlist.id,
+                                  title: setlist.title
+                                })
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="삭제"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         </>
                       )}
-                      <ChevronRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition" />
+                      <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 group-hover:text-blue-600 transition flex-shrink-0" />
                     </div>
                   </div>
                 </div>
