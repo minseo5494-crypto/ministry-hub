@@ -68,7 +68,7 @@ function LoginForm() {
             로그인
           </h1>
           <p className="text-gray-600">
-            Worship App에 오신 것을 환영합니다
+            Ministry Hub에 오신 것을 환영합니다
           </p>
         </div>
 

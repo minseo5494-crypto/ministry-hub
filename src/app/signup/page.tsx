@@ -107,7 +107,7 @@ export default function SignupPage() {
             회원가입
           </h1>
           <p className="text-gray-600">
-            Worship App과 함께 시작하세요
+            Ministry Hub와 함께 시작하세요
           </p>
         </div>
 
