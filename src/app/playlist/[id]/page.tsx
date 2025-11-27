@@ -17,6 +17,7 @@ interface SetlistSong {
   id: string
   order_number: number
   selected_form?: string[]
+  notes?: string  // ✅ 추가
   songs: Song
 }
 
@@ -55,26 +56,28 @@ export default function PlaylistPage() {
 
       // 곡 목록 (송폼 정보 포함) - 모든 곡 가져오기
     const { data: setlistSongs, error: songsError } = await supabase
-      .from('team_setlist_songs')
-      .select(`
-        id,
-        order_number,
-        selected_form,
-        songs (*)
-      `)
-      .eq('setlist_id', playlistId)
-      .order('order_number')
+  .from('team_setlist_songs')
+  .select(`
+    id,
+    order_number,
+    selected_form,
+    notes,
+    songs (*)
+  `)
+  .eq('setlist_id', playlistId)
+  .order('order_number')
 
     if (songsError) throw songsError
 
     // 🎵 필터링 제거 - 모든 곡 표시
     const allSongs: SetlistSong[] = (setlistSongs || [])
-      .map((item: any) => ({
-        id: item.id,
-        order_number: item.order_number,
-        selected_form: item.selected_form,
-        songs: item.songs
-      }))
+  .map((item: any) => ({
+    id: item.id,
+    order_number: item.order_number,
+    selected_form: item.selected_form,
+    notes: item.notes,  // ✅ 추가
+    songs: item.songs
+  }))
 
     console.log('📊 전체 곡:', allSongs.length)
     const songsWithYoutube = allSongs.filter(s => s.songs.youtube_url && s.songs.youtube_url.trim() !== '')
@@ -229,7 +232,15 @@ const handleNext = () => {
                 ))}
               </div>
             )}
-          </div>
+          {/* 📝 인도자 메모 표시 */}
+          {currentSong.notes && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                <span className="font-medium">📝 인도자 메모:</span> {currentSong.notes}
+              </p>
+            </div>
+          )}
+        </div>
 
           {/* 이전/다음 버튼 */}
           <div className="flex gap-2">
@@ -289,6 +300,12 @@ const handleNext = () => {
           {song.songs.song_name}
           {!song.songs.youtube_url && ' (영상 없음)'}
         </p>
+        {/* 📝 메모가 있으면 표시 */}
+{song.notes && (
+  <p className="text-xs text-yellow-600 truncate mt-1">
+    📝 {song.notes}
+  </p>
+)}
         {/* 나머지 내용 동일... */}
       </div>
     </div>

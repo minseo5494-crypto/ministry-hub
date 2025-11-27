@@ -71,6 +71,7 @@ interface SortableSongItemProps {
   onOpenSongForm: (song: SetlistSong) => void
   onOpenSheetViewer: (song: SetlistSong) => void
   onOpenYoutubeModal: (song: Song) => void
+  onOpenNoteModal: (song: SetlistSong) => void  // ✅ 추가
   isPreviewOpen: boolean
   totalSongs: number
 }
@@ -86,6 +87,7 @@ function SortableSongItem({
   onOpenSongForm,
   onOpenSheetViewer,
   onOpenYoutubeModal,
+  onOpenNoteModal,  // ✅ 추가
   isPreviewOpen,
   totalSongs,
 }: SortableSongItemProps) {
@@ -140,11 +142,33 @@ function SortableSongItem({
                 송폼: {song.selected_form.join(' - ')}
               </p>
             )}
-            {song.notes && (
-              <p className="text-sm text-red-600 italic mb-2">
-                메모: {song.notes}
-              </p>
-            )}
+            {/* 📝 메모 표시 및 수정 */}
+{song.notes ? (
+  <div className="flex items-start gap-2 mb-2">
+    <div className="flex-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+      <p className="text-sm text-yellow-800">
+        <span className="font-medium">📝 메모:</span> {song.notes}
+      </p>
+    </div>
+    {canEdit && (
+      <button
+        onClick={() => onOpenNoteModal(song)}
+        className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+      >
+        수정
+      </button>
+    )}
+  </div>
+) : (
+  canEdit && (
+    <button
+      onClick={() => onOpenNoteModal(song)}
+      className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+    >
+      + 메모 추가
+    </button>
+  )
+)}
 
             {/* 상세 정보 (토글 시 표시) */}
             {isPreviewOpen && (
@@ -320,6 +344,20 @@ export default function TeamSetlistDetailPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // 🎵 유튜브 모달 상태 추가
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
+
+  // 📝 메모 수정 모달 상태
+const [noteModal, setNoteModal] = useState<{
+  show: boolean
+  songId: string
+  songName: string
+  currentNote: string
+}>({
+  show: false,
+  songId: '',
+  songName: '',
+  currentNote: ''
+})
+const [savingNote, setSavingNote] = useState(false)
 
   // 🆕 드래그 앤 드롭 센서 설정
   const sensors = useSensors(
@@ -1014,6 +1052,42 @@ const handleSharePlaylist = () => {
     setCurrentPDFPage(1);
     setTotalPDFPages(0);
   }
+  // 📝 메모 모달 열기
+const openNoteModal = (song: SetlistSong) => {
+  setNoteModal({
+    show: true,
+    songId: song.id,
+    songName: song.songs.song_name,
+    currentNote: song.notes || ''
+  })
+}
+
+// 📝 메모 저장
+const saveNote = async () => {
+  setSavingNote(true)
+  try {
+    const { error } = await supabase
+      .from('team_setlist_songs')
+      .update({ notes: noteModal.currentNote.trim() || null })
+      .eq('id', noteModal.songId)
+
+    if (error) throw error
+
+    // 로컬 상태 업데이트
+    setSongs(prev => prev.map(song => 
+      song.id === noteModal.songId 
+        ? { ...song, notes: noteModal.currentNote.trim() || null }
+        : song
+    ))
+
+    setNoteModal({ show: false, songId: '', songName: '', currentNote: '' })
+  } catch (error) {
+    console.error('메모 저장 오류:', error)
+    alert('메모 저장에 실패했습니다.')
+  } finally {
+    setSavingNote(false)
+  }
+}
 
   // 🎵 다음/이전 곡으로 이동 (콘티 내의 곡들만)
   const goToAdjacentSong = (direction: 'prev' | 'next') => {
@@ -1304,22 +1378,23 @@ const handleSharePlaylist = () => {
     >
       <div className="divide-y">
         {songs.map((song, index) => (
-          <SortableSongItem
-            key={song.id}
-            song={song}
-            index={index}
-            canEdit={canEdit()}
-            onRemove={removeSongFromSetlist}
-            onMoveUp={() => moveSong(index, 'up')}
-            onMoveDown={() => moveSong(index, 'down')}
-            onTogglePreview={togglePreview}
-            onOpenSongForm={openSongFormModal}
-            onOpenSheetViewer={openSheetViewerForSong}
-            onOpenYoutubeModal={setYoutubeModalSong}
-            isPreviewOpen={previewStates[song.id] || false}
-            totalSongs={songs.length}
-          />
-        ))}
+  <SortableSongItem
+    key={song.id}
+    song={song}
+    index={index}
+    canEdit={canEdit()}
+    onRemove={removeSongFromSetlist}
+    onMoveUp={() => moveSong(index, 'up')}
+    onMoveDown={() => moveSong(index, 'down')}
+    onTogglePreview={togglePreview}
+    onOpenSongForm={openSongFormModal}
+    onOpenSheetViewer={openSheetViewerForSong}
+    onOpenYoutubeModal={setYoutubeModalSong}
+    onOpenNoteModal={openNoteModal}  // ✅ 추가
+    isPreviewOpen={previewStates[song.id] || false}
+    totalSongs={songs.length}
+  />
+))}
       </div>
     </SortableContext>
   </DndContext>
@@ -1556,26 +1631,67 @@ const handleSharePlaylist = () => {
           </div>
         </div>
       )}
+
+      {/* 📝 메모 수정 모달 */}
+{noteModal.show && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg w-full max-w-md">
+      <div className="p-4 border-b">
+        <h3 className="text-lg font-bold text-gray-900">곡 메모</h3>
+        <p className="text-sm text-gray-600">{noteModal.songName}</p>
+      </div>
+      
+      <div className="p-4">
+        <textarea
+          value={noteModal.currentNote}
+          onChange={(e) => setNoteModal(prev => ({ ...prev, currentNote: e.target.value }))}
+          placeholder="이 곡에 대한 메모를 입력하세요...&#10;(예: 2절까지만, 키 반음 낮춤, 속도 조절 등)"
+          className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          autoFocus
+        />
+        <p className="text-xs text-gray-500 mt-2">
+          💡 팀원들이 플레이리스트에서 이 메모를 볼 수 있습니다.
+        </p>
+      </div>
+      
+      <div className="p-4 border-t flex gap-2 justify-end">
+        <button
+          onClick={() => setNoteModal({ show: false, songId: '', songName: '', currentNote: '' })}
+          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+        >
+          취소
+        </button>
+        <button
+          onClick={saveNote}
+          disabled={savingNote}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {savingNote ? '저장 중...' : '저장'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       
       {/* 🎵 악보보기 모드 (전체화면) */}
       {showSheetViewer && currentSheetSong && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
           {/* 상단 바 */}
-          <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
+          <div className="bg-white text-gray-900 p-4 flex items-center justify-between shadow-md">
             <div className="flex items-center gap-4">
               <span className="text-lg font-bold">
                 {currentSheetSong.song_name}
               </span>
               {currentSheetSong.team_name && (
-                <span className="text-sm text-gray-400">
-                  {currentSheetSong.team_name}
-                </span>
-              )}
-              {currentSheetSong.key && (
-                <span className="text-sm text-gray-400">
-                  Key: {currentSheetSong.key}
-                </span>
-              )}
+  <span className="text-sm text-gray-600">
+    {currentSheetSong.team_name}
+  </span>
+)}
+{currentSheetSong.key && (
+  <span className="text-sm text-gray-600">
+    Key: {currentSheetSong.key}
+  </span>
+)}
             </div>
 
             {/* 닫기 버튼 */}
@@ -1590,9 +1706,9 @@ const handleSharePlaylist = () => {
           </div>
 
           {/* 악보 표시 영역 */}
-          <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-900">
+          <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-200">
             {!currentSheetSong.file_url ? (
-              <div className="text-white text-center">
+              <div className="text-gray-500 text-center">
                 <Music size={80} className="mx-auto mb-4 opacity-30" />
                 <p className="text-2xl">악보가 없습니다</p>
               </div>
@@ -1600,8 +1716,8 @@ const handleSharePlaylist = () => {
               <>
                 {isLoadingPDF ? (
                   <div className="flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-                    <p className="text-white">PDF 로딩 중...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-gray-700">PDF 로딩 중...</p>
                   </div>
                 ) : (
                   <canvas
@@ -1620,7 +1736,7 @@ const handleSharePlaylist = () => {
                     {currentPDFPage > 1 && (
                       <button
                         onClick={() => setCurrentPDFPage(p => p - 1)}
-                        className="absolute left-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                        className="absolute left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
                       >
                         <ChevronLeft size={32} />
                       </button>
@@ -1629,7 +1745,7 @@ const handleSharePlaylist = () => {
                     {currentPDFPage < totalPDFPages && (
                       <button
                         onClick={() => setCurrentPDFPage(p => p + 1)}
-                        className="absolute right-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                        className="absolute right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
                       >
                         <ChevronRight size={32} />
                       </button>
@@ -1639,7 +1755,7 @@ const handleSharePlaylist = () => {
 
                 {/* 페이지 번호 표시 */}
                 {!isLoadingPDF && totalPDFPages > 0 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-full">
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-4 py-2 rounded-full shadow-lg border border-gray-300">
                     페이지 {currentPDFPage} / {totalPDFPages}
                   </div>
                 )}
@@ -1659,15 +1775,15 @@ const handleSharePlaylist = () => {
           </div>
 
           {/* 하단 정보 바 */}
-          <div className="bg-gray-900 text-white p-4 flex justify-between items-center border-t border-gray-700">
+          <div className="bg-white text-gray-900 p-4 flex justify-between items-center border-t border-gray-300 shadow-md">
             <div className="flex gap-4 text-sm">
               {currentSheetSong.bpm && (
-                <span className="px-3 py-1 bg-gray-800 rounded">
+                <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
                   BPM: {currentSheetSong.bpm}
                 </span>
               )}
               {currentSheetSong.time_signature && (
-                <span className="px-3 py-1 bg-gray-800 rounded">
+                <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
                   박자: {currentSheetSong.time_signature}
                 </span>
               )}
@@ -1677,20 +1793,20 @@ const handleSharePlaylist = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => goToAdjacentSong('prev')}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
               >
                 <ChevronLeft size={20} />
                 이전 곡
               </button>
 
               {/* 현재 위치 */}
-              <span className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg font-bold">
+              <span className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg font-bold">
                 {songs.findIndex(s => s.songs.id === currentSheetSong?.id) + 1} / {songs.filter(s => s.songs.file_url).length}
               </span>
 
               <button
                 onClick={() => goToAdjacentSong('next')}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
               >
                 다음 곡
                 <ChevronRight size={20} />

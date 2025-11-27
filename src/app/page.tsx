@@ -92,9 +92,10 @@ export default function Home() {
   // PPT 모달 상태
   const [showPPTModal, setShowPPTModal] = useState(false)
 
-  // PDF/PPT 다운로드 로딩 상태
-  const [downloadingPDF, setDownloadingPDF] = useState(false)
-  const [downloadingPPT, setDownloadingPPT] = useState(false)
+  // PDF/PPT/이미지 다운로드 로딩 상태
+const [downloadingPDF, setDownloadingPDF] = useState(false)
+const [downloadingPPT, setDownloadingPPT] = useState(false)
+const [downloadingImage, setDownloadingImage] = useState(false)  // 추가
 
   // 🆕 파일 형식 선택 모달 상태
   const [showFormatModal, setShowFormatModal] = useState(false)
@@ -1235,7 +1236,7 @@ if (user) {
 
 // 🆕 사진파일로 다운로드 (각 곡을 개별 파일로)
 const downloadAsImageFiles = async () => {
-  setDownloadingPDF(true)
+  setDownloadingImage(true)  // 변경
 
   // 모바일에서 시작 전 안내
 if (isMobileDevice()) {
@@ -1287,7 +1288,7 @@ alert('📱 모바일에서 이미지 저장 안내\n\n공유 화면이 나타�
     console.error('다운로드 오류:', error)
     alert('❌ 다운로드 중 오류가 발생했습니다.')
   } finally {
-    setDownloadingPDF(false)
+    setDownloadingImage(false)  // 변경
   }
 }
 
@@ -3720,26 +3721,28 @@ rounded text-blue-900">{abbr}</span>
       )}
 
       {/* ✅ 여기부터 새로 추가 ✅ */}
-      {/* PDF/PPT 다운로드 로딩 모달 */}
-      {(downloadingPDF || downloadingPPT) && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
-            {/* 스피너 */}
-            <div className="flex justify-center mb-4">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
-            </div>
-            
-            {/* 제목 */}
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {downloadingPDF ? 'PDF 생성 중...' : 'PPT 생성 중...'}
-            </h3>
-            
-            {/* 설명 */}
-            <p className="text-gray-600 mb-4">
-              {downloadingPDF
-                ? '선택하신 곡들의 악보를 PDF로 생성하고 있습니다.'
-                : '선택하신 곡들의 가사를 PPT로 생성하고 있습니다.'}
-            </p>
+      {/* PDF/PPT/이미지 다운로드 로딩 모달 */}
+{(downloadingPDF || downloadingPPT || downloadingImage) && (
+  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+      {/* 스피너 */}
+      <div className="flex justify-center mb-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+      </div>
+
+      {/* 제목 */}
+      <h3 className="text-xl font-bold text-gray-900 mb-2">
+        {downloadingPDF ? 'PDF 생성 중...' : downloadingImage ? '사진 다운로드 중...' : 'PPT 생성 중...'}
+      </h3>
+
+      {/* 설명 */}
+      <p className="text-gray-600 mb-4">
+        {downloadingPDF
+          ? '선택하신 곡들의 악보를 PDF로 생성하고 있습니다.'
+          : downloadingImage
+          ? '선택하신 곡들의 악보를 사진 파일로 다운로드하고 있습니다.'
+          : '선택하신 곡들의 가사를 PPT로 생성하고 있습니다.'}
+      </p>
             
             {/* 안내 메시지 */}
             <p className="text-sm text-gray-500">
@@ -3760,20 +3763,20 @@ rounded text-blue-900">{abbr}</span>
 
       {/* 🆕🆕🆕 악보보기 모드 (전체화면) */}
 {showSheetViewer && currentSheetSong && (
-  <div className="fixed inset-0 bg-black z-50 flex flex-col">
+  <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
     {/* 상단 바 */}
-    <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
+    <div className="bg-white text-gray-900 p-4 flex items-center justify-between shadow-md">
       <div className="flex items-center gap-4">
         <span className="text-base md:text-lg font-bold">
           {currentSheetSong.song_name}
         </span>
         {currentSheetSong.team_name && (
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-gray-600">
             {currentSheetSong.team_name}
           </span>
         )}
         {currentSheetSong.key && (
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-gray-600">
             Key: {currentSheetSong.key}
           </span>
         )}
@@ -3791,9 +3794,9 @@ rounded text-blue-900">{abbr}</span>
     </div>
 
     {/* 악보 표시 영역 */}
-    <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-900">
+    <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-200">
       {!currentSheetSong.file_url ? (
-        <div className="text-white text-center">
+        <div className="text-gray-500 text-center">
           <Music size={80} className="mx-auto mb-4 opacity-30" />
           <p className="text-2xl">악보가 없습니다</p>
         </div>
@@ -3801,8 +3804,8 @@ rounded text-blue-900">{abbr}</span>
         <>
           {isLoadingPDF ? (
             <div className="flex flex-col items-center justify-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-              <p className="text-white">PDF 로딩 중...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+              <p className="text-gray-700">PDF 로딩 중...</p>
             </div>
           ) : (
             <canvas
@@ -3821,7 +3824,7 @@ rounded text-blue-900">{abbr}</span>
               {currentPDFPage > 1 && (
                 <button
                   onClick={() => setCurrentPDFPage(p => p - 1)}
-                  className="absolute left-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                  className="absolute left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
                 >
                   <ChevronLeft size={32} />
                 </button>
@@ -3830,7 +3833,7 @@ rounded text-blue-900">{abbr}</span>
               {currentPDFPage < totalPDFPages && (
                 <button
                   onClick={() => setCurrentPDFPage(p => p + 1)}
-                  className="absolute right-8 top-1/2 -translate-y-1/2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-4 rounded-full backdrop-blur transition-all"
+                  className="absolute right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
                 >
                   <ChevronRight size={32} />
                 </button>
@@ -3840,7 +3843,7 @@ rounded text-blue-900">{abbr}</span>
           
           {/* 페이지 번호 표시 */}
           {!isLoadingPDF && totalPDFPages > 0 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-full">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-4 py-2 rounded-full shadow-lg border border-gray-300">
               페이지 {currentPDFPage} / {totalPDFPages}
             </div>
           )}
@@ -3860,15 +3863,15 @@ rounded text-blue-900">{abbr}</span>
     </div>
 
     {/* 하단 정보 바 - 더 잘 보이게 개선 */}
-    <div className="bg-gray-900 text-white p-4 flex justify-between items-center border-t border-gray-700">
+    <div className="bg-white text-gray-900 p-4 flex justify-between items-center border-t border-gray-300 shadow-md">
       <div className="flex gap-4 text-sm">
         {currentSheetSong.bpm && (
-          <span className="px-3 py-1 bg-gray-800 rounded">
+          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
             BPM: {currentSheetSong.bpm}
           </span>
         )}
         {currentSheetSong.time_signature && (
-          <span className="px-3 py-1 bg-gray-800 rounded">
+          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
             박자: {currentSheetSong.time_signature}
           </span>
         )}
@@ -3878,7 +3881,7 @@ rounded text-blue-900">{abbr}</span>
       <div className="flex items-center gap-3">
         <button
           onClick={() => goToAdjacentSong('prev')}
-          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
         >
           <ChevronLeft size={20} />
           이전 곡
@@ -3891,7 +3894,7 @@ rounded text-blue-900">{abbr}</span>
         
         <button
           onClick={() => goToAdjacentSong('next')}
-          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors font-medium flex items-center gap-1"
+          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
         >
           다음 곡
           <ChevronRight size={20} />
