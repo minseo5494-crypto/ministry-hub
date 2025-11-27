@@ -100,6 +100,8 @@ function SortableSongItem({
     transition,
     isDragging,
   } = useSortable({ id: song.id })
+  // 메모 펼침 상태
+  const [isNoteExpanded, setIsNoteExpanded] = useState(false)
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -142,13 +144,37 @@ function SortableSongItem({
                 송폼: {song.selected_form.join(' - ')}
               </p>
             )}
-            {/* 📝 메모 표시 및 수정 */}
+            {/* 📝 메모 표시 - 접기/펼치기 기능 */}
 {song.notes ? (
   <div className="flex items-start gap-2 mb-2">
     <div className="flex-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <p className="text-sm text-yellow-800">
-        <span className="font-medium">📝 메모:</span> {song.notes}
-      </p>
+      <div className="text-sm text-yellow-800">
+  <span className="font-medium">📝 메모:</span>
+  <pre className="whitespace-pre-wrap font-sans mt-1">
+    {song.notes.length > 100 && !isNoteExpanded
+      ? `${song.notes.slice(0, 100)}...`
+      : song.notes
+    }
+  </pre>
+</div>
+      {song.notes.length > 100 && (
+        <button
+          onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+          className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
+        >
+          {isNoteExpanded ? (
+            <>
+              <ChevronUp size={14} />
+              접기
+            </>
+          ) : (
+            <>
+              <ChevronDown size={14} />
+              더보기
+            </>
+          )}
+        </button>
+      )}
     </div>
     {canEdit && (
       <button
@@ -1635,7 +1661,7 @@ const saveNote = async () => {
       {/* 📝 메모 수정 모달 */}
 {noteModal.show && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg w-full max-w-md">
+    <div className="bg-white rounded-lg w-full max-w-2xl">
       <div className="p-4 border-b">
         <h3 className="text-lg font-bold text-gray-900">곡 메모</h3>
         <p className="text-sm text-gray-600">{noteModal.songName}</p>
@@ -1646,7 +1672,7 @@ const saveNote = async () => {
           value={noteModal.currentNote}
           onChange={(e) => setNoteModal(prev => ({ ...prev, currentNote: e.target.value }))}
           placeholder="이 곡에 대한 메모를 입력하세요...&#10;(예: 2절까지만, 키 반음 낮춤, 속도 조절 등)"
-          className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full h-64 p-3 border border-gray-300 rounded-lg resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           autoFocus
         />
         <p className="text-xs text-gray-500 mt-2">

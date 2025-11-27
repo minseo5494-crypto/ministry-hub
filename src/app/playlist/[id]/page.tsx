@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Music, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Music, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react'
 
 interface Song {
   id: string
@@ -37,6 +37,8 @@ export default function PlaylistPage() {
   const [setlistInfo, setSetlistInfo] = useState<SetlistInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const playerRef = useRef<HTMLIFrameElement>(null)
+  // 메모 펼침 상태 추가
+  const [expandedNotes, setExpandedNotes] = useState<{ [key: string]: boolean }>({})
 
   useEffect(() => {
     fetchPlaylist()
@@ -233,13 +235,39 @@ const handleNext = () => {
               </div>
             )}
           {/* 📝 인도자 메모 표시 */}
-          {currentSong.notes && (
-            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <span className="font-medium">📝 인도자 메모:</span> {currentSong.notes}
-              </p>
-            </div>
+{currentSong.notes && (
+  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+    <div className="text-sm text-yellow-800">
+      <span className="font-medium">📝 인도자 메모:</span>
+      <pre className={`whitespace-pre-wrap font-sans mt-1 ${
+        !expandedNotes[currentSong.id] && currentSong.notes.length > 200 ? 'line-clamp-5' : ''
+      }`}>
+        {currentSong.notes}
+      </pre>
+      {currentSong.notes.length > 200 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpandedNotes(prev => ({ ...prev, [currentSong.id]: !prev[currentSong.id] }))
+          }}
+          className="text-xs text-yellow-700 hover:text-yellow-900 mt-2 font-medium flex items-center gap-1"
+        >
+          {expandedNotes[currentSong.id] ? (
+            <>
+              <ChevronUp size={14} />
+              접기
+            </>
+          ) : (
+            <>
+              <ChevronDown size={14} />
+              더보기
+            </>
           )}
+        </button>
+      )}
+    </div>
+  </div>
+)}
         </div>
 
           {/* 이전/다음 버튼 */}
@@ -269,14 +297,10 @@ const handleNext = () => {
           <div className="space-y-2">
             {songs.map((song, index) => (
   <button
-    key={song.id}
-    onClick={() => {
-      if (song.songs.youtube_url) {
-        setCurrentIndex(index)
-      } else {
-        alert('이 곡은 유튜브 링크가 없습니다.')
-      }
-    }}
+  key={song.id}
+  onClick={() => {
+    setCurrentIndex(index)
+  }}
     className={`w-full p-3 md:p-4 rounded-lg text-left transition-all ${
       index === currentIndex
         ? 'bg-blue-100 border-2 border-blue-400 shadow-md'
@@ -300,12 +324,7 @@ const handleNext = () => {
           {song.songs.song_name}
           {!song.songs.youtube_url && ' (영상 없음)'}
         </p>
-        {/* 📝 메모가 있으면 표시 */}
-{song.notes && (
-  <p className="text-xs text-yellow-600 truncate mt-1">
-    📝 {song.notes}
-  </p>
-)}
+        
         {/* 나머지 내용 동일... */}
       </div>
     </div>

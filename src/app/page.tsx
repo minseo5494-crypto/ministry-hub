@@ -2348,15 +2348,15 @@ className="p-2 hover:bg-gray-100 rounded-lg"
     <Activity className="inline w-4 h-4 mr-1" />
     템포
   </label>
-  <div className="flex gap-2">
+  <div className="flex flex-wrap gap-2">
     {tempos.map(tempo => (
       <button
         key={tempo}
-        onClick={() => setFilters({ 
-          ...filters, 
-          tempo: filters.tempo === tempo ? '' : tempo 
+        onClick={() => setFilters({
+          ...filters,
+          tempo: filters.tempo === tempo ? '' : tempo
         })}
-        className={`flex-1 px-3 py-2 rounded text-sm transition ${
+        className={`px-3 py-2 rounded text-sm transition whitespace-nowrap ${
           filters.tempo === tempo
             ? 'bg-[#C5D7F2] text-white'
             : 'bg-gray-100 hover:bg-gray-200'
@@ -2754,8 +2754,8 @@ className="p-2 hover:bg-gray-100 rounded-lg"
       color: !song.youtube_url 
         ? '#d1d5db' 
         : youtubeStates[song.id] 
-        ? '#dc2626' 
-        : '#4b5563',
+        ? '#dc2626'
+        : '#dc2626',
       backgroundColor: !song.youtube_url
         ? 'transparent'
         : youtubeStates[song.id]
