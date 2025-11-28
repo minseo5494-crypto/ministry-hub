@@ -82,6 +82,11 @@ export default function Home() {
   const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
   const [loading, setLoading] = useState(true)
 
+  // 🆕 무한 스크롤을 위한 상태
+const [displayCount, setDisplayCount] = useState(20)
+const [isLoadingMore, setIsLoadingMore] = useState(false)
+const loadMoreRef = useRef<HTMLDivElement>(null)
+
   // 송폼 관련 상태
   const [songForms, setSongForms] = useState<{[songId: string]: string[]}>({})
   const [showFormModal, setShowFormModal] = useState(false)
@@ -990,6 +995,8 @@ const handleTempoChange = (tempoValue: string) => {
     }
   }
 
+  
+
   // 개선된 필터링 로직
   useEffect(() => {
     let result = [...songs]
@@ -1090,6 +1097,37 @@ const handleTempoChange = (tempoValue: string) => {
   return () => clearTimeout(debounceTimer)
 }
   }, [songs, filters, user])
+  
+  // 🆕 필터가 변경되면 표시 개수 초기화
+useEffect(() => {
+  setDisplayCount(20)
+}, [filteredSongs])
+
+// 🆕 무한 스크롤 Intersection Observer
+useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && displayCount < filteredSongs.length && !isLoadingMore) {
+        setIsLoadingMore(true)
+        setTimeout(() => {
+          setDisplayCount(prev => Math.min(prev + 20, filteredSongs.length))
+          setIsLoadingMore(false)
+        }, 300)
+      }
+    },
+    { threshold: 0.1 }
+  )
+
+  if (loadMoreRef.current) {
+    observer.observe(loadMoreRef.current)
+  }
+
+  return () => observer.disconnect()
+}, [displayCount, filteredSongs.length, isLoadingMore])
+
+// 🆕 표시할 곡 목록 계산
+const displayedSongs = filteredSongs.slice(0, displayCount)
+const hasMore = displayCount < filteredSongs.length
 
   const toggleSongSelection = (song: Song) => {
     if (selectedSongs.find(s => s.id === song.id)) {
@@ -2442,8 +2480,11 @@ className="p-2 hover:bg-gray-100 rounded-lg"
           <Filter size={20} />
         </button>
         <span className="text-gray-600">
-          {filteredSongs.length}개의 찬양
-        </span>
+{displayCount < filteredSongs.length 
+  ? `${displayCount} / ${filteredSongs.length}개의 찬양`
+  : `${filteredSongs.length}개의 찬양`
+}
+</span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -2483,7 +2524,7 @@ className="p-2 hover:bg-gray-100 rounded-lg"
   
   // 그리드 뷰
   <div className="p-3 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-    {filteredSongs.map((song, index) => (
+{displayedSongs.map((song, index) => (
       <div
         key={song.id}
         onClick={() => {
@@ -2593,7 +2634,7 @@ className="p-2 hover:bg-gray-100 rounded-lg"
               ) : (
                 // 리스트 뷰 (기존 스타일 유지)
                 <div ref={songListRef} className="divide-y divide-gray-200">
-                  {filteredSongs.map((song, index) => (
+{displayedSongs.map((song, index) => (
                     <div
                       key={song.id}
                       tabIndex={0}
@@ -2666,10 +2707,10 @@ className="p-2 hover:bg-gray-100 rounded-lg"
       <div>
         <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
         {song.file_type === 'pdf' ? (
-          <iframe
-            src={song.file_url}
-            className="w-full h-[600px] border rounded"
-          />
+<iframe
+src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+className="w-full h-[600px] border rounded"
+/>
         ) : (
           <img 
             src={song.file_url}
@@ -2792,6 +2833,25 @@ className="p-2 hover:bg-gray-100 rounded-lg"
                 </div>
               )}
             </div>
+
+            {/* 🆕 무한 스크롤 로딩 표시 */}
+{hasMore && (
+  <div 
+    ref={loadMoreRef} 
+    className="py-8 text-center"
+  >
+    {isLoadingMore ? (
+      <div className="flex items-center justify-center gap-2">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+        <span className="text-gray-600">더 불러오는 중...</span>
+      </div>
+    ) : (
+      <span className="text-gray-400">
+        스크롤하여 더 보기 ({displayCount} / {filteredSongs.length})
+      </span>
+    )}
+  </div>
+)}
 
             {/* 선택한 곡 순서 변경 (숨김 처리) */}
             {selectedSongs.length > 0 && (
@@ -3761,147 +3821,152 @@ rounded text-blue-900">{abbr}</span>
       {/* ✅ 여기까지 새로 추가 ✅ */}
       {/* ✅ 여기까지 새로 추가 ✅ */}
 
-      {/* 🆕🆕🆕 악보보기 모드 (전체화면) */}
+      {/* 🎵 악보보기 모드 (전체화면) */}
 {showSheetViewer && currentSheetSong && (
-  <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
-    {/* 상단 바 */}
-    <div className="bg-white text-gray-900 p-4 flex items-center justify-between shadow-md">
-      <div className="flex items-center gap-4">
-        <span className="text-base md:text-lg font-bold">
-          {currentSheetSong.song_name}
-        </span>
-        {currentSheetSong.team_name && (
-          <span className="text-sm text-gray-600">
-            {currentSheetSong.team_name}
-          </span>
-        )}
-        {currentSheetSong.key && (
-          <span className="text-sm text-gray-600">
-            Key: {currentSheetSong.key}
-          </span>
-        )}
-      </div>
-      
-      {/* 닫기 버튼 - 더 잘 보이게 개선 */}
-      <button
-        onClick={closeSheetViewer}
-        className="px-4 py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-2"
-        title="닫기 (ESC)"
-      >
-        <X size={20} />
-        <span className="font-medium">닫기</span>
-      </button>
-    </div>
+<div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
+{/* 상단 바 - 모바일에서 컴팩트하게 */}
+<div className="bg-white text-gray-900 p-2 md:p-4 flex items-center justify-between shadow-md">
+<div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+<span className="text-sm md:text-lg font-bold truncate">
+{currentSheetSong.song_name}
+</span>
+{/* 모바일에서 팀명과 키 숨김 */}
+{currentSheetSong.team_name && (
+<span className="hidden md:inline text-sm text-gray-600">
+{currentSheetSong.team_name}
+</span>
+)}
+{currentSheetSong.key && (
+<span className="hidden md:inline text-sm text-gray-600">
+Key: {currentSheetSong.key}
+</span>
+)}
+</div>
 
-    {/* 악보 표시 영역 */}
-    <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-200">
-      {!currentSheetSong.file_url ? (
-        <div className="text-gray-500 text-center">
-          <Music size={80} className="mx-auto mb-4 opacity-30" />
-          <p className="text-2xl">악보가 없습니다</p>
-        </div>
-      ) : currentSheetSong.file_type === 'pdf' ? (
-        <>
-          {isLoadingPDF ? (
-            <div className="flex flex-col items-center justify-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-gray-700">PDF 로딩 중...</p>
-            </div>
-          ) : (
-            <canvas
-              ref={canvasRef}
-              className="shadow-2xl bg-white"
-              style={{ 
-                maxHeight: '85vh', 
-                width: 'auto'
-              }}
-            />
-          )}
-          
-          {/* PDF 페이지 네비게이션 버튼 */}
-          {!isLoadingPDF && totalPDFPages > 1 && (
-            <>
-              {currentPDFPage > 1 && (
-                <button
-                  onClick={() => setCurrentPDFPage(p => p - 1)}
-                  className="absolute left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
-                >
-                  <ChevronLeft size={32} />
-                </button>
-              )}
-              
-              {currentPDFPage < totalPDFPages && (
-                <button
-                  onClick={() => setCurrentPDFPage(p => p + 1)}
-                  className="absolute right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
-                >
-                  <ChevronRight size={32} />
-                </button>
-              )}
-            </>
-          )}
-          
-          {/* 페이지 번호 표시 */}
-          {!isLoadingPDF && totalPDFPages > 0 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-4 py-2 rounded-full shadow-lg border border-gray-300">
-              페이지 {currentPDFPage} / {totalPDFPages}
-            </div>
-          )}
-        </>
-      ) : (
-        <img
-          src={currentSheetSong.file_url}
-          alt={currentSheetSong.song_name}
-          className="shadow-2xl"
-          style={{
-            maxHeight: '85vh',
-            width: 'auto',
-            objectFit: 'contain'
-          }}
-        />
-      )}
-    </div>
+{/* 닫기 버튼 - 모바일에서 작게 */}
+<button
+onClick={closeSheetViewer}
+className="px-2 py-1 md:px-4 md:py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-1 md:gap-2 flex-shrink-0"
+title="닫기 (ESC)"
+>
+<X size={isMobile ? 16 : 20} />
+<span className="font-medium text-sm md:text-base">닫기</span>
+</button>
+</div>
 
-    {/* 하단 정보 바 - 더 잘 보이게 개선 */}
-    <div className="bg-white text-gray-900 p-4 flex justify-between items-center border-t border-gray-300 shadow-md">
-      <div className="flex gap-4 text-sm">
-        {currentSheetSong.bpm && (
-          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-            BPM: {currentSheetSong.bpm}
-          </span>
-        )}
-        {currentSheetSong.time_signature && (
-          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-            박자: {currentSheetSong.time_signature}
-          </span>
-        )}
-      </div>
-      
-      {/* 곡 네비게이션 - 더 크고 잘 보이게 */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => goToAdjacentSong('prev')}
-          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
-        >
-          <ChevronLeft size={20} />
-          이전 곡
-        </button>
-        
-        {/* 현재 위치 - 더 크고 명확하게 */}
-        <span className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg font-bold">
-          {filteredSongs.findIndex(s => s.id === currentSheetSong?.id) + 1} / {filteredSongs.filter(s => s.file_url).length}
-        </span>
-        
-        <button
-          onClick={() => goToAdjacentSong('next')}
-          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
-        >
-          다음 곡
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    </div>
-  </div>
+{/* 악보 표시 영역 - 모바일에서 여백 추가 */}
+<div className="flex-1 flex items-center justify-center relative overflow-auto bg-gray-200 p-2 md:p-4">
+{!currentSheetSong.file_url ? (
+<div className="text-gray-500 text-center">
+<Music size={isMobile ? 48 : 80} className="mx-auto mb-4 opacity-30" />
+<p className="text-lg md:text-2xl">악보가 없습니다</p>
+</div>
+) : currentSheetSong.file_type === 'pdf' ? (
+<>
+{isLoadingPDF ? (
+<div className="flex flex-col items-center justify-center">
+<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+<p className="text-gray-700">PDF 로딩 중...</p>
+</div>
+) : (
+<canvas
+ref={canvasRef}
+className="shadow-2xl bg-white"
+style={{
+maxHeight: isMobile ? '70vh' : '85vh',
+maxWidth: isMobile ? '95vw' : 'auto',
+width: 'auto',
+objectFit: 'contain'
+}}
+/>
+)}
+
+{/* PDF 페이지 네비게이션 버튼 - 모바일에서 작게 */}
+{!isLoadingPDF && totalPDFPages > 1 && (
+<>
+{currentPDFPage > 1 && (
+<button
+onClick={() => setCurrentPDFPage(p => p - 1)}
+className="absolute left-2 md:left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300"
+>
+<ChevronLeft size={isMobile ? 20 : 32} />
+</button>
+)}
+
+{currentPDFPage < totalPDFPages && (
+<button
+onClick={() => setCurrentPDFPage(p => p + 1)}
+className="absolute right-2 md:right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300"
+>
+<ChevronRight size={isMobile ? 20 : 32} />
+</button>
+)}
+</>
+)}
+
+{/* 페이지 번호 표시 */}
+{!isLoadingPDF && totalPDFPages > 0 && (
+<div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-3 py-1 md:px-4 md:py-2 rounded-full shadow-lg border border-gray-300 text-sm md:text-base">
+페이지 {currentPDFPage} / {totalPDFPages}
+</div>
+)}
+</>
+) : (
+<img
+src={currentSheetSong.file_url}
+alt={currentSheetSong.song_name}
+className="shadow-2xl"
+style={{
+maxHeight: isMobile ? '70vh' : '85vh',
+maxWidth: isMobile ? '95vw' : 'auto',
+width: 'auto',
+objectFit: 'contain'
+}}
+/>
+)}
+</div>
+
+{/* 하단 정보 바 - 모바일에서 세로로 배치 */}
+<div className="bg-white text-gray-900 p-2 md:p-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-300 shadow-md gap-2 md:gap-0">
+{/* BPM, 박자 정보 - 모바일에서 숨김 또는 작게 */}
+<div className="hidden md:flex gap-4 text-sm">
+{currentSheetSong.bpm && (
+<span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
+BPM: {currentSheetSong.bpm}
+</span>
+)}
+{currentSheetSong.time_signature && (
+<span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
+박자: {currentSheetSong.time_signature}
+</span>
+)}
+</div>
+
+{/* 곡 네비게이션 */}
+<div className="flex items-center gap-2 md:gap-3">
+<button
+onClick={() => goToAdjacentSong('prev')}
+className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
+>
+<ChevronLeft size={isMobile ? 16 : 20} />
+<span className="hidden md:inline">이전 곡</span>
+</button>
+
+{/* 현재 위치 */}
+<span className="px-3 py-1 md:px-4 md:py-2 bg-[#C5D7F2] text-white rounded-lg font-bold text-sm md:text-base">
+{filteredSongs.findIndex(s => s.id === currentSheetSong?.id) + 1} / {filteredSongs.filter(s => s.file_url).length}
+</span>
+
+<button
+onClick={() => goToAdjacentSong('next')}
+className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
+>
+<span className="hidden md:inline">다음 곡</span>
+<ChevronRight size={isMobile ? 16 : 20} />
+</button>
+</div>
+</div>
+</div>
 )}
 
       {/* 🆕 송폼 위치 설정 모달 */}

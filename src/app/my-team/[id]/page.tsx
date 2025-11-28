@@ -1521,11 +1521,11 @@ const downloadSelectedFixedSongs = async () => {
       </div>
       <div className="p-4 overflow-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
         {previewFixedSong.song.file_type === 'pdf' ? (
-          <iframe
-            src={previewFixedSong.song.file_url}
-            className="w-full h-[70vh]"
-            title={previewFixedSong.song.song_name}
-          />
+<iframe
+src={`${previewFixedSong.song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+className="w-full h-[70vh]"
+title={previewFixedSong.song.song_name}
+/>
         ) : (
           <img
             src={previewFixedSong.song.file_url}
@@ -1558,11 +1558,11 @@ const downloadSelectedFixedSongs = async () => {
     </div>
     <div className="w-full h-full flex items-center justify-center p-8">
       {currentSheetSong.file_type === 'pdf' ? (
-        <iframe
-          src={currentSheetSong.file_url}
-          className="w-full h-full bg-white"
-          title={currentSheetSong.song_name}
-        />
+<iframe
+src={`${currentSheetSong.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+className="w-full h-full bg-white"
+title={currentSheetSong.song_name}
+/>
       ) : (
         <img
           src={currentSheetSong.file_url}
