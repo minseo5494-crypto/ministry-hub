@@ -115,9 +115,10 @@ function SortableSongItem({
       style={style}
       className={`p-4 hover:bg-gray-50 print-song ${isDragging ? 'shadow-2xl z-50' : ''}`}
     >
+      {/* 상단: 곡 정보 + 버튼 (항상 고정) */}
       <div className="flex items-start justify-between">
         <div className="flex items-start flex-1 gap-2">
-          {/* 🆕 드래그 핸들 */}
+          {/* 드래그 핸들 */}
           {canEdit && (
             <div
               {...attributes}
@@ -131,7 +132,7 @@ function SortableSongItem({
           <span className="text-lg font-bold text-blue-600 w-8 mt-1">
             {index + 1}.
           </span>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {/* 기본 정보 (항상 표시) */}
             <h3 className="font-semibold text-gray-900 text-xl mb-2">
               {song.songs.song_name}
@@ -144,92 +145,62 @@ function SortableSongItem({
                 송폼: {song.selected_form.join(' - ')}
               </p>
             )}
-            {/* 📝 메모 표시 - 접기/펼치기 기능 */}
-{song.notes ? (
-  <div className="flex items-start gap-2 mb-2">
-    <div className="flex-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div className="text-sm text-yellow-800">
-  <span className="font-medium">📝 메모:</span>
-  <pre className="whitespace-pre-wrap font-sans mt-1">
-    {song.notes.length > 100 && !isNoteExpanded
-      ? `${song.notes.slice(0, 100)}...`
-      : song.notes
-    }
-  </pre>
-</div>
-      {song.notes.length > 100 && (
-        <button
-          onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-          className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
-        >
-          {isNoteExpanded ? (
-            <>
-              <ChevronUp size={14} />
-              접기
-            </>
-          ) : (
-            <>
-              <ChevronDown size={14} />
-              더보기
-            </>
-          )}
-        </button>
-      )}
-    </div>
-    {canEdit && (
-      <button
-        onClick={() => onOpenNoteModal(song)}
-        className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-      >
-        수정
-      </button>
-    )}
-  </div>
-) : (
-  canEdit && (
-    <button
-      onClick={() => onOpenNoteModal(song)}
-      className="text-sm text-blue-600 hover:text-blue-800 mb-2"
-    >
-      + 메모 추가
-    </button>
-  )
-)}
-
-            {/* 상세 정보 (토글 시 표시) */}
-            {isPreviewOpen && (
-              <div className="mt-4 border-t pt-4">
-                {song.songs.lyrics && (
-                  <div className="mb-4">
-                    <h4 className="font-semibold text-gray-700 mb-2">가사</h4>
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded">
-                      {song.songs.lyrics}
+            {/* 메모 표시 */}
+            {song.notes ? (
+              <div className="flex items-start gap-2 mb-2">
+                <div className="flex-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="text-sm text-yellow-800">
+                    <span className="font-medium">📝 메모:</span>
+                    <pre className="whitespace-pre-wrap font-sans mt-1">
+                      {song.notes.length > 100 && !isNoteExpanded
+                        ? `${song.notes.slice(0, 100)}...`
+                        : song.notes
+                      }
                     </pre>
                   </div>
-                )}
-                {song.songs.file_url && (
-                  <div>
-                    <h4 className="font-semibold text-gray-700 mb-2">악보</h4>
-                    {song.songs.file_type === 'pdf' ? (
-                      <iframe
-                        src={song.songs.file_url}
-                        className="w-full h-[600px] border rounded"
-                      />
-                    ) : (
-                      <img
-                        src={song.songs.file_url}
-                        alt={`${song.songs.song_name} 악보`}
-                        className="max-w-full h-auto rounded shadow-sm"
-                      />
-                    )}
-                  </div>
+                  {song.notes.length > 100 && (
+                    <button
+                      onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+                      className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
+                    >
+                      {isNoteExpanded ? (
+                        <>
+                          <ChevronUp size={14} />
+                          접기
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} />
+                          더보기
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {canEdit && (
+                  <button
+                    onClick={() => onOpenNoteModal(song)}
+                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                  >
+                    수정
+                  </button>
                 )}
               </div>
+            ) : (
+              canEdit && (
+                <button
+                  onClick={() => onOpenNoteModal(song)}
+                  className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+                >
+                  + 메모 추가
+                </button>
+              )
             )}
           </div>
         </div>
 
-        <div className="flex gap-2 no-print ml-4">
+        {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
+        <div className="flex gap-2 no-print ml-4 flex-shrink-0">
           {/* 미리보기 토글 버튼 */}
           {(song.songs.lyrics || song.songs.file_url) && (
             <button
@@ -306,6 +277,37 @@ function SortableSongItem({
           )}
         </div>
       </div>
+
+      {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) - 버튼 아래 별도 영역 */}
+      {isPreviewOpen && (
+        <div className="mt-4 border-t pt-4">
+          {song.songs.lyrics && (
+            <div className="mb-4">
+              <h4 className="font-semibold text-gray-700 mb-2">가사</h4>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded max-h-60 overflow-y-auto">
+                {song.songs.lyrics}
+              </pre>
+            </div>
+          )}
+          {song.songs.file_url && (
+            <div className="-mx-4">
+              <h4 className="font-semibold text-gray-700 mb-2 px-4">악보</h4>
+              {song.songs.file_type === 'pdf' ? (
+                <iframe
+                  src={`${song.songs.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                  className="w-full h-[700px] border-y"
+                />
+              ) : (
+                <img
+                  src={song.songs.file_url}
+                  alt={`${song.songs.song_name} 악보`}
+                  className="w-full h-auto"
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -368,6 +370,13 @@ export default function TeamSetlistDetailPage() {
   const [pdfDoc, setPdfDoc] = useState<any>(null)
   const [isLoadingPDF, setIsLoadingPDF] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  
+// 🔍 확대/축소 상태
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const MIN_ZOOM = 0.5
+  const MAX_ZOOM = 3
+  const ZOOM_STEP = 0.25
+
   // 🎵 유튜브 모달 상태 추가
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
 
@@ -1067,6 +1076,7 @@ const handleSharePlaylist = () => {
     setCurrentSheetSong(setlistSong.songs);
     setCurrentPDFPage(1);
     setPdfDoc(null);
+    setZoomLevel(1);  // 🔍 줌 리셋 추가
     setShowSheetViewer(true);
   }
 
@@ -1077,6 +1087,21 @@ const handleSharePlaylist = () => {
     setPdfDoc(null);
     setCurrentPDFPage(1);
     setTotalPDFPages(0);
+  }
+
+  // 🔍 확대
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+  }
+
+  // 🔍 축소
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+  }
+
+  // 🔍 줌 리셋
+  const handleZoomReset = () => {
+    setZoomLevel(1);
   }
   // 📝 메모 모달 열기
 const openNoteModal = (song: SetlistSong) => {
@@ -1155,12 +1180,37 @@ const saveNote = async () => {
         } else {
           goToAdjacentSong('next');
         }
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleZoomIn();
+      } else if (e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        handleZoomReset();
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          handleZoomIn();
+        } else {
+          handleZoomOut();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages]);
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener('wheel', handleWheel);
+    };
+  }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages, zoomLevel]);
 
   // 🎵 PDF 렌더링 useEffect
   useEffect(() => {
@@ -1190,33 +1240,70 @@ const saveNote = async () => {
     loadPDF();
   }, [showSheetViewer, currentSheetSong]);
 
-  // 🎵 PDF 페이지 렌더링
+  // 📄 PDF 페이지 렌더링 - 고화질 + 확대/축소 지원
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current) return;
 
+    let renderTask: any = null;
+    let isCancelled = false;
+
     const renderPage = async () => {
+      console.log(`📄 페이지 ${currentPDFPage} 렌더링 시작 (zoom: ${zoomLevel * 100}%)`);
+
       try {
         const page = await pdfDoc.getPage(currentPDFPage);
+        
+        if (isCancelled) return;
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const context = canvas.getContext('2d');
-        const viewport = page.getViewport({ scale: 2.0 });
+        if (!context) return;
 
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
+        const viewport = page.getViewport({ scale: 1 });
+        const baseScale = (window.innerHeight * 0.75) / viewport.height;
+        const finalScale = baseScale * zoomLevel;
+        const scaledViewport = page.getViewport({ scale: finalScale });
 
-        await page.render({
+        const pixelRatio = window.devicePixelRatio || 1;
+        
+        canvas.width = scaledViewport.width * pixelRatio;
+        canvas.height = scaledViewport.height * pixelRatio;
+        canvas.style.width = `${scaledViewport.width}px`;
+        canvas.style.height = `${scaledViewport.height}px`;
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.scale(pixelRatio, pixelRatio);
+
+        const renderContext = {
           canvasContext: context,
-          viewport: viewport
-        }).promise;
-      } catch (error) {
-        console.error('Error rendering page:', error);
+          viewport: scaledViewport
+        };
+
+        renderTask = page.render(renderContext);
+        await renderTask.promise;
+        
+        console.log('✅ 페이지 렌더링 완료');
+      } catch (error: any) {
+        if (error?.name === 'RenderingCancelledException' || isCancelled) {
+          console.log('⏹️ 렌더링 취소됨');
+          return;
+        }
+        console.error('❌ 페이지 렌더링 실패:', error);
       }
     };
 
     renderPage();
-  }, [pdfDoc, currentPDFPage]);
+
+    return () => {
+      isCancelled = true;
+      if (renderTask) {
+        renderTask.cancel();
+      }
+    };
+  }, [pdfDoc, currentPDFPage, zoomLevel]);
 
   if (loading) {
     return (
@@ -1699,110 +1786,150 @@ const saveNote = async () => {
   </div>
 )}
       
-      {/* 🎵 악보보기 모드 (전체화면) */}
+      {/* 🎵 악보보기 모드 (전체화면) - 확대/축소 기능 추가 */}
       {showSheetViewer && currentSheetSong && (
         <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
           {/* 상단 바 */}
-          <div className="bg-white text-gray-900 p-4 flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-4">
-              <span className="text-lg font-bold">
+          <div className="bg-white text-gray-900 p-2 md:p-4 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+              <span className="text-sm md:text-lg font-bold truncate">
                 {currentSheetSong.song_name}
               </span>
               {currentSheetSong.team_name && (
-  <span className="text-sm text-gray-600">
-    {currentSheetSong.team_name}
-  </span>
-)}
-{currentSheetSong.key && (
-  <span className="text-sm text-gray-600">
-    Key: {currentSheetSong.key}
-  </span>
-)}
+                <span className="hidden md:inline text-sm text-gray-600">
+                  {currentSheetSong.team_name}
+                </span>
+              )}
+              {currentSheetSong.key && (
+                <span className="hidden md:inline text-sm text-gray-600">
+                  Key: {currentSheetSong.key}
+                </span>
+              )}
+            </div>
+
+            {/* 🔍 확대/축소 컨트롤 */}
+            <div className="flex items-center gap-1 md:gap-2 mr-2 md:mr-4">
+              <button
+                onClick={handleZoomOut}
+                disabled={zoomLevel <= MIN_ZOOM}
+                className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="축소 (-)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  <line x1="8" y1="11" x2="14" y2="11"/>
+                </svg>
+              </button>
+              
+              <button
+                onClick={handleZoomReset}
+                className="px-2 py-1 md:px-3 md:py-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-xs md:text-sm font-medium min-w-[50px] md:min-w-[60px]"
+                title="100%로 리셋 (0)"
+              >
+                {Math.round(zoomLevel * 100)}%
+              </button>
+              
+              <button
+                onClick={handleZoomIn}
+                disabled={zoomLevel >= MAX_ZOOM}
+                className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="확대 (+)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  <line x1="11" y1="8" x2="11" y2="14"/>
+                  <line x1="8" y1="11" x2="14" y2="11"/>
+                </svg>
+              </button>
             </div>
 
             {/* 닫기 버튼 */}
             <button
               onClick={closeSheetViewer}
-              className="px-4 py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-2"
+              className="px-2 py-1 md:px-4 md:py-2 bg-[#E26559] hover:bg-[#D14E42] text-white rounded-lg transition-colors flex items-center gap-1 md:gap-2 flex-shrink-0"
               title="닫기 (ESC)"
             >
               <X size={20} />
-              <span className="font-medium">닫기</span>
+              <span className="font-medium text-sm md:text-base">닫기</span>
             </button>
           </div>
 
           {/* 악보 표시 영역 */}
-          <div className="flex-1 flex items-center justify-center relative overflow-hidden bg-gray-200">
-            {!currentSheetSong.file_url ? (
-              <div className="text-gray-500 text-center">
-                <Music size={80} className="mx-auto mb-4 opacity-30" />
-                <p className="text-2xl">악보가 없습니다</p>
-              </div>
-            ) : currentSheetSong.file_type === 'pdf' ? (
-              <>
-                {isLoadingPDF ? (
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                    <p className="text-gray-700">PDF 로딩 중...</p>
-                  </div>
-                ) : (
-                  <canvas
-                    ref={canvasRef}
-                    className="shadow-2xl bg-white"
-                    style={{
-                      maxHeight: '85vh',
-                      width: 'auto'
-                    }}
-                  />
-                )}
+          <div className="flex-1 overflow-auto bg-gray-200 p-2 md:p-4">
+            <div className="min-h-full flex items-center justify-center">
+              {!currentSheetSong.file_url ? (
+                <div className="text-gray-500 text-center">
+                  <Music size={80} className="mx-auto mb-4 opacity-30" />
+                  <p className="text-2xl">악보가 없습니다</p>
+                </div>
+              ) : currentSheetSong.file_type === 'pdf' ? (
+                <>
+                  {isLoadingPDF ? (
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                      <p className="text-gray-700">PDF 로딩 중...</p>
+                    </div>
+                  ) : (
+                    <canvas
+                      ref={canvasRef}
+                      className="shadow-2xl bg-white"
+                    />
+                  )}
 
-                {/* PDF 페이지 네비게이션 버튼 */}
-                {!isLoadingPDF && totalPDFPages > 1 && (
-                  <>
-                    {currentPDFPage > 1 && (
-                      <button
-                        onClick={() => setCurrentPDFPage(p => p - 1)}
-                        className="absolute left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
-                      >
-                        <ChevronLeft size={32} />
-                      </button>
-                    )}
+                  {/* PDF 페이지 네비게이션 버튼 */}
+                  {!isLoadingPDF && totalPDFPages > 1 && (
+                    <>
+                      {currentPDFPage > 1 && (
+                        <button
+                          onClick={() => setCurrentPDFPage(p => p - 1)}
+                          className="fixed left-2 md:left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
+                        >
+                          <ChevronLeft size={32} />
+                        </button>
+                      )}
 
-                    {currentPDFPage < totalPDFPages && (
-                      <button
-                        onClick={() => setCurrentPDFPage(p => p + 1)}
-                        className="absolute right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-4 rounded-full shadow-lg transition-all border border-gray-300"
-                      >
-                        <ChevronRight size={32} />
-                      </button>
-                    )}
-                  </>
-                )}
+                      {currentPDFPage < totalPDFPages && (
+                        <button
+                          onClick={() => setCurrentPDFPage(p => p + 1)}
+                          className="fixed right-2 md:right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
+                        >
+                          <ChevronRight size={32} />
+                        </button>
+                      )}
+                    </>
+                  )}
 
-                {/* 페이지 번호 표시 */}
-                {!isLoadingPDF && totalPDFPages > 0 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-4 py-2 rounded-full shadow-lg border border-gray-300">
-                    페이지 {currentPDFPage} / {totalPDFPages}
-                  </div>
-                )}
-              </>
-            ) : (
-              <img
-                src={currentSheetSong.file_url}
-                alt={currentSheetSong.song_name}
-                className="shadow-2xl"
-                style={{
-                  maxHeight: '85vh',
-                  width: 'auto',
-                  objectFit: 'contain'
-                }}
-              />
-            )}
+                  {/* 페이지 번호 표시 */}
+                  {!isLoadingPDF && totalPDFPages > 0 && (
+                    <div className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-3 py-1 md:px-4 md:py-2 rounded-full shadow-lg border border-gray-300 text-sm md:text-base z-10">
+                      페이지 {currentPDFPage} / {totalPDFPages}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* 🖼️ 이미지 표시 - 확대/축소 적용 */
+                <img
+                  src={currentSheetSong.file_url}
+                  alt={currentSheetSong.song_name}
+                  className="shadow-2xl bg-white transition-transform duration-200"
+                  style={{
+                    transform: `scale(${zoomLevel})`,
+                    transformOrigin: 'center center',
+                    maxWidth: zoomLevel <= 1 ? '95%' : 'none',
+                    maxHeight: zoomLevel <= 1 ? '85vh' : 'none',
+                  }}
+                  draggable={false}
+                />
+              )}
+            </div>
           </div>
 
           {/* 하단 정보 바 */}
-          <div className="bg-white text-gray-900 p-4 flex justify-between items-center border-t border-gray-300 shadow-md">
-            <div className="flex gap-4 text-sm">
+          <div className="bg-white text-gray-900 p-2 md:p-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-300 shadow-md gap-2 md:gap-0">
+            {/* BPM, 박자 정보 */}
+            <div className="hidden md:flex gap-4 text-sm">
               {currentSheetSong.bpm && (
                 <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
                   BPM: {currentSheetSong.bpm}
@@ -1816,27 +1943,32 @@ const saveNote = async () => {
             </div>
 
             {/* 곡 네비게이션 */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               <button
                 onClick={() => goToAdjacentSong('prev')}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
+                className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
               >
                 <ChevronLeft size={20} />
-                이전 곡
+                <span className="hidden md:inline">이전 곡</span>
               </button>
 
               {/* 현재 위치 */}
-              <span className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg font-bold">
+              <span className="px-3 py-1 md:px-4 md:py-2 bg-[#C5D7F2] text-white rounded-lg font-bold text-sm md:text-base">
                 {songs.findIndex(s => s.songs.id === currentSheetSong?.id) + 1} / {songs.filter(s => s.songs.file_url).length}
               </span>
 
               <button
                 onClick={() => goToAdjacentSong('next')}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1"
+                className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
               >
-                다음 곡
+                <span className="hidden md:inline">다음 곡</span>
                 <ChevronRight size={20} />
               </button>
+            </div>
+
+            {/* 모바일용 줌 힌트 */}
+            <div className="md:hidden text-xs text-gray-500">
+              + / - 키로 확대/축소
             </div>
           </div>
         </div>

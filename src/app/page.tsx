@@ -129,6 +129,12 @@ const [downloadingImage, setDownloadingImage] = useState(false)  // 추가
   const [pdfDoc, setPdfDoc] = useState<any>(null)
   const [isLoadingPDF, setIsLoadingPDF] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // 🔍 확대/축소 상태
+const [zoomLevel, setZoomLevel] = useState(1)
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 3
+const ZOOM_STEP = 0.25
   
   // 🆕 미리보기 토글 상태 (각 곡별로)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
@@ -305,45 +311,85 @@ useEffect(() => {
     loadPDF();
   }, [showSheetViewer, currentSheetSong]);
 
-  // 🆕 PDF 페이지 렌더링
-  useEffect(() => {
-    if (!pdfDoc || !canvasRef.current) return;
+  // 📄 PDF 페이지 렌더링 - 고화질 + 확대/축소 지원
+useEffect(() => {
+  if (!pdfDoc || !canvasRef.current) return;
 
-    const renderPage = async () => {
-      console.log(`📄 페이지 ${currentPDFPage} 렌더링 시작`);
+  let renderTask: any = null;  // 🆕 렌더링 태스크 저장
+  let isCancelled = false;     // 🆕 취소 플래그
+
+  const renderPage = async () => {
+    console.log(`📄 페이지 ${currentPDFPage} 렌더링 시작 (zoom: ${zoomLevel * 100}%)`);
+
+    try {
+      const page = await pdfDoc.getPage(currentPDFPage);
       
-      try {
-        const page = await pdfDoc.getPage(currentPDFPage);
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+      // 🆕 이미 취소되었으면 중단
+      if (isCancelled) return;
 
-        const context = canvas.getContext('2d');
-        if (!context) return;
-        
-        // 세로 기준으로 화면의 85%에 맞춤!
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = (window.innerHeight * 0.85) / viewport.height;
-        const scaledViewport = page.getViewport({ scale });
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-        // Canvas 크기 설정
-        canvas.height = scaledViewport.height;
-        canvas.width = scaledViewport.width;
+      const context = canvas.getContext('2d');
+      if (!context) return;
 
-        // 렌더링
-        const renderContext = {
-          canvasContext: context,
-          viewport: scaledViewport
-        };
+      // 기본 스케일 계산 (화면 높이의 75%에 맞춤)
+      const viewport = page.getViewport({ scale: 1 });
+      const baseScale = (window.innerHeight * 0.75) / viewport.height;
+      
+      // 🔍 zoomLevel 적용
+      const finalScale = baseScale * zoomLevel;
+      const scaledViewport = page.getViewport({ scale: finalScale });
 
-        await page.render(renderContext).promise;
-        console.log('✅ 페이지 렌더링 완료');
-      } catch (error) {
-        console.error('❌ 페이지 렌더링 실패:', error);
+      // 고해상도 렌더링을 위한 devicePixelRatio 적용
+      const pixelRatio = window.devicePixelRatio || 1;
+      
+      // Canvas 실제 크기 설정 (고해상도)
+      canvas.width = scaledViewport.width * pixelRatio;
+      canvas.height = scaledViewport.height * pixelRatio;
+      
+      // Canvas 표시 크기 설정
+      canvas.style.width = `${scaledViewport.width}px`;
+      canvas.style.height = `${scaledViewport.height}px`;
+
+      // 🆕 이전 내용 지우기
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 고해상도 렌더링을 위한 스케일 적용
+      context.scale(pixelRatio, pixelRatio);
+
+      // 렌더링
+      const renderContext = {
+        canvasContext: context,
+        viewport: scaledViewport
+      };
+
+      // 🆕 렌더링 태스크 저장
+      renderTask = page.render(renderContext);
+      await renderTask.promise;
+      
+      console.log('✅ 페이지 렌더링 완료');
+    } catch (error: any) {
+      // 🆕 취소된 경우는 에러로 처리하지 않음
+      if (error?.name === 'RenderingCancelledException' || isCancelled) {
+        console.log('⏹️ 렌더링 취소됨 (새 렌더링으로 대체)');
+        return;
       }
-    };
+      console.error('❌ 페이지 렌더링 실패:', error);
+    }
+  };
 
-    renderPage();
-  }, [pdfDoc, currentPDFPage]);
+  renderPage();
+
+  // 🆕 클린업: 컴포넌트 언마운트 또는 의존성 변경 시 이전 렌더링 취소
+  return () => {
+    isCancelled = true;
+    if (renderTask) {
+      renderTask.cancel();
+    }
+  };
+}, [pdfDoc, currentPDFPage, zoomLevel]);
 
   const checkUser = async () => {
     try {
@@ -467,19 +513,19 @@ useEffect(() => {
     }
   }
 
-  // 🆕 악보보기 모드 열기
-  const openSheetViewerForSong = (song: Song) => {
-    console.log('🎵 악보보기 모드 열기:', song.song_name);
+  // 🎵 악보보기 모드 열기
+const openSheetViewerForSong = (song: Song) => {
+  console.log('🎵 악보보기 모드 열기:', song.song_name);
 
-    // 📊 곡 조회 로깅 추가
   if (user) {
     logSongView(song.id, user.id).catch(err => console.error('로깅 실패:', err));
   }
-    setCurrentSheetSong(song);
-    setCurrentPDFPage(1);
-    setPdfDoc(null);
-    setShowSheetViewer(true);
-  }
+  setCurrentSheetSong(song);
+  setCurrentPDFPage(1);
+  setPdfDoc(null);
+  setZoomLevel(1);  // 🔍 줌 레벨 리셋 추가!
+  setShowSheetViewer(true);
+}
 
   // 🆕 악보보기 모드 닫기
   const closeSheetViewer = () => {
@@ -489,6 +535,21 @@ useEffect(() => {
     setCurrentPDFPage(1);
     setTotalPDFPages(0);
   }
+
+  // 🔍 확대
+const handleZoomIn = () => {
+  setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+}
+
+// 🔍 축소
+const handleZoomOut = () => {
+  setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+}
+
+// 🔍 줌 리셋
+const handleZoomReset = () => {
+  setZoomLevel(1);
+}
 
   // 🆕 다음/이전 곡으로 이동
   const goToAdjacentSong = (direction: 'prev' | 'next') => {
@@ -511,31 +572,59 @@ useEffect(() => {
     }
   }
 
-  // 🆕 악보보기 모드 키보드 단축키
-  useEffect(() => {
-    if (!showSheetViewer) return;
+  // 🎵 악보보기 모드 키보드 단축키
+useEffect(() => {
+  if (!showSheetViewer) return;
 
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeSheetViewer();
-      } else if (e.key === 'ArrowLeft') {
-        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage > 1) {
-          setCurrentPDFPage(p => p - 1);
-        } else {
-          goToAdjacentSong('prev');
-        }
-      } else if (e.key === 'ArrowRight') {
-        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage < totalPDFPages) {
-          setCurrentPDFPage(p => p + 1);
-        } else {
-          goToAdjacentSong('next');
-        }
+  const handleKeyPress = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeSheetViewer();
+    } else if (e.key === 'ArrowLeft') {
+      if (currentSheetSong?.file_type === 'pdf' && currentPDFPage > 1) {
+        setCurrentPDFPage(p => p - 1);
+      } else {
+        goToAdjacentSong('prev');
       }
-    };
+    } else if (e.key === 'ArrowRight') {
+      if (currentSheetSong?.file_type === 'pdf' && currentPDFPage < totalPDFPages) {
+        setCurrentPDFPage(p => p + 1);
+      } else {
+        goToAdjacentSong('next');
+      }
+    } 
+    // 🔍 확대/축소 키보드 단축키 추가
+    else if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      handleZoomIn();
+    } else if (e.key === '-') {
+      e.preventDefault();
+      handleZoomOut();
+    } else if (e.key === '0') {
+      e.preventDefault();
+      handleZoomReset();
+    }
+  };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages]);
+  // 🔍 마우스 휠 줌 (Ctrl + 휠)
+  const handleWheel = (e: WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        handleZoomIn();
+      } else {
+        handleZoomOut();
+      }
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyPress);
+  window.addEventListener('wheel', handleWheel, { passive: false });
+  
+  return () => {
+    window.removeEventListener('keydown', handleKeyPress);
+    window.removeEventListener('wheel', handleWheel);
+  };
+}, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages, zoomLevel]);
 
 const fetchSongs = async () => {
   setLoading(true)
@@ -2633,204 +2722,205 @@ className="p-2 hover:bg-gray-100 rounded-lg"
   </div>
               ) : (
                 // 리스트 뷰 (기존 스타일 유지)
-                <div ref={songListRef} className="divide-y divide-gray-200">
-{displayedSongs.map((song, index) => (
-                    <div
-                      key={song.id}
-                      tabIndex={0}
-                      onClick={() => {
-                        toggleSongSelection(song)
-                        setFocusedSongIndex(index)
-                      }}
-                      onFocus={() => setFocusedSongIndex(index)}
-                      className={`p-4 cursor-pointer transition-all ${
-                        selectedSongs.find(s => s.id === song.id)
-                          ? 'bg-blue-50'
-                          : focusedSongIndex === index
-                          ? 'bg-gray-50'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!!selectedSongs.find(s => s.id === song.id)}
-                              onChange={() => {}}
-                              className="mr-3"
-                            />
-                            <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
-                            {songForms[song.id] && songForms[song.id].length > 0 && (
-                              <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
-                                송폼: {songForms[song.id].join('-')}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1 ml-7">
-                            {song.team_name && `${song.team_name} | `}
-                            Key: {song.key || '-'} | 
-                            박자: {song.time_signature || '-'} | 
-                            템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
-                          </p>
-
-                          {/* 🆕 유튜브 영상 (토글 시 표시) */}
-{youtubeStates[song.id] && song.youtube_url && (
-  <div className="mt-3 ml-7 mb-3">
-    {getYoutubeEmbedUrl(song.youtube_url) ? (
-      <div className="relative w-full max-w-2xl" style={{ paddingBottom: '56.25%' }}>
-        <iframe
-          src={getYoutubeEmbedUrl(song.youtube_url) || ''}
-          className="absolute top-0 left-0 w-full h-full rounded-lg"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    ) : (
-      <p className="text-sm text-gray-500">유효하지 않은 유튜브 링크입니다.</p>
-    )}
-  </div>
-)}
-
-{/* 🆕 상세 정보 (토글 시 표시) */}
-{previewStates[song.id] && (
-  <div className="mt-3 ml-7 border-t pt-3">
-    {song.lyrics && (
-      <div className="mb-3">
-        <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
-        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded">
-          {song.lyrics}
-        </pre>
-      </div>
-    )}
-    {song.file_url && (
-      <div>
-        <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
-        {song.file_type === 'pdf' ? (
-<iframe
-src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-className="w-full h-[600px] border rounded"
-/>
-        ) : (
-          <img 
-            src={song.file_url}
-            alt={`${song.song_name} 악보`}
-            className="max-w-full h-auto rounded shadow-sm"
-          />
-        )}
-      </div>
-    )}
-  </div>
-)}
-
-<div className="flex flex-wrap gap-1 mt-2 ml-7">
-  {song.theme1 && (
-    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-      {song.theme1}
-    </span>
-  )}
-  {song.theme2 && (
-    <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-      {song.theme2}
-    </span>
-  )}
-</div>
-                          <div className="flex flex-wrap gap-1 mt-2 ml-7">
-                            {song.theme1 && (
-                              <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-                                {song.theme1}
-                              </span>
-                            )}
-                            {song.theme2 && (
-                              <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-                                {song.theme2}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 ml-4">
-  {/* 미리보기 토글 버튼 */}
-  {(song.lyrics || song.file_url) && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        togglePreview(song.id)
-      }}
-      className={`p-2 rounded-lg ${
-        previewStates[song.id]
-          ? 'text-blue-600 bg-blue-100'
-          : 'text-gray-600 hover:bg-gray-100'
+<div ref={songListRef} className="divide-y divide-gray-200">
+  {displayedSongs.map((song, index) => (
+    <div
+      key={song.id}
+      tabIndex={0}
+      onFocus={() => setFocusedSongIndex(index)}
+      className={`p-4 cursor-pointer transition-all ${
+        selectedSongs.find(s => s.id === song.id)
+          ? 'bg-blue-50'
+          : focusedSongIndex === index
+          ? 'bg-gray-50'
+          : 'hover:bg-gray-50'
       }`}
-      title={previewStates[song.id] ? '접기' : '펼치기'}
     >
-      {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  )}
+      {/* 상단: 곡 정보 + 버튼 (항상 고정) */}
+      <div 
+        className="flex items-start justify-between"
+        onClick={() => {
+          toggleSongSelection(song)
+          setFocusedSongIndex(index)
+        }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!selectedSongs.find(s => s.id === song.id)}
+              onChange={() => {}}
+              onClick={(e) => e.stopPropagation()}
+              className="mr-3 flex-shrink-0 mt-1"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
+                {songForms[song.id] && songForms[song.id].length > 0 && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded flex-shrink-0">
+                    송폼: {songForms[song.id].join('-')}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                {song.team_name && `${song.team_name} | `}
+                Key: {song.key || '-'} | 
+                박자: {song.time_signature || '-'} | 
+                템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
+              </p>
+              
+              {/* 테마 태그 */}
+              <div className="flex flex-wrap gap-1 mt-2">
+                {song.theme1 && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                    {song.theme1}
+                  </span>
+                )}
+                {song.theme2 && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                    {song.theme2}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
-{/* 🆕🆕🆕 여기에 악보보기 버튼 추가! */}
-  {song.file_url && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        openSheetViewerForSong(song)  // 새로운 함수 호출!
-      }}
-      className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
-      title="악보 전체화면"
-    >
-      <Presentation size={18} />
-    </button>
-  )}
+        {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
+        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
+          {/* 미리보기 토글 버튼 */}
+          {(song.lyrics || song.file_url) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePreview(song.id)
+              }}
+              className={`p-2 rounded-lg ${
+                previewStates[song.id]
+                  ? 'text-blue-600 bg-blue-100'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              title={previewStates[song.id] ? '접기' : '펼치기'}
+            >
+              {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          )}
 
-  {/* 유튜브 영상 토글 버튼 - 항상 표시 */}
-  <button
-    onClick={(e) => {
-      e.stopPropagation()
-      if (song.youtube_url) {
-        toggleYoutube(song.id)
-      }
-    }}
-    disabled={!song.youtube_url}
-    className="p-2 rounded-lg"
-    style={{
-      color: !song.youtube_url 
-        ? '#d1d5db' 
-        : youtubeStates[song.id] 
-        ? '#dc2626'
-        : '#dc2626',
-      backgroundColor: !song.youtube_url
-        ? 'transparent'
-        : youtubeStates[song.id]
-        ? '#fee2e2'
-        : 'transparent',
-      cursor: song.youtube_url ? 'pointer' : 'not-allowed',
-      opacity: song.youtube_url ? 1 : 0.5
-    }}
-    title={
-      !song.youtube_url
-        ? '유튜브 링크 없음'
-        : youtubeStates[song.id]
-        ? '유튜브 닫기'
-        : '유튜브 열기'
-    }
-  >
-    <Youtube size={18} />
-  </button>
-  {selectedSongs.find(s => s.id === song.id) && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        openFormModal(song)
-      }}
-      className="px-3 py-1 bg-[#C4BEE2] text-white text-sm rounded hover:bg-[#C4BEE2]"
-    >
-      송폼 설정
-    </button>
-  )}
+          {/* 악보보기 전체화면 버튼 */}
+          {song.file_url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openSheetViewerForSong(song)
+              }}
+              className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+              title="악보 전체화면"
+            >
+              <Presentation size={18} />
+            </button>
+          )}
+
+          {/* 유튜브 영상 토글 버튼 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (song.youtube_url) {
+                toggleYoutube(song.id)
+              }
+            }}
+            disabled={!song.youtube_url}
+            className="p-2 rounded-lg"
+            style={{
+              color: !song.youtube_url 
+                ? '#d1d5db' 
+                : youtubeStates[song.id] 
+                ? '#dc2626'
+                : '#dc2626',
+              backgroundColor: !song.youtube_url
+                ? 'transparent'
+                : youtubeStates[song.id]
+                ? '#fee2e2'
+                : 'transparent',
+              cursor: song.youtube_url ? 'pointer' : 'not-allowed',
+              opacity: song.youtube_url ? 1 : 0.5
+            }}
+            title={
+              !song.youtube_url
+                ? '유튜브 링크 없음'
+                : youtubeStates[song.id]
+                ? '유튜브 닫기'
+                : '유튜브 열기'
+            }
+          >
+            <Youtube size={18} />
+          </button>
+
+          {/* 송폼 설정 버튼 */}
+          {selectedSongs.find(s => s.id === song.id) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openFormModal(song)
+              }}
+              className="px-2 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs md:text-sm rounded hover:bg-[#B0A8D8] whitespace-nowrap"
+            >
+              송폼
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 하단: 펼쳐지는 콘텐츠 (유튜브) */}
+      {youtubeStates[song.id] && song.youtube_url && (
+        <div className="mt-4 ml-7">
+          {getYoutubeEmbedUrl(song.youtube_url) ? (
+            <div className="relative w-full max-w-2xl" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src={getYoutubeEmbedUrl(song.youtube_url) || ''}
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">유효하지 않은 유튜브 링크입니다.</p>
+          )}
+        </div>
+      )}
+
+      {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) */}
+      {previewStates[song.id] && (
+        <div className="mt-4 ml-7 border-t pt-4">
+          {song.lyrics && (
+            <div className="mb-4">
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded max-h-60 overflow-y-auto">
+                {song.lyrics}
+              </pre>
+            </div>
+          )}
+          {song.file_url && (
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+              {song.file_type === 'pdf' ? (
+                <iframe
+                  src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                  className="w-full h-[600px] border rounded"
+                />
+              ) : (
+                <img 
+                  src={song.file_url}
+                  alt={`${song.song_name} 악보`}
+                  className="max-w-full h-auto rounded shadow-sm"
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  ))}
 </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
 
@@ -3821,163 +3911,193 @@ rounded text-blue-900">{abbr}</span>
       {/* ✅ 여기까지 새로 추가 ✅ */}
       {/* ✅ 여기까지 새로 추가 ✅ */}
 
-      {/* 🎵 악보보기 모드 (전체화면) */}
+      {/* 🎵 악보보기 모드 (전체화면) - 확대/축소 기능 추가 */}
 {showSheetViewer && currentSheetSong && (
-<div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
-{/* 상단 바 - 모바일에서 컴팩트하게 */}
-<div className="bg-white text-gray-900 p-2 md:p-4 flex items-center justify-between shadow-md">
-<div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-<span className="text-sm md:text-lg font-bold truncate">
-{currentSheetSong.song_name}
-</span>
-{/* 모바일에서 팀명과 키 숨김 */}
-{currentSheetSong.team_name && (
-<span className="hidden md:inline text-sm text-gray-600">
-{currentSheetSong.team_name}
-</span>
-)}
-{currentSheetSong.key && (
-<span className="hidden md:inline text-sm text-gray-600">
-Key: {currentSheetSong.key}
-</span>
-)}
-</div>
+  <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
+    {/* 상단 바 */}
+    <div className="bg-white text-gray-900 p-2 md:p-4 flex items-center justify-between shadow-md">
+      <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+        <span className="text-sm md:text-lg font-bold truncate">
+          {currentSheetSong.song_name}
+        </span>
+        {currentSheetSong.team_name && (
+          <span className="hidden md:inline text-sm text-gray-600">
+            {currentSheetSong.team_name}
+          </span>
+        )}
+        {currentSheetSong.key && (
+          <span className="hidden md:inline text-sm text-gray-600">
+            Key: {currentSheetSong.key}
+          </span>
+        )}
+      </div>
 
-{/* 닫기 버튼 - 모바일에서 작게 */}
-<button
-onClick={closeSheetViewer}
-className="px-2 py-1 md:px-4 md:py-2 bg-[#E26559] hover:bg-[#D14E42] rounded-lg transition-colors flex items-center gap-1 md:gap-2 flex-shrink-0"
-title="닫기 (ESC)"
->
-<X size={isMobile ? 16 : 20} />
-<span className="font-medium text-sm md:text-base">닫기</span>
-</button>
-</div>
+      {/* 🔍 확대/축소 컨트롤 */}
+      <div className="flex items-center gap-1 md:gap-2 mr-2 md:mr-4">
+        <button
+          onClick={handleZoomOut}
+          disabled={zoomLevel <= MIN_ZOOM}
+          className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="축소 (-)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? 16 : 20} height={isMobile ? 16 : 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+        </button>
+        
+        <button
+          onClick={handleZoomReset}
+          className="px-2 py-1 md:px-3 md:py-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-xs md:text-sm font-medium min-w-[50px] md:min-w-[60px]"
+          title="100%로 리셋 (0)"
+        >
+          {Math.round(zoomLevel * 100)}%
+        </button>
+        
+        <button
+          onClick={handleZoomIn}
+          disabled={zoomLevel >= MAX_ZOOM}
+          className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="확대 (+)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? 16 : 20} height={isMobile ? 16 : 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <line x1="11" y1="8" x2="11" y2="14"/>
+            <line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+        </button>
+      </div>
 
-{/* 악보 표시 영역 - 모바일에서 여백 추가 */}
-<div className="flex-1 flex items-center justify-center relative overflow-auto bg-gray-200 p-2 md:p-4">
-{!currentSheetSong.file_url ? (
-<div className="text-gray-500 text-center">
-<Music size={isMobile ? 48 : 80} className="mx-auto mb-4 opacity-30" />
-<p className="text-lg md:text-2xl">악보가 없습니다</p>
-</div>
-) : currentSheetSong.file_type === 'pdf' ? (
-<>
-{isLoadingPDF ? (
-<div className="flex flex-col items-center justify-center">
-<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-<p className="text-gray-700">PDF 로딩 중...</p>
-</div>
-) : (
-<canvas
-ref={canvasRef}
-className="shadow-2xl bg-white"
-style={{
-maxHeight: isMobile ? '70vh' : '85vh',
-maxWidth: isMobile ? '95vw' : 'auto',
-width: 'auto',
-objectFit: 'contain'
-}}
-/>
-)}
+      {/* 닫기 버튼 */}
+      <button
+        onClick={closeSheetViewer}
+        className="px-2 py-1 md:px-4 md:py-2 bg-[#E26559] hover:bg-[#D14E42] text-white rounded-lg transition-colors flex items-center gap-1 md:gap-2 flex-shrink-0"
+        title="닫기 (ESC)"
+      >
+        <X size={isMobile ? 16 : 20} />
+        <span className="font-medium text-sm md:text-base">닫기</span>
+      </button>
+    </div>
 
-{/* PDF 페이지 네비게이션 버튼 - 모바일에서 작게 */}
-{!isLoadingPDF && totalPDFPages > 1 && (
-<>
-{currentPDFPage > 1 && (
-<button
-onClick={() => setCurrentPDFPage(p => p - 1)}
-className="absolute left-2 md:left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300"
->
-<ChevronLeft size={isMobile ? 20 : 32} />
-</button>
-)}
+    {/* 악보 표시 영역 */}
+    <div className="flex-1 overflow-auto bg-gray-200 p-2 md:p-4">
+      <div className="min-h-full flex items-center justify-center">
+        {!currentSheetSong.file_url ? (
+          <div className="text-gray-500 text-center">
+            <Music size={isMobile ? 48 : 80} className="mx-auto mb-4 opacity-30" />
+            <p className="text-lg md:text-2xl">악보가 없습니다</p>
+          </div>
+        ) : currentSheetSong.file_type === 'pdf' ? (
+          <>
+            {isLoadingPDF ? (
+              <div className="flex flex-col items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-gray-700">PDF 로딩 중...</p>
+              </div>
+            ) : (
+              <canvas
+                ref={canvasRef}
+                className="shadow-2xl bg-white"
+              />
+            )}
 
-{currentPDFPage < totalPDFPages && (
-<button
-onClick={() => setCurrentPDFPage(p => p + 1)}
-className="absolute right-2 md:right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300"
->
-<ChevronRight size={isMobile ? 20 : 32} />
-</button>
-)}
-</>
-)}
+            {/* PDF 페이지 네비게이션 버튼 */}
+            {!isLoadingPDF && totalPDFPages > 1 && (
+              <>
+                {currentPDFPage > 1 && (
+                  <button
+                    onClick={() => setCurrentPDFPage(p => p - 1)}
+                    className="fixed left-2 md:left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
+                  >
+                    <ChevronLeft size={isMobile ? 20 : 32} />
+                  </button>
+                )}
 
-{/* 페이지 번호 표시 */}
-{!isLoadingPDF && totalPDFPages > 0 && (
-<div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-3 py-1 md:px-4 md:py-2 rounded-full shadow-lg border border-gray-300 text-sm md:text-base">
-페이지 {currentPDFPage} / {totalPDFPages}
-</div>
-)}
-</>
-) : (
-<img
-src={currentSheetSong.file_url}
-alt={currentSheetSong.song_name}
-className="shadow-2xl"
-style={{
-maxHeight: isMobile ? '70vh' : '85vh',
-maxWidth: isMobile ? '95vw' : 'auto',
-width: 'auto',
-objectFit: 'contain'
-}}
-/>
-)}
-</div>
+                {currentPDFPage < totalPDFPages && (
+                  <button
+                    onClick={() => setCurrentPDFPage(p => p + 1)}
+                    className="fixed right-2 md:right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
+                  >
+                    <ChevronRight size={isMobile ? 20 : 32} />
+                  </button>
+                )}
+              </>
+            )}
 
-{/* 하단 정보 바 - 모바일에서 세로로 배치 */}
-<div className="bg-white text-gray-900 p-2 md:p-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-300 shadow-md gap-2 md:gap-0">
-{/* BPM, 박자 정보 - 모바일에서 숨김 또는 작게 */}
-<div className="hidden md:flex gap-4 text-sm">
-{currentSheetSong.bpm && (
-<span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-BPM: {currentSheetSong.bpm}
-</span>
+            {/* 페이지 번호 표시 */}
+            {!isLoadingPDF && totalPDFPages > 0 && (
+              <div className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-3 py-1 md:px-4 md:py-2 rounded-full shadow-lg border border-gray-300 text-sm md:text-base z-10">
+                페이지 {currentPDFPage} / {totalPDFPages}
+              </div>
+            )}
+          </>
+        ) : (
+          /* 🖼️ 이미지 표시 - 확대/축소 적용 */
+          <img
+            src={currentSheetSong.file_url}
+            alt={currentSheetSong.song_name}
+            className="shadow-2xl bg-white transition-transform duration-200"
+            style={{
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+              maxWidth: zoomLevel <= 1 ? '95%' : 'none',
+              maxHeight: zoomLevel <= 1 ? '85vh' : 'none',
+            }}
+            draggable={false}
+          />
+        )}
+      </div>
+    </div>
+
+    {/* 하단 정보 바 */}
+    <div className="bg-white text-gray-900 p-2 md:p-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-300 shadow-md gap-2 md:gap-0">
+      {/* BPM, 박자 정보 */}
+      <div className="hidden md:flex gap-4 text-sm">
+        {currentSheetSong.bpm && (
+          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
+            BPM: {currentSheetSong.bpm}
+          </span>
+        )}
+        {currentSheetSong.time_signature && (
+          <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
+            박자: {currentSheetSong.time_signature}
+          </span>
+        )}
+      </div>
+
+      {/* 곡 네비게이션 */}
+      <div className="flex items-center gap-2 md:gap-3">
+        <button
+          onClick={() => goToAdjacentSong('prev')}
+          className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
+        >
+          <ChevronLeft size={isMobile ? 16 : 20} />
+          <span className="hidden md:inline">이전 곡</span>
+        </button>
+
+        {/* 현재 위치 */}
+        <span className="px-3 py-1 md:px-4 md:py-2 bg-[#C5D7F2] text-white rounded-lg font-bold text-sm md:text-base">
+          {filteredSongs.findIndex(s => s.id === currentSheetSong?.id) + 1} / {filteredSongs.filter(s => s.file_url).length}
+        </span>
+
+        <button
+          onClick={() => goToAdjacentSong('next')}
+          className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
+        >
+          <span className="hidden md:inline">다음 곡</span>
+          <ChevronRight size={isMobile ? 16 : 20} />
+        </button>
+      </div>
+
+      {/* 모바일용 줌 힌트 */}
+      <div className="md:hidden text-xs text-gray-500">
+        + / - 키로 확대/축소
+      </div>
+    </div>
+  </div>
 )}
-{currentSheetSong.time_signature && (
-<span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-박자: {currentSheetSong.time_signature}
-</span>
-)}
-</div>
-
-{/* 곡 네비게이션 */}
-<div className="flex items-center gap-2 md:gap-3">
-<button
-onClick={() => goToAdjacentSong('prev')}
-className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
->
-<ChevronLeft size={isMobile ? 16 : 20} />
-<span className="hidden md:inline">이전 곡</span>
-</button>
-
-{/* 현재 위치 */}
-<span className="px-3 py-1 md:px-4 md:py-2 bg-[#C5D7F2] text-white rounded-lg font-bold text-sm md:text-base">
-{filteredSongs.findIndex(s => s.id === currentSheetSong?.id) + 1} / {filteredSongs.filter(s => s.file_url).length}
-</span>
-
-<button
-onClick={() => goToAdjacentSong('next')}
-className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
->
-<span className="hidden md:inline">다음 곡</span>
-<ChevronRight size={isMobile ? 16 : 20} />
-</button>
-</div>
-</div>
-</div>
-)}
-
-      {/* 🆕 송폼 위치 설정 모달 */}
-      {showPositionModal && (
-        <SongFormPositionModal
-          songs={selectedSongs}
-          songForms={songForms}
-          onConfirm={generatePDF}
-          onCancel={() => setShowPositionModal(false)}
-        />
-      )}
       
     </div>
   )
