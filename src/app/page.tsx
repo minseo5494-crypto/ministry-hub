@@ -3870,6 +3870,22 @@ rounded text-blue-900">{abbr}</span>
         </div>
       )}
 
+      {/* 송폼 위치 선택 모달 */}
+{showPositionModal && (
+  <SongFormPositionModal
+    songs={selectedSongs.map(s => ({
+      id: s.id,
+      song_name: s.song_name,
+      file_url: s.file_url,
+      file_type: s.file_type,
+      selectedForm: songForms[s.id] || []
+    }))}
+    songForms={songForms}
+    onConfirm={generatePDF}
+    onCancel={() => setShowPositionModal(false)}
+  />
+)}
+
       {/* ✅ 여기부터 새로 추가 ✅ */}
       {/* PDF/PPT/이미지 다운로드 로딩 모달 */}
 {(downloadingPDF || downloadingPPT || downloadingImage) && (
