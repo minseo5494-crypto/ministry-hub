@@ -91,6 +91,10 @@ const {
   startDownloadWithFormat,
   startPPTDownload,
   generatePPTWithOptions,
+  // 🆕 다운로드 옵션 추가
+  downloadOptions,
+  setDownloadOptions,
+  hasSongsWithForms,
 } = useDownload({
   selectedSongs,
   songForms,
@@ -2843,15 +2847,81 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         </div>
       )}
 
-      {/* 🆕 파일 형식 선택 모달 */}
+      {/* 🆕 파일 형식 + 옵션 선택 모달 */}
 {showFormatModal && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg w-full max-w-md p-6">
-      <h3 className="text-xl font-bold mb-4">다운로드 형식 선택</h3>
-      <p className="text-gray-600 mb-6">
-        어떤 형식으로 다운로드하시겠습니까?
-      </p>
+      <h3 className="text-xl font-bold mb-4">다운로드 설정</h3>
       
+      {/* 🆕 옵션 섹션 */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-3">
+        <h4 className="font-medium text-gray-700 mb-2">다운로드 옵션</h4>
+        
+        {/* 표지 포함 */}
+        <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition">
+          <input
+            type="checkbox"
+            checked={downloadOptions.includeCover}
+            onChange={(e) => setDownloadOptions(prev => ({
+              ...prev, includeCover: e.target.checked
+            }))}
+            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <div>
+            <span className="font-medium">📄 표지 포함</span>
+            <p className="text-xs text-gray-500">콘티 제목과 곡 목록이 포함된 표지</p>
+          </div>
+        </label>
+        
+        {/* 송폼 포함 - 송폼이 설정된 곡이 있을 때만 표시 */}
+        {hasSongsWithForms() && (
+          <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition">
+            <input
+              type="checkbox"
+              checked={downloadOptions.includeSongForm}
+              onChange={(e) => setDownloadOptions(prev => ({
+                ...prev, includeSongForm: e.target.checked
+              }))}
+              className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <span className="font-medium">🎵 송폼 표시</span>
+              <p className="text-xs text-gray-500">악보에 송폼(V1-C-B 등) 오버레이</p>
+            </div>
+          </label>
+        )}
+        
+        {/* 여백 조절 */}
+        <div className="p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium">📐 악보 크기 조절</span>
+            <span className="text-sm text-blue-600 font-medium">
+              {downloadOptions.marginPercent === 0 ? '기본' : `+${downloadOptions.marginPercent}%`}
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="30"
+            step="5"
+            value={downloadOptions.marginPercent}
+            onChange={(e) => setDownloadOptions(prev => ({
+              ...prev, marginPercent: Number(e.target.value)
+            }))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          />
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <span>기본</span>
+            <span>크게</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            여백을 줄여 악보를 더 크게 표시합니다
+          </p>
+        </div>
+      </div>
+
+      {/* 형식 선택 */}
+      <p className="text-gray-600 mb-3 font-medium">다운로드 형식</p>
       <div className="space-y-3">
         <button
           onClick={() => startDownloadWithFormat('pdf')}
@@ -2862,7 +2932,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
             모든 곡을 하나의 PDF 문서로 통합
           </div>
         </button>
-        
+
         <button
           onClick={() => startDownloadWithFormat('image')}
           className="w-full p-4 border-2 border-green-600 rounded-lg hover:bg-green-50 text-left transition"
@@ -2876,7 +2946,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           </div>
         </button>
       </div>
-      
+
       <button
         onClick={() => setShowFormatModal(false)}
         className="w-full mt-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
@@ -3180,9 +3250,9 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 {/* 🆕 송폼 위치 선택 모달 */}
 {showPositionModal && (
   <SongFormPositionModal
-    songs={selectedSongs.filter(song => songForms[song.id]?.length > 0)}
+    songs={selectedSongs}
     songForms={songForms}
-    onConfirm={(positions: any) => onPositionConfirm(positions)}
+    onConfirm={onPositionConfirm}  // 이미 두 인자를 받도록 되어있으면 그대로
     onCancel={onPositionCancel}
   />
 )}

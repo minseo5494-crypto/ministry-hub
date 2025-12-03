@@ -23,24 +23,53 @@ export interface SongFormPosition {
   size?: SizeType // 크기 정보
 }
 
+// 🆕 파트 태그 타입
+export interface PartTag {
+  id: string
+  label: string
+  x: number
+  y: number
+}
+
 export interface PDFGenerateOptions {
   title: string
   date: string
   songs: PDFSong[]
   songForms: { [key: string]: string[] }
   songFormPositions?: { [key: string]: SongFormPosition }
+  partTags?: { [songId: string]: PartTag[] }  // 🆕 추가
+  includeCover?: boolean
+  marginPercent?: number
 }
 
-/**
- * 크기에 따른 폰트 크기와 패딩 반환 - 일관성 있게 수정
- */
-const getSizeConfig = (size: SizeType = 'medium') => {
-  const sizeMap = {
-    small: { fontSize: 14, padding: 10 },   // 더 일관성 있는 크기
-    medium: { fontSize: 18, padding: 12 },  // 표준 크기
-    large: { fontSize: 24, padding: 16 }    // 큰 크기
+const getSizeConfig = (size: string) => {
+  switch (size) {
+    case 'small':
+      return { fontSize: 36, padding: 18 }
+    case 'large':
+      return { fontSize: 56, padding: 28 }
+    default: // medium
+      return { fontSize: 46, padding: 22 }
   }
-  return sizeMap[size]
+}
+
+// 🆕 파트 태그 색상 매핑
+const getPartTagColor = (label: string) => {
+  const colorMap: { [key: string]: { r: number; g: number; b: number } } = {
+    'I': { r: 0.94, g: 0.27, b: 0.27 },      // 빨강
+    'V': { r: 0.23, g: 0.51, b: 0.96 },      // 파랑
+    'V1': { r: 0.23, g: 0.51, b: 0.96 },
+    'V2': { r: 0.19, g: 0.45, b: 0.86 },
+    'V3': { r: 0.15, g: 0.39, b: 0.76 },
+    'PC': { r: 0.92, g: 0.69, b: 0.15 },     // 노랑
+    'C': { r: 0.22, g: 0.80, b: 0.45 },      // 초록
+    'C1': { r: 0.22, g: 0.80, b: 0.45 },
+    'C2': { r: 0.16, g: 0.70, b: 0.38 },
+    'B': { r: 0.58, g: 0.34, b: 0.92 },      // 보라
+    '간주': { r: 0.96, g: 0.49, b: 0.13 },   // 주황
+    'Out': { r: 0.42, g: 0.45, b: 0.49 },    // 회색
+  }
+  return colorMap[label] || { r: 0.5, g: 0.5, b: 0.5 }
 }
 
 /**
@@ -49,24 +78,26 @@ const getSizeConfig = (size: SizeType = 'medium') => {
 const calculatePositionFromPercent = (
   percentX: number,
   percentY: number,
-  pageWidth: number,
-  pageHeight: number,
+  sheetX: number,      // 🆕 악보 시작 X 좌표
+  sheetY: number,      // 🆕 악보 시작 Y 좌표
+  sheetWidth: number,  // 🆕 악보 너비
+  sheetHeight: number, // 🆕 악보 높이
   textWidth: number,
-  fontSize: number
+  boxHeight: number
 ): { x: number; y: number } => {
-  // X 좌표: 전체 A4 페이지 기준으로 계산
+  // X 좌표: 악보 영역 기준으로 계산
   let x
   if (percentX <= 20) { // 왼쪽
-    x = 40 // 페이지 왼쪽 여백
+    x = sheetX + 20 // 악보 왼쪽에서 20포인트
   } else if (percentX >= 80) { // 오른쪽
-    x = pageWidth - textWidth - 40 // 페이지 오른쪽 여백
+    x = sheetX + sheetWidth - textWidth - 20 // 악보 오른쪽에서 20포인트
   } else { // 가운데
-    x = (pageWidth - textWidth) / 2 // 페이지 정중앙
+    x = sheetX + (sheetWidth - textWidth) / 2 // 악보 중앙
   }
-  
-  // Y 좌표: 상단에서 15포인트만 떨어진 위치 (더 상단으로)
-  const y = pageHeight - fontSize - 15 // 상단에서 15포인트만 아래
-  
+
+  // Y 좌표: 악보 상단에서 15포인트 아래 (PDF 좌표계는 아래가 0)
+  const y = sheetY + sheetHeight - boxHeight - 15
+
   return { x, y }
 }
 
@@ -74,7 +105,16 @@ const calculatePositionFromPercent = (
  * PDF 생성 함수
  */
 export const generatePDF = async (options: PDFGenerateOptions) => {
-  const { title, date, songs, songForms, songFormPositions } = options
+  const { 
+    title, 
+    date, 
+    songs, 
+    songForms, 
+    songFormPositions, 
+    partTags,
+    includeCover = true,      // 🆕 기본값 true
+    marginPercent = 0         // 🆕 기본값 0
+  } = options
 
   if (songs.length === 0) {
     throw new Error('곡이 없습니다.')
@@ -84,6 +124,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
   console.log('선택된 곡 목록:', songs.map(s => ({ id: s.id, name: s.song_name })))
   console.log('각 곡별 송폼:', songForms)
   console.log('각 곡별 송폼 위치:', songFormPositions)
+  console.log('🏷️ 각 곡별 파트 태그:', partTags)  // 🆕 디버깅
 
   try {
     const pdfLib = await import('pdf-lib')
@@ -118,6 +159,8 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
       console.error('❌ 한글 폰트 로드 실패:', fontError)
     }
 
+    // 🆕 표지 포함 옵션이 true일 때만 생성
+  if (includeCover) {
     // 표지 페이지 생성
     const coverDiv = document.createElement('div')
     coverDiv.style.cssText = `
@@ -169,6 +212,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     const [coverPage] = await mergedPdf.copyPages(coverDoc, [0])
     mergedPdf.addPage(coverPage)
     console.log('✅ 표지 페이지 생성 완료')
+  } // 🆕 if (includeCover) 닫기
 
     // 각 곡별 악보 페이지 추가
     for (let i = 0; i < songs.length; i++) {
@@ -205,11 +249,13 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             // A4 크기로 새 페이지 생성
             const newPage = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
             
-            // 원본 페이지를 A4에 맞게 스케일 조정
-            const scale = Math.min(
-              A4_WIDTH / srcWidth,
-              A4_HEIGHT / srcHeight
-            ) * 0.95 // 95%로 여백 확보
+            // 🆕 원본 페이지를 A4에 맞게 스케일 조정 (여백 옵션 적용)
+        // marginPercent가 0이면 0.95, 30이면 약 1.04 (더 크게)
+        const baseMarginScale = 0.95 + (marginPercent / 100 * 0.15)
+        const scale = Math.min(
+          A4_WIDTH / srcWidth,
+          A4_HEIGHT / srcHeight
+        ) * baseMarginScale
             
             const scaledWidth = srcWidth * scale
             const scaledHeight = srcHeight * scale
@@ -240,48 +286,110 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
 
               console.log(` 📐 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
-              // 전체 A4 페이지 기준으로 위치 계산
+              // 🆕 악보 영역 기준으로 위치 계산
+              const boxHeight = fontSize + padding
               let textX, textY
               if (songPosition) {
                 const position = calculatePositionFromPercent(
                   songPosition.x,
                   songPosition.y,
-                  A4_WIDTH,
-                  A4_HEIGHT,
-                  textWidth,
-                  fontSize
+                  x,              // 🆕 악보 시작 X
+                  y,              // 🆕 악보 시작 Y
+                  scaledWidth,    // 🆕 악보 너비
+                  scaledHeight,   // 🆕 악보 높이
+                  textWidth + (padding * 2),  // 박스 전체 너비
+                  boxHeight
                 )
-                textX = position.x
-                textY = position.y
+                textX = position.x + padding  // 텍스트는 패딩 안쪽
+                textY = position.y + (padding * 0.25)
                 console.log(` 📍 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
                 console.log(` 📍 실제 좌표: x=${textX}, y=${textY}`)
               } else {
-                // 기본값: 우측 상단
-                textX = A4_WIDTH - textWidth - 40
-                textY = A4_HEIGHT - fontSize - 15
-                console.log(` 📍 기본 위치 사용: 우측 상단`)
+                // 기본값: 악보 우측 상단
+                const boxHeight = fontSize + padding
+                textX = x + scaledWidth - textWidth - (padding * 2) - 20 + padding
+                textY = y + scaledHeight - boxHeight - 15 + (padding * 0.25)
+                console.log(` 📍 기본 위치 사용: 악보 우측 상단`)
               }
 
-              // 배경 박스
-              newPage.drawRectangle({
-                x: textX - padding,
-                y: textY - (padding * 0.5),
-                width: textWidth + (padding * 2),
-                height: fontSize + padding,
-                color: rgb(1, 1, 1),
-                opacity: 0.9,
-              })
-
-              // 텍스트
+              const outlineOffsets: [number, number][] = []
+              const outlineThickness = 8
+              for (let dx = -outlineThickness; dx <= outlineThickness; dx += 2) {
+                for (let dy = -outlineThickness; dy <= outlineThickness; dy += 2) {
+                  if (dx !== 0 || dy !== 0) {
+                    outlineOffsets.push([dx, dy])
+                  }
+                }
+              }
+              for (const [ox, oy] of outlineOffsets) {
+                newPage.drawText(formText, {
+                  x: textX + ox,
+                  y: textY + oy,
+                  size: fontSize,
+                  font: koreanFont,
+                  color: rgb(1, 1, 1),
+                })
+              }
+              // 본문 텍스트
               newPage.drawText(formText, {
                 x: textX,
                 y: textY,
                 size: fontSize,
                 font: koreanFont,
-                color: rgb(0.4, 0.2, 0.8),
+                color: rgb(0.49, 0.23, 0.93),
               })
 
               console.log(`✅ PDF 송폼 표시 성공! (곡 ${i + 1}: ${song.song_name})`)
+              // 🆕 파트 태그 그리기
+              const songPartTags = partTags?.[song.id] || []
+              if (songPartTags.length > 0 && koreanFont) {
+                console.log(`🏷️ 파트 태그 ${songPartTags.length}개 그리기`)
+                
+                for (const tag of songPartTags) {
+                  const tagFontSize = 36
+                  const tagPadding = 14
+
+                  const tagText = tag.label
+                  const tagTextWidth = koreanFont.widthOfTextAtSize(tagText, tagFontSize)
+                  const tagBoxWidth = tagTextWidth + tagPadding * 2
+                  const tagBoxHeight = tagFontSize + tagPadding
+                  
+                  // 퍼센트를 악보 영역 내 좌표로 변환
+                  const tagX = x + (scaledWidth * tag.x / 100) - tagBoxWidth / 2
+                  const tagY = y + scaledHeight - (scaledHeight * tag.y / 100) - tagBoxHeight / 2
+                  
+                  const color = getPartTagColor(tag.label)
+                  
+                  // 텍스트 (흰색 외곽선 + 색상 본문)
+              const tagOutlineOffsets: [number, number][] = []
+              const tagOutlineThickness = 6
+              for (let dx = -tagOutlineThickness; dx <= tagOutlineThickness; dx += 2) {
+                for (let dy = -tagOutlineThickness; dy <= tagOutlineThickness; dy += 2) {
+                  if (dx !== 0 || dy !== 0) {
+                    tagOutlineOffsets.push([dx, dy])
+                  }
+                }
+              }
+              for (const [ox, oy] of tagOutlineOffsets) {
+                newPage.drawText(tagText, {
+                  x: tagX + tagPadding + ox,
+                  y: tagY + tagPadding * 0.3 + oy,
+                  size: tagFontSize,
+                  font: koreanFont,
+                  color: rgb(1, 1, 1),
+                })
+              }
+              // 본문 텍스트
+              newPage.drawText(tagText, {
+                x: tagX + tagPadding,
+                y: tagY + tagPadding * 0.3,
+                size: tagFontSize,
+                font: koreanFont,
+                color: rgb(color.r, color.g, color.b),
+              })
+                }
+                console.log(`✅ 파트 태그 표시 완료`)
+              }
             }
           }
 
@@ -302,8 +410,10 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
 
           const imgWidth = image.width
-          const imgHeight = image.height
-          const scale = Math.min(A4_WIDTH / imgWidth, A4_HEIGHT / imgHeight) * 0.95 // 95%로 여백 확보
+      const imgHeight = image.height
+      // 🆕 여백 옵션 적용
+      const baseMarginScale = 0.95 + (marginPercent / 100 * 0.15)
+      const scale = Math.min(A4_WIDTH / imgWidth, A4_HEIGHT / imgHeight) * baseMarginScale
 
           const scaledWidth = imgWidth * scale
           const scaledHeight = imgHeight * scale
@@ -326,46 +436,109 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
 
             console.log(` 📐 이미지: 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
-            // 전체 A4 페이지 기준으로 위치 계산
+            // 🆕 악보 영역 기준으로 위치 계산
+            const boxHeight = fontSize + padding
             let textX, textY
             if (songPosition) {
               const position = calculatePositionFromPercent(
                 songPosition.x,
                 songPosition.y,
-                A4_WIDTH,
-                A4_HEIGHT,
-                textWidth,
-                fontSize
+                x,              // 🆕 악보 시작 X
+                y,              // 🆕 악보 시작 Y
+                scaledWidth,    // 🆕 악보 너비
+                scaledHeight,   // 🆕 악보 높이
+                textWidth + (padding * 2),
+                boxHeight
               )
-              textX = position.x
-              textY = position.y
+              textX = position.x + padding
+              textY = position.y + (padding * 0.25)
               console.log(` 📍 이미지: 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
               console.log(` 📍 이미지: 실제 좌표: x=${textX}, y=${textY}`)
             } else {
-              // 기본값: 우측 상단
-              textX = A4_WIDTH - textWidth - 40
-              textY = A4_HEIGHT - fontSize - 15
-              console.log(` 📍 이미지: 기본 위치 사용: 우측 상단`)
+              // 기본값: 악보 우측 상단
+              const defaultBoxHeight = fontSize + padding
+              textX = x + scaledWidth - textWidth - (padding * 2) - 20 + padding
+              textY = y + scaledHeight - defaultBoxHeight - 15 + (padding * 0.25)
+              console.log(` 📍 이미지: 기본 위치 사용: 악보 우측 상단`)
             }
 
-            // 배경 박스
-            page.drawRectangle({
-              x: textX - padding,
-              y: textY - (padding * 0.5),
-              width: textWidth + (padding * 2),
-              height: fontSize + padding,
-              color: rgb(1, 1, 1),
-              opacity: 0.9,
-            })
+            // 텍스트 (흰색 외곽선 효과)
+              const outlineOffsets: [number, number][] = []
+              const outlineThickness = 8
+              for (let dx = -outlineThickness; dx <= outlineThickness; dx += 2) {
+                for (let dy = -outlineThickness; dy <= outlineThickness; dy += 2) {
+                  if (dx !== 0 || dy !== 0) {
+                    outlineOffsets.push([dx, dy])
+                  }
+                }
+              }
+              for (const [ox, oy] of outlineOffsets) {
+                page.drawText(formText, {
+                  x: textX + ox,
+                  y: textY + oy,
+                  size: fontSize,
+                  font: koreanFont,
+                  color: rgb(1, 1, 1),
+                })
+              }
+              // 본문 텍스트
+              page.drawText(formText, {
+                x: textX,
+                y: textY,
+                size: fontSize,
+                font: koreanFont,
+                color: rgb(0.49, 0.23, 0.93),
+              })
+          }
 
-            // 텍스트
-            page.drawText(formText, {
-              x: textX,
-              y: textY,
-              size: fontSize,
-              font: koreanFont,
-              color: rgb(0.4, 0.2, 0.8),
-            })
+          // 🆕 파트 태그 그리기 (이미지)
+          const songPartTags = partTags?.[song.id] || []
+          if (songPartTags.length > 0 && koreanFont) {
+            console.log(`🏷️ 이미지: 파트 태그 ${songPartTags.length}개 그리기`)
+            
+            for (const tag of songPartTags) {
+              const tagFontSize = 36
+              const tagPadding = 14
+
+              const tagText = tag.label
+              const tagTextWidth = koreanFont.widthOfTextAtSize(tagText, tagFontSize)
+              const tagBoxWidth = tagTextWidth + tagPadding * 2
+              const tagBoxHeight = tagFontSize + tagPadding
+              
+              // 퍼센트를 악보 영역 내 좌표로 변환
+              const tagX = x + (scaledWidth * tag.x / 100) - tagBoxWidth / 2
+              const tagY = y + scaledHeight - (scaledHeight * tag.y / 100) - tagBoxHeight / 2
+              
+              const color = getPartTagColor(tag.label)
+              
+              const tagOutlineOffsets: [number, number][] = []
+              const tagOutlineThickness = 6
+              for (let dx = -tagOutlineThickness; dx <= tagOutlineThickness; dx += 2) {
+                for (let dy = -tagOutlineThickness; dy <= tagOutlineThickness; dy += 2) {
+                  if (dx !== 0 || dy !== 0) {
+                    tagOutlineOffsets.push([dx, dy])
+                  }
+                }
+              }
+              for (const [ox, oy] of tagOutlineOffsets) {
+                page.drawText(tagText, {
+                  x: tagX + tagPadding + ox,
+                  y: tagY + tagPadding * 0.3 + oy,
+                  size: tagFontSize,
+                  font: koreanFont,
+                  color: rgb(1, 1, 1),
+                })
+              }
+              // 본문 텍스트
+              page.drawText(tagText, {
+                x: tagX + tagPadding,
+                y: tagY + tagPadding * 0.3,
+                size: tagFontSize,
+                font: koreanFont,
+                color: rgb(color.r, color.g, color.b),
+              })
+            }
+            console.log(`✅ 이미지: 파트 태그 표시 완료`)
           }
 
           console.log(`✅ 이미지 악보 처리 완료: ${song.song_name}`)

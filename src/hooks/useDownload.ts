@@ -1,12 +1,13 @@
 // src/hooks/useDownload.ts
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Song } from '@/lib/supabase'
 import { SongFormPosition } from '@/lib/types'
 import { generatePDF as generatePDFFile, PDFSong } from '@/lib/pdfGenerator'
 import { logPDFDownload, logPPTDownload } from '@/lib/activityLogger'
 import { SECTION_ABBREVIATIONS } from '@/lib/supabase'
+import { PartTag } from '@/components/SongFormPositionModal'
 
 // 모바일 기기 감지
 const isMobileDevice = () => {
@@ -27,6 +28,13 @@ interface UseDownloadProps {
   setlistDate?: string   // 콘티 날짜 (my-team용)
 }
 
+// 🆕 다운로드 옵션 인터페이스
+export interface DownloadOptions {
+  includeCover: boolean       // 표지 포함 여부
+  includeSongForm: boolean    // 송폼 표시 여부
+  marginPercent: number       // 여백 축소 퍼센트 (0-30)
+}
+
 interface UseDownloadReturn {
   // 상태
   downloadingPDF: boolean
@@ -40,6 +48,11 @@ interface UseDownloadReturn {
   setShowFormatModal: (show: boolean) => void
   setShowPositionModal: (show: boolean) => void
   setShowPPTModal: (show: boolean) => void  // 🆕 추가
+
+  // 🆕 다운로드 옵션
+  downloadOptions: DownloadOptions
+  setDownloadOptions: React.Dispatch<React.SetStateAction<DownloadOptions>>
+  hasSongsWithForms: () => boolean
   
   // 액션
   handleDownload: () => void
@@ -65,8 +78,39 @@ export function useDownload({
   // 모달 상태
   const [showFormatModal, setShowFormatModal] = useState(false)
   const [showPositionModal, setShowPositionModal] = useState(false)
-  const [showPPTModal, setShowPPTModal] = useState(false)  // 🆕 추가
+  const [showPPTModal, setShowPPTModal] = useState(false) // 🆕 추가
+
+    // 🆕 다운로드 옵션 상태
+  const [downloadOptions, setDownloadOptions] = useState<DownloadOptions>({
+    includeCover: true,
+    includeSongForm: true,
+    marginPercent: 0
+  })
+
+  // 🆕 downloadOptions를 ref로도 유지 (내부 함수에서 최신 값 참조용)
+  const downloadOptionsRef = useRef<DownloadOptions>(downloadOptions)
   
+  // 🆕 selectedSongs와 songForms도 ref로 관리 (클로저 문제 해결)
+  const selectedSongsRef = useRef<Song[]>(selectedSongs)
+  const songFormsRef = useRef<{ [songId: string]: string[] }>(songForms)
+  const partTagsRef = useRef<{ [songId: string]: PartTag[] }>({})
+  
+  // 값이 변경될 때마다 ref 업데이트
+  useEffect(() => {
+    downloadOptionsRef.current = downloadOptions
+  }, [downloadOptions])
+  
+  useEffect(() => {
+    selectedSongsRef.current = selectedSongs
+  }, [selectedSongs])
+  
+  useEffect(() => {
+    songFormsRef.current = songForms
+  }, [songForms])
+
+  // 🆕 형식 선택 대기 (위치 선택 후 사용)
+  const pendingFormatRef = useRef<'pdf' | 'image' | null>(null)
+
   // 송폼 위치 저장 (위치 선택 후 형식 선택까지 유지)
   const positionsRef = useRef<{ [key: string]: SongFormPosition }>({})
 
@@ -78,27 +122,36 @@ export function useDownload({
     })
   }, [selectedSongs, songForms])
 
-  // 다운로드 버튼 클릭
+  // 다운로드 버튼 클릭 - 🆕 항상 형식+옵션 선택 모달 먼저
   const handleDownload = useCallback(() => {
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
     }
 
-    // 송폼이 있으면 먼저 위치 선택 모달
-    if (hasSongsWithForms()) {
-      setShowPositionModal(true)
-    } else {
-      // 송폼이 없으면 바로 형식 선택 모달
-      setShowFormatModal(true)
-    }
-  }, [selectedSongs.length, hasSongsWithForms])
-
-  // 송폼 위치 선택 완료 → 형식 선택 모달 열기
-  const onPositionConfirm = useCallback((positions: { [key: string]: SongFormPosition }) => {
-    positionsRef.current = positions
-    setShowPositionModal(false)
+    // 항상 형식+옵션 선택 모달 먼저 표시
     setShowFormatModal(true)
+  }, [selectedSongs.length])
+
+  // 🆕 송폼 위치 선택 완료 → 바로 다운로드 진행
+  const onPositionConfirm = useCallback((
+    positions: { [key: string]: SongFormPosition },
+    partTags: { [songId: string]: PartTag[] } = {}
+  ) => {
+    console.log('🏷️ useDownload - partTags 받음:', partTags)  // 🆕 디버깅
+    positionsRef.current = positions
+    partTagsRef.current = partTags
+    setShowPositionModal(false)
+    
+    // 대기 중인 형식으로 다운로드 진행
+    const format = pendingFormatRef.current
+    pendingFormatRef.current = null
+    
+    if (format === 'pdf') {
+      generatePDF(positions)
+    } else if (format === 'image') {
+      downloadAsImageFiles(positions)
+    }
   }, [])
 
   // 송폼 위치 선택 취소
@@ -107,23 +160,35 @@ export function useDownload({
     setShowPositionModal(false)
   }, [])
 
-  // 형식 선택 후 다운로드 시작
+  // 🆕 형식 선택 후 다운로드 시작 - 옵션에 따라 분기
   const startDownloadWithFormat = useCallback((format: 'pdf' | 'image') => {
     setShowFormatModal(false)
 
-    if (format === 'pdf') {
-      generatePDF(positionsRef.current)
+    // 송폼 옵션이 켜져 있고, 송폼이 설정된 곡이 있으면 위치 선택 모달
+    if (downloadOptions.includeSongForm && hasSongsWithForms()) {
+      pendingFormatRef.current = format
+      setShowPositionModal(true)
     } else {
-      downloadAsImageFiles(positionsRef.current)
+      // 바로 다운로드 진행 (송폼 없이)
+      if (format === 'pdf') {
+        generatePDF({})
+      } else {
+        downloadAsImageFiles({})
+      }
     }
-  }, [])
+  }, [downloadOptions.includeSongForm, hasSongsWithForms])
 
   // PDF 생성
   const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
     setDownloadingPDF(true)
 
     try {
-      const pdfSongs: PDFSong[] = selectedSongs.map(song => ({
+      // 🆕 ref에서 최신 값 가져오기
+      const currentSongs = selectedSongsRef.current
+      const currentSongForms = songFormsRef.current
+      const opts = downloadOptionsRef.current
+      
+      const pdfSongs: PDFSong[] = currentSongs.map(song => ({
         id: song.id,
         song_name: song.song_name,
         team_name: song.team_name,
@@ -131,20 +196,25 @@ export function useDownload({
         file_url: song.file_url,
         file_type: song.file_type,
         lyrics: song.lyrics,
-        selectedForm: songForms[song.id] || [],
+        selectedForm: currentSongForms[song.id] || [],
       }))
 
+      console.log('🏷️ generatePDF - partTagsRef.current:', partTagsRef.current)  // 🆕 디버깅
+      
       await generatePDFFile({
         title: setlistTitle || '찬양 콘티',
         date: setlistDate || new Date().toLocaleDateString('ko-KR'),
         songs: pdfSongs,
-        songForms: songForms,
-        songFormPositions: positions
+        songForms: opts.includeSongForm ? currentSongForms : {},
+        songFormPositions: opts.includeSongForm ? positions : undefined,
+        partTags: opts.includeSongForm ? partTagsRef.current : {},  // 🆕 추가
+        includeCover: opts.includeCover,
+        marginPercent: opts.marginPercent
       })
 
       // PDF 다운로드 로깅
       if (userId) {
-        const songIds = selectedSongs.map(s => s.id)
+        const songIds = currentSongs.map(s => s.id)  // 🆕 ref 사용
         await logPDFDownload(songIds, undefined, userId).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
@@ -163,23 +233,21 @@ export function useDownload({
   // 이미지 파일로 다운로드
   const downloadAsImageFiles = async (positions: { [key: string]: SongFormPosition }) => {
     setDownloadingImage(true)
+    
+    // 🆕 ref에서 최신 값 가져오기
+    const currentSongs = selectedSongsRef.current
 
     // 모바일 안내
     if (isMobileDevice()) {
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
-      if (isIOS) {
-        alert('📱 iOS에서 이미지 저장 안내\n\n공유 화면이 나타나면 "이미지 저장"을 선택해주세요.')
-      } else {
-        alert('📱 모바일에서 이미지 저장 안내\n\n공유 화면이 나타나면 갤러리에 저장하거나,\n이미지를 길게 눌러서 저장해주세요.')
-      }
+      // ... 생략
     }
 
     try {
       let downloadCount = 0
-      console.log(`✅ 총 ${selectedSongs.length}개 곡 다운로드 시작`)
+      console.log(`✅ 총 ${currentSongs.length}개 곡 다운로드 시작`)
 
-      for (let i = 0; i < selectedSongs.length; i++) {
-        const song = selectedSongs[i]
+      for (let i = 0; i < currentSongs.length; i++) {
+        const song = currentSongs[i]
 
         if (!song.file_url) {
           console.warn(`⚠️ ${song.song_name}: 파일이 없어서 건너뜁니다`)
@@ -189,7 +257,8 @@ export function useDownload({
         console.log(`\n📥 처리 중 (${i + 1}/${selectedSongs.length}): ${song.song_name}`)
 
         try {
-          const position = positions[song.id]
+          // 🆕 송폼 옵션이 꺼져 있으면 위치 정보 무시
+            const position = downloadOptionsRef.current.includeSongForm ? positions[song.id] : undefined
           
           if (song.file_type === 'pdf') {
             await downloadPdfAsJpg(song, i, position)
@@ -203,7 +272,7 @@ export function useDownload({
         }
 
         // 다음 파일 다운로드 전 대기
-        if (i < selectedSongs.length - 1) {
+        if (i < currentSongs.length - 1) {  // 🆕 ref 사용
           await new Promise(resolve => setTimeout(resolve, 500))
         }
       }
@@ -241,8 +310,8 @@ export function useDownload({
           canvas.height = img.naturalHeight
           ctx.drawImage(img, 0, 0)
 
-          // 송폼이 있으면 추가
-          const forms = songForms[song.id]
+          // 송폼 옵션이 켜져 있고 송폼이 있으면 추가
+          const forms = downloadOptionsRef.current.includeSongForm ? songForms[song.id] : undefined
           if (forms && forms.length > 0) {
             const formText = forms.join(' - ')
             
@@ -252,8 +321,13 @@ export function useDownload({
               medium: 18,
               large: 24
             }
-            const baseFontSize = position?.size ? sizeMap[position.size] : 18
-            const fontSize = Math.max(baseFontSize, canvas.width / 50)
+            const sizeMapLarge = {
+              small: 48,
+              medium: 64,
+              large: 80
+            }
+            const baseFontSize = position?.size ? sizeMapLarge[position.size] : 64
+            const fontSize = Math.max(baseFontSize, canvas.width / 15)
             
             ctx.font = `bold ${fontSize}px Arial, sans-serif`
             
@@ -267,12 +341,9 @@ export function useDownload({
             let y: number
             
             if (position) {
-              // position.x는 0-100 퍼센트 값
               x = (canvas.width * position.x / 100) - boxWidth / 2
-              // position.y는 0-100 퍼센트 값 (95가 상단)
               y = canvas.height * (100 - position.y) / 100
             } else {
-              // 기본값: 우측 상단
               x = canvas.width - boxWidth - 20
               y = 20
             }
@@ -281,19 +352,49 @@ export function useDownload({
             x = Math.max(10, Math.min(x, canvas.width - boxWidth - 10))
             y = Math.max(10, Math.min(y, canvas.height - boxHeight - 10))
 
-            // 배경
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-            ctx.strokeStyle = 'rgba(147, 51, 234, 0.5)'
-            ctx.lineWidth = 2
-            ctx.beginPath()
-            ctx.roundRect(x, y, boxWidth, boxHeight, 8)
-            ctx.fill()
-            ctx.stroke()
-
-            // 텍스트
-            ctx.fillStyle = '#7C3AED'
+            // 텍스트 (흰색 외곽선 + 보라색 본문) - 배경 없음
+            ctx.font = `900 ${fontSize}px Arial, sans-serif`
             ctx.textBaseline = 'middle'
+            ctx.lineWidth = 24
+            ctx.strokeStyle = '#ffffff'
+            ctx.strokeText(formText, x + padding, y + boxHeight / 2)
+            ctx.fillStyle = '#7C3AED'
             ctx.fillText(formText, x + padding, y + boxHeight / 2)
+          }
+
+          // 파트 태그 그리기
+          const songPartTags = partTagsRef.current?.[song.id] || []
+          if (songPartTags.length > 0) {
+            for (const tag of songPartTags) {
+              const tagFontSize = Math.max(48, canvas.width / 18)
+              const tagPadding = 16
+              
+              ctx.font = `bold ${tagFontSize}px Arial, sans-serif`
+              const tagTextWidth = ctx.measureText(tag.label).width
+              const tagBoxWidth = tagTextWidth + tagPadding * 2
+              const tagBoxHeight = tagFontSize + tagPadding
+              
+              // 퍼센트를 캔버스 좌표로 변환
+              const tagX = (canvas.width * tag.x / 100) - tagBoxWidth / 2
+              const tagY = (canvas.height * tag.y / 100) - tagBoxHeight / 2
+              
+              // 파트 태그 색상
+              const tagColors: { [key: string]: string } = {
+                'I': '#ef4444', 'V': '#3b82f6', 'V1': '#3b82f6', 'V2': '#2563eb', 'V3': '#1d4ed8',
+                'PC': '#eab308', 'C': '#22c55e', 'C1': '#22c55e', 'C2': '#16a34a',
+                'B': '#a855f7', '간주': '#f97316', 'Out': '#6b7280'
+              }
+              const tagColor = tagColors[tag.label] || '#6b7280'
+              
+              // 텍스트 (흰색 외곽선 + 색상 본문) - 배경 없음
+              ctx.font = `900 ${tagFontSize}px Arial, sans-serif`
+              ctx.textBaseline = 'middle'
+              ctx.lineWidth = 20
+              ctx.strokeStyle = '#ffffff'
+              ctx.strokeText(tag.label, tagX + tagPadding, tagY + tagBoxHeight / 2)
+              ctx.fillStyle = tagColor
+              ctx.fillText(tag.label, tagX + tagPadding, tagY + tagBoxHeight / 2)
+            }
           }
 
           // 다운로드
@@ -360,10 +461,10 @@ export function useDownload({
 
         await page.render({ canvasContext: ctx, viewport }).promise
 
-        // 송폼 추가 (첫 페이지에만)
-        if (pageNum === 1) {
-          const forms = songForms[song.id]
-          if (forms && forms.length > 0) {
+        // 🆕 송폼 옵션이 켜져 있을 때만 추가 (첫 페이지에만)
+      if (pageNum === 1 && downloadOptionsRef.current.includeSongForm) {
+        const forms = songForms[song.id]
+        if (forms && forms.length > 0) {
             const formText = forms.join(' - ')
             
             // 크기 설정
@@ -372,8 +473,13 @@ export function useDownload({
               medium: 18,
               large: 24
             }
-            const baseFontSize = position?.size ? sizeMap[position.size] : 18
-            const fontSize = Math.max(baseFontSize, canvas.width / 50)
+            const sizeMapLarge = {
+              small: 48,
+              medium: 64,
+              large: 80
+            }
+            const baseFontSize = position?.size ? sizeMapLarge[position.size] : 64
+            const fontSize = Math.max(baseFontSize, canvas.width / 15)
             
             ctx.font = `bold ${fontSize}px Arial, sans-serif`
             
@@ -397,17 +503,49 @@ export function useDownload({
             x = Math.max(10, Math.min(x, canvas.width - boxWidth - 10))
             y = Math.max(10, Math.min(y, canvas.height - boxHeight - 10))
 
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-            ctx.strokeStyle = 'rgba(147, 51, 234, 0.5)'
-            ctx.lineWidth = 2
-            ctx.beginPath()
-            ctx.roundRect(x, y, boxWidth, boxHeight, 8)
-            ctx.fill()
-            ctx.stroke()
-
-            ctx.fillStyle = '#7C3AED'
+            // 텍스트 (흰색 외곽선 + 보라색 본문) - 배경 없음
+            ctx.font = `900 ${fontSize}px Arial, sans-serif`
             ctx.textBaseline = 'middle'
+            ctx.lineWidth = 24
+            ctx.strokeStyle = '#ffffff'
+            ctx.strokeText(formText, x + padding, y + boxHeight / 2)
+            ctx.fillStyle = '#7C3AED'
             ctx.fillText(formText, x + padding, y + boxHeight / 2)
+          }
+        }
+
+        // 🆕 파트 태그 그리기 (첫 페이지에만)
+        if (pageNum === 1) {
+          const songPartTags = partTagsRef.current?.[song.id] || []
+          if (songPartTags.length > 0) {
+            for (const tag of songPartTags) {
+              const tagFontSize = Math.max(48, canvas.width / 18)
+              const tagPadding = 16
+              
+              ctx.font = `bold ${tagFontSize}px Arial, sans-serif`
+              const tagTextWidth = ctx.measureText(tag.label).width
+              const tagBoxWidth = tagTextWidth + tagPadding * 2
+              const tagBoxHeight = tagFontSize + tagPadding
+              
+              const tagX = (canvas.width * tag.x / 100) - tagBoxWidth / 2
+              const tagY = (canvas.height * tag.y / 100) - tagBoxHeight / 2
+              
+              const tagColors: { [key: string]: string } = {
+                'I': '#ef4444', 'V': '#3b82f6', 'V1': '#3b82f6', 'V2': '#2563eb', 'V3': '#1d4ed8',
+                'PC': '#eab308', 'C': '#22c55e', 'C1': '#22c55e', 'C2': '#16a34a',
+                'B': '#a855f7', '간주': '#f97316', 'Out': '#6b7280'
+              }
+              const tagColor = tagColors[tag.label] || '#6b7280'
+              
+              // 텍스트 (흰색 외곽선 + 색상 본문) - 배경 없음
+              ctx.font = `900 ${tagFontSize}px Arial, sans-serif`
+              ctx.textBaseline = 'middle'
+              ctx.lineWidth = 20
+              ctx.strokeStyle = '#ffffff'
+              ctx.strokeText(tag.label, tagX + tagPadding, tagY + tagBoxHeight / 2)
+              ctx.fillStyle = tagColor
+              ctx.fillText(tag.label, tagX + tagPadding, tagY + tagBoxHeight / 2)
+            }
           }
         }
 
@@ -557,15 +695,20 @@ export function useDownload({
     // 상태
     downloadingPDF,
     downloadingImage,
-    downloadingPPT,           // 🆕 추가
+    downloadingPPT, // 🆕 추가
     showFormatModal,
     showPositionModal,
-    showPPTModal,             // 🆕 추가
+    showPPTModal, // 🆕 추가
 
     // 상태 설정
     setShowFormatModal,
     setShowPositionModal,
-    setShowPPTModal,          // 🆕 추가
+    setShowPPTModal, // 🆕 추가
+
+    // 🆕 다운로드 옵션
+    downloadOptions,
+    setDownloadOptions,
+    hasSongsWithForms,
 
     // 액션
     handleDownload,

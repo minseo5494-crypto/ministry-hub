@@ -1671,7 +1671,7 @@ const saveNote = async () => {
   <SongFormPositionModal
     songs={downloadSongs.filter(song => downloadSongForms[song.id]?.length > 0)}
     songForms={downloadSongForms}
-    onConfirm={(positions: any) => onPositionConfirm(positions)}
+    onConfirm={(positions: any, partTags: any) => (onPositionConfirm as any)(positions, partTags || {})}
     onCancel={onPositionCancel}
   />
 )}
