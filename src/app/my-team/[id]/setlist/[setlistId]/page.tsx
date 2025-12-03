@@ -23,7 +23,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase, Song } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logDownload } from '@/lib/downloadLogger'
-import { generatePDF, PDFSong } from '@/lib/pdfGenerator'
+import { PDFSong } from '@/lib/pdfGenerator'
 import SongFormPositionModal from '@/components/SongFormPositionModal' // 🆕 추가
 import { canEditSetlist } from '@/lib/teamOperations' // ✅ 추가
 import {
@@ -32,6 +32,8 @@ import {
   Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation,
   GripVertical // 🆕 드래그 핸들 아이콘 추가
 } from 'lucide-react'
+import { useMobile } from '@/hooks/useMobile'
+import { useDownload } from '@/hooks/useDownload'
 
 interface SetlistSong {
   id: string
@@ -313,6 +315,7 @@ function SortableSongItem({
 }
 
 export default function TeamSetlistDetailPage() {
+  
   const params = useParams()
   const router = useRouter()
   const teamId = params.id as string
@@ -356,11 +359,7 @@ export default function TeamSetlistDetailPage() {
 
   // 다운로드 상태
   const [downloadingPPT, setDownloadingPPT] = useState(false)
-  const [downloadingPDF, setDownloadingPDF] = useState(false)
 
-  // 🆕 송폼 위치 선택 모달 상태
-  const [showPositionModal, setShowPositionModal] = useState(false)
-  const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
 
   // 🎵 악보보기 모드 전용 상태 추가
   const [showSheetViewer, setShowSheetViewer] = useState(false)
@@ -394,6 +393,35 @@ const [noteModal, setNoteModal] = useState<{
 })
 const [savingNote, setSavingNote] = useState(false)
 
+// 🆕 useDownload 훅용 데이터 변환 (songs 상태 이후에 위치해야 함)
+const downloadSongs = songs.map(s => s.songs)
+const downloadSongForms: { [key: string]: string[] } = {}
+songs.forEach(s => {
+  if (s.selected_form && s.selected_form.length > 0) {
+    downloadSongForms[s.songs.id] = s.selected_form
+  }
+})
+
+// 🆕 useDownload 훅 사용
+const {
+  downloadingPDF,
+  downloadingImage,
+  showFormatModal,
+  showPositionModal,
+  setShowFormatModal,
+  setShowPositionModal,
+  handleDownload,
+  onPositionConfirm,
+  onPositionCancel,
+  startDownloadWithFormat,
+} = useDownload({
+  selectedSongs: downloadSongs,
+  songForms: downloadSongForms,
+  userId: user?.id,
+  setlistTitle: setlist?.title,
+  setlistDate: setlist?.service_date ? new Date(setlist.service_date).toLocaleDateString('ko-KR') : undefined
+})
+
   // 🆕 드래그 앤 드롭 센서 설정
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -408,9 +436,12 @@ const [savingNote, setSavingNote] = useState(false)
 
   const [canUserEdit, setCanUserEdit] = useState(false) // ✅ 편집 권한 상태
 
-  useEffect(() => {
-    checkUser()
-  }, [])
+// 모바일 감지
+const isMobile = useMobile()
+
+useEffect(() => {
+  checkUser()
+}, [])
 
   useEffect(() => {
     if (user && teamId && setlistId) {
@@ -980,95 +1011,18 @@ const removeSongForm = (index: number) => {
     }
   }
 
-  // 🆕 PDF 다운로드 - 1단계: 송폼 위치 선택 모달 열기
-  const handleDownloadPDF = async () => {
-    if (!setlist || songs.length === 0) {
-      alert('다운로드할 곡이 없습니다.')
-      return
-    }
-
-    // 송폼이 있는 곡이 있는지 확인
-    const songsWithForms = songs.filter(song => 
-      song.selected_form && song.selected_form.length > 0
-    )
-
-    if (songsWithForms.length > 0) {
-      // 송폼이 있으면 위치 선택 모달 열기
-      setShowPositionModal(true)
-    } else {
-      // 송폼이 없으면 바로 PDF 생성
-      await generatePDFFile({})
-    }
-  }
-
   // 🎵 플레이리스트 공유
-const handleSharePlaylist = () => {
-  const playlistUrl = `${window.location.origin}/playlist/${setlistId}`
-  
-  // 새 탭에서 플레이리스트 열기
-  window.open(playlistUrl, '_blank')
-  
-  // 링크도 자동 복사 (공유용)
-  navigator.clipboard.writeText(playlistUrl)
-}
-
-  // 🆕 PDF 다운로드 - 2단계: 실제 PDF 생성
-  const generatePDFFile = async (positions: { [key: string]: SongFormPosition }) => {
-    if (!setlist) return
-
-    setDownloadingPDF(true)
-    setShowPositionModal(false)
-
-    try {
-      // 곡 데이터 변환
-      const pdfSongs: PDFSong[] = songs.map(setlistSong => ({
-        id: setlistSong.id,
-        song_name: setlistSong.songs.song_name,
-        team_name: setlistSong.songs.team_name,
-        key: setlistSong.songs.key,
-        file_url: setlistSong.songs.file_url,
-        file_type: setlistSong.songs.file_type,
-        lyrics: setlistSong.songs.lyrics,
-        selectedForm: setlistSong.selected_form || [],
-        keyTransposed: setlistSong.key_transposed,
-        notes: setlistSong.notes
-      }))
-
-      // 송폼 데이터 변환
-      const songForms: { [key: string]: string[] } = {}
-      songs.forEach(setlistSong => {
-        if (setlistSong.selected_form && setlistSong.selected_form.length > 0) {
-          songForms[setlistSong.id] = setlistSong.selected_form
-        }
-      })
-
-      // 🆕 PDF 생성 (위치 정보 포함)
-      await generatePDF({
-        title: setlist.title,
-        date: new Date(setlist.service_date).toLocaleDateString('ko-KR'),
-        songs: pdfSongs,
-        songForms: songForms,
-        songFormPositions: positions  // 🆕 위치 정보 전달
-      })
-
-      // 다운로드 로그
-      await logDownload({
-        userId: user.id,
-        setlistId: setlist.id,
-        downloadType: 'pdf',
-        fileName: `${setlist.title}_${new Date(setlist.service_date).toLocaleDateString('ko-KR').replace(/\./g, '')}.pdf`,
-        teamId: teamId,
-        metadata: { songCount: songs.length }
-      })
-
-      alert('✅ PDF 파일이 다운로드되었습니다!')
-    } catch (error: any) {
-      console.error('Error generating PDF:', error)
-      alert(`PDF 생성 실패: ${error.message}`)
-    } finally {
-      setDownloadingPDF(false)
-    }
+  const handleSharePlaylist = () => {
+    const playlistUrl = `${window.location.origin}/playlist/${setlistId}`
+    
+    // 새 탭에서 플레이리스트 열기
+    window.open(playlistUrl, '_blank')
+    
+    // 링크도 자동 복사 (공유용)
+    navigator.clipboard.writeText(playlistUrl)
   }
+
+  
 
   // 🎵 악보보기 모드 열기
   const openSheetViewerForSong = (setlistSong: SetlistSong) => {
@@ -1386,13 +1340,13 @@ const saveNote = async () => {
                 플레이리스트
               </button>
                   <button
-                    onClick={handleDownloadPDF}
-                    disabled={downloadingPDF || songs.length === 0}
+                    onClick={handleDownload}
+                    disabled={downloadingPDF || downloadingImage || songs.length === 0}
                     className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50"
-                    title="PDF 다운로드"
+                    title="악보 다운로드"
                   >
                     <FileDown className="mr-2" size={18} />
-                    {downloadingPDF ? 'PDF 생성 중...' : 'PDF'}
+                    {downloadingPDF || downloadingImage ? '다운로드 중...' : '악보 다운로드'}
                   </button>
                   
                   {/* 수정/삭제 버튼 - leader/admin만 */}
@@ -1683,26 +1637,44 @@ const saveNote = async () => {
   </div>
 )}
 
+      {/* 🆕 다운로드 형식 선택 모달 */}
+{showFormatModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+      <h3 className="text-lg font-bold mb-4">다운로드 형식 선택</h3>
+      <div className="space-y-3">
+        <button
+          onClick={() => startDownloadWithFormat('pdf')}
+          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          📄 PDF로 다운로드
+        </button>
+        <button
+          onClick={() => startDownloadWithFormat('image')}
+          className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          🖼️ 이미지로 다운로드
+        </button>
+        <button
+          onClick={() => setShowFormatModal(false)}
+          className="w-full py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+      
       {/* 🆕 송폼 위치 선택 모달 */}
-      {showPositionModal && (
-        <SongFormPositionModal
-          songs={songs.map(s => ({
-            id: s.id,
-            song_name: s.songs.song_name,
-            file_url: s.songs.file_url,
-            file_type: s.songs.file_type,
-            selectedForm: s.selected_form
-          }))}
-          songForms={songs.reduce((acc, song) => {
-            if (song.selected_form && song.selected_form.length > 0) {
-              acc[song.id] = song.selected_form
-            }
-            return acc
-          }, {} as { [key: string]: string[] })}
-          onConfirm={generatePDFFile}
-          onCancel={() => setShowPositionModal(false)}
-        />
-      )}
+{showPositionModal && (
+  <SongFormPositionModal
+    songs={downloadSongs.filter(song => downloadSongForms[song.id]?.length > 0)}
+    songForms={downloadSongForms}
+    onConfirm={(positions: any) => onPositionConfirm(positions)}
+    onCancel={onPositionCancel}
+  />
+)}
       
       {/* 🎵 유튜브 모달 */}
       {youtubeModalSong && (

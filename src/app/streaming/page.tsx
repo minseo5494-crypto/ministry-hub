@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useMobile } from '@/hooks/useMobile'
 import { 
   Music, Play, Heart, Home, Compass, Bookmark, Search,
   Shuffle, SkipBack, SkipForward, Repeat, Volume2, 
@@ -30,6 +31,9 @@ export default function Streaming() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'library'>('home')
   const [selectedCategory, setSelectedCategory] = useState('All')
+
+// 모바일 감지
+const isMobile = useMobile()
 
   const videos: Video[] = [
     {

@@ -11,6 +11,7 @@ import {
   Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
   Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon
 } from 'lucide-react'
+import { useMobile } from '@/hooks/useMobile'
 
 interface TeamInfo {
   id: string
@@ -118,26 +119,20 @@ const [downloadingFixed, setDownloadingFixed] = useState(false)
 
 // 🆕 모바일 상태 추가
 const [showFilters, setShowFilters] = useState(true)
-const [isMobile, setIsMobile] = useState(false)
+
+const isMobile = useMobile()
+
+// 모바일일 때 필터 기본 숨김
+useEffect(() => {
+  if (isMobile) {
+    setShowFilters(false)
+  }
+}, [isMobile])
 
 const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉헌찬양', '직접입력']
 
   useEffect(() => {
     checkUser()
-  }, [])
-
-  // 🆕 모바일 감지
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (mobile) {
-        setShowFilters(false)
-      }
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {

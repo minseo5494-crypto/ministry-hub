@@ -8,36 +8,10 @@ import {
   Music, Settings, Edit, Trash2, Eye, Globe,
   Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus
 } from 'lucide-react'
-
-// 절기 & 테마 상수
-const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
-const THEMES = ['경배', '찬양', '회개', '감사', '헌신', '선교', '구원', '사랑', '소망', '믿음', '은혜', '성령', '치유', '회복', '십자가']
-
-// BPM에 따른 템포 자동 선택 상수
-const TEMPO_RANGES: { [key: string]: { min: number; max: number } } = {
-  '느림': { min: 0, max: 65 },
-  '조금느림': { min: 66, max: 79 },
-  '보통': { min: 80, max: 100 },
-  '조금빠름': { min: 101, max: 120 },
-  '빠름': { min: 121, max: 150 },
-  '매우빠름': { min: 151, max: 200 },
-}
-
-// BPM에서 템포 자동 선택 함수
-const getTempoFromBPM = (bpm: number): string => {
-  if (bpm <= 65) return '느림'
-  if (bpm <= 79) return '조금느림'
-  if (bpm <= 100) return '보통'
-  if (bpm <= 120) return '조금빠름'
-  if (bpm <= 150) return '빠름'
-  if (bpm <= 200) return '매우빠름'
-  return ''
-}
-
-// 템포에 따른 BPM 범위 반환 함수
-const getBPMRangeFromTempo = (tempo: string): { min: number; max: number } | null => {
-  return TEMPO_RANGES[tempo] || null
-}
+import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
+import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
+import { useMobile } from '@/hooks/useMobile'
+import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 
 // 상수
 const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
@@ -128,36 +102,18 @@ export default function MyPagePage() {
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [teamNameSuggestions, setTeamNameSuggestions] = useState<string[]>([])
-  const [showTeamSuggestions, setShowTeamSuggestions] = useState(false)
-  // ✅ 팀명 자동완성 검색
-const searchTeamNames = async (query: string) => {
-  if (!query.trim()) {
-    setTeamNameSuggestions([])
-    setShowTeamSuggestions(false)
-    return
-  }
-
   
 
-  try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('team_name')
-      .ilike('team_name', `%${query}%`)
-      .not('team_name', 'is', null)
-      .limit(50)
+// ✅ 모바일 감지
+const isMobile = useMobile()
 
-    if (error) throw error
-
-    // 중복 제거 및 정렬
-    const uniqueTeams = [...new Set(data?.map(d => d.team_name).filter(Boolean))] as string[]
-    setTeamNameSuggestions(uniqueTeams.slice(0, 10))
-    setShowTeamSuggestions(uniqueTeams.length > 0)
-  } catch (error) {
-    console.error('Error searching team names:', error)
-  }
-}
+// ✅ 팀명 자동완성 훅
+const {
+  suggestions: teamNameSuggestions,
+  showSuggestions: showTeamSuggestions,
+  searchTeamNames,
+  setShowSuggestions: setShowTeamSuggestions
+} = useTeamNameSearch()
 
 // ✅ 곡 삭제
   const handleDeleteSong = async (song: any) => {

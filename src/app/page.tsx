@@ -10,49 +10,29 @@ import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2, Menu
 } from 'lucide-react'
+import { useMobile } from '@/hooks/useMobile'
+import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
+import { useDownload } from '@/hooks/useDownload'
+
 import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
 import { logSongSearch, logPPTDownload, logSongView, logPDFDownload } from '@/lib/activityLogger'
 // 🆕 추가
 import SongFormPositionModal from '@/components/SongFormPositionModal'
+import DownloadLoadingModal from '@/components/DownloadLoadingModal'
+import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
+import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
+
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
+import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
+import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
 // 🆕 TypeScript를 위한 전역 선언 (import 아래에 추가)
 declare global {
   interface Window {
     pdfjsLib: any;
   }
-}
-
-// 절기 & 테마 상수 추가
-const SEASONS = ['전체', '크리스마스', '부활절', '고난주간', '추수감사절', '신년', '종교개혁주일']
-const THEMES = ['경배', '찬양', '회개', '감사', '헌신', '선교', '구원', '사랑', '소망', '믿음', '은혜', '성령', '치유', '회복', '십자가']
-
-// BPM에 따른 템포 자동 선택 상수
-const TEMPO_RANGES: { [key: string]: { min: number; max: number } } = {
-  '느림': { min: 0, max: 65 },
-  '조금느림': { min: 66, max: 79 },
-  '보통': { min: 80, max: 100 },
-  '조금빠름': { min: 101, max: 120 },
-  '빠름': { min: 121, max: 150 },
-  '매우빠름': { min: 151, max: 200 },
-}
-
-// BPM에서 템포 자동 선택 함수
-const getTempoFromBPM = (bpm: number): string => {
-  if (bpm <= 65) return '느림'
-  if (bpm <= 79) return '조금느림'
-  if (bpm <= 100) return '보통'
-  if (bpm <= 120) return '조금빠름'
-  if (bpm <= 150) return '빠름'
-  if (bpm <= 200) return '매우빠름'
-  return ''
-}
-
-// 템포에 따른 BPM 범위 반환 함수
-const getBPMRangeFromTempo = (tempo: string): { min: number; max: number } | null => {
-  return TEMPO_RANGES[tempo] || null
 }
 
 // 모바일 기기 감지 함수
@@ -63,6 +43,7 @@ const isMobileDevice = () => {
 
 export default function Home() {
   const router = useRouter()
+  const isMobile = useMobile()
   const [user, setUser] = useState<any>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showMenu, setShowMenu] = useState(false)
@@ -70,7 +51,6 @@ export default function Home() {
   // UI 상태 추가
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   const [showFilterPanel, setShowFilterPanel] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)  // ← 이 줄 추가!
   const [showMobileMenu, setShowMobileMenu] = useState(false)  // ← 🆕 추가!
   
   // 임시 사용자 ID
@@ -91,31 +71,33 @@ const loadMoreRef = useRef<HTMLDivElement>(null)
   const [songForms, setSongForms] = useState<{[songId: string]: string[]}>({})
   const [showFormModal, setShowFormModal] = useState(false)
   const [currentFormSong, setCurrentFormSong] = useState<Song | null>(null)
-  const [tempSelectedForm, setTempSelectedForm] = useState<string[]>([])
+
   const [customSection, setCustomSection] = useState('')
 
-  // PPT 모달 상태
-  const [showPPTModal, setShowPPTModal] = useState(false)
+  /// useDownload 훅 사용
+const {
+  downloadingPDF,
+  downloadingImage,
+  downloadingPPT,
+  showFormatModal,
+  showPositionModal,
+  showPPTModal,
+  setShowFormatModal,
+  setShowPositionModal,
+  setShowPPTModal,
+  handleDownload,
+  onPositionConfirm,
+  onPositionCancel,
+  startDownloadWithFormat,
+  startPPTDownload,
+  generatePPTWithOptions,
+} = useDownload({
+  selectedSongs,
+  songForms,
+  userId: user?.id
+})
 
-  // PDF/PPT/이미지 다운로드 로딩 상태
-const [downloadingPDF, setDownloadingPDF] = useState(false)
-const [downloadingPPT, setDownloadingPPT] = useState(false)
-const [downloadingImage, setDownloadingImage] = useState(false)  // 추가
-
-  // 🆕 파일 형식 선택 모달 상태
-  const [showFormatModal, setShowFormatModal] = useState(false)
-
-  // 🆕 추가
-  const [showPositionModal, setShowPositionModal] = useState(false)
-  const [songFormPositions, setSongFormPositions] = useState<{ [key: string]: SongFormPosition }>({})
-
-  // 사용 가능한 송폼 섹션
-  const availableSections = [
-    'Intro', 'Verse1', 'Verse2', 'Verse3', 'Verse4',
-    'PreChorus', 'PreChorus1', 'PreChorus2',
-    'Chorus', 'Chorus1', 'Chorus2',
-    'Interlude', 'Bridge', 'Outro'
-  ]
+  
   
   
   // 악보 미리보기 상태
@@ -178,35 +160,14 @@ const ZOOM_STEP = 0.25
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [userTeams, setUserTeams] = useState<any[]>([])
-  const [teamNameSuggestions, setTeamNameSuggestions] = useState<string[]>([])
-  const [showTeamSuggestions, setShowTeamSuggestions] = useState(false)
 
-  // ✅ 팀명 자동완성 검색
-const searchTeamNames = async (query: string) => {
-  if (!query.trim()) {
-    setTeamNameSuggestions([])
-    setShowTeamSuggestions(false)
-    return
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('team_name')
-      .ilike('team_name', `%${query}%`)
-      .not('team_name', 'is', null)
-      .limit(50)
-
-    if (error) throw error
-
-    // 중복 제거 및 정렬
-    const uniqueTeams = [...new Set(data?.map(d => d.team_name).filter(Boolean))] as string[]
-    setTeamNameSuggestions(uniqueTeams.slice(0, 10))
-    setShowTeamSuggestions(uniqueTeams.length > 0)
-  } catch (error) {
-    console.error('Error searching team names:', error)
-  }
-}
+  // ✅ 팀명 자동완성 훅
+const {
+  suggestions: teamNameSuggestions,
+  showSuggestions: showTeamSuggestions,
+  searchTeamNames,
+  setShowSuggestions: setShowTeamSuggestions
+} = useTeamNameSearch()
   
   // 필터 상태 (개선된 버전)
   const [filters, setFilters] = useState<{
@@ -248,21 +209,6 @@ const searchTeamNames = async (query: string) => {
   useEffect(() => {
     checkUser()
   }, [])
-
-  // 화면 크기 감지 (모바일 대응)
-useEffect(() => {
-  const checkMobile = () => {
-    const mobile = window.innerWidth < 768
-    setIsMobile(mobile)
-    if (mobile) {
-      setShowFilterPanel(false)  // 모바일이면 필터 닫기
-    }
-  }
-  
-  checkMobile()  // 첫 로드 시 체크
-  window.addEventListener('resize', checkMobile)
-  return () => window.removeEventListener('resize', checkMobile)
-}, [])
 
   // 🆕 PDF.js 초기화
   useEffect(() => {
@@ -401,6 +347,12 @@ useEffect(() => {
       setCheckingAuth(false)
     }
   }
+  // 🆕 초기 로드 시 모바일이면 필터 패널 닫기
+useEffect(() => {
+  if (window.innerWidth < 768) {
+    setShowFilterPanel(false)
+  }
+}, [])
 
   const handleSignOut = async () => {
     try {
@@ -1240,537 +1192,30 @@ const hasMore = displayCount < filteredSongs.length
   const openFormModal = (song: Song) => {
     setCurrentFormSong(song)
     const existingForm = songForms[song.id] || []
-    setTempSelectedForm(existingForm)
     setShowFormModal(true)
   }
 
-  const addSection = (section: string) => {
-    const abbr = SECTION_ABBREVIATIONS[section] || section
-    setTempSelectedForm(prev => [...prev, abbr])
+  // 🆕 필터 변경 핸들러 (FilterPanel용)
+  const handleFilterChange = (key: string, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
   }
 
-  const addCustomSection = () => {
-    if (customSection.trim()) {
-      setTempSelectedForm(prev => [...prev, customSection.trim()])
-      setCustomSection('')
-    }
-  }
-
-  const removeSection = (index: number) => {
-    setTempSelectedForm(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const moveSectionUp = (index: number) => {
-    if (index === 0) return
-    const newForm = [...tempSelectedForm]
-    ;[newForm[index - 1], newForm[index]] = [newForm[index], newForm[index - 1]]
-    setTempSelectedForm(newForm)
-  }
-
-  const moveSectionDown = (index: number) => {
-    if (index === tempSelectedForm.length - 1) return
-    const newForm = [...tempSelectedForm]
-    ;[newForm[index], newForm[index + 1]] = [newForm[index + 1], newForm[index]]
-    setTempSelectedForm(newForm)
-  }
-
-  const saveSongForm = () => {
-    if (!currentFormSong) return
-    setSongForms(prev => ({
-      ...prev,
-      [currentFormSong.id]: tempSelectedForm
-    }))
-    setShowFormModal(false)
-    setCurrentFormSong(null)
-  }
-
-  // 🆕 다운로드 버튼 클릭 시 (파일 형식 선택 모달 열기)
-const handleDownload = () => {
-  if (selectedSongs.length === 0) {
-    alert('찬양을 선택해주세요.')
-    return
-  }
-  
-  // 파일 형식 선택 모달 열기
-  setShowFormatModal(true)
-}
-
-// 🆕 선택한 형식에 따라 다운로드 시작
-const startDownloadWithFormat = (format: 'pdf' | 'image') => {
-  setShowFormatModal(false)
-  
-  if (format === 'pdf') {
-    // PDF 다운로드 로직
-    const songsWithForms = selectedSongs.filter(song => {
-      const forms = songForms[song.id] || []
-      return forms.length > 0
+  // 🆕 필터 초기화 (FilterPanel용)
+  const resetFilters = () => {
+    setFilters({
+      season: '전체',
+      themes: [],
+      theme: '',
+      key: '',
+      isMinor: false,
+      timeSignature: '',
+      tempo: '',
+      searchText: filters.searchText,  // 검색어는 유지
+      bpmMin: '',
+      bpmMax: ''
     })
-    
-    if (songsWithForms.length > 0) {
-      setShowPositionModal(true)
-    } else {
-      generatePDF({})
-    }
-  } else {
-    // 사진파일 다운로드
-    downloadAsImageFiles()
-  }
-}
-
-// 🆕 위치 확정 후 PDF 생성 (모달에서 "확정" 버튼 클릭 시 호출됨)
-const generatePDF = async (positions: { [key: string]: SongFormPosition }) => {
-  setDownloadingPDF(true)
-  setShowPositionModal(false)  // 모달 닫기
-
-  try {
-    // PDFSong 형식으로 변환
-    const pdfSongs: PDFSong[] = selectedSongs.map(song => ({
-      id: song.id,
-      song_name: song.song_name,
-      team_name: song.team_name,
-      key: song.key,
-      file_url: song.file_url,
-      file_type: song.file_type,
-      lyrics: song.lyrics,
-      selectedForm: songForms[song.id] || [],
-    }))
-
-    // generatePDFFile 함수 호출
-    await generatePDFFile({
-      title: '찬양 콘티',
-      date: new Date().toLocaleDateString('ko-KR'),
-      songs: pdfSongs,
-      songForms: songForms,
-      songFormPositions: positions  // 🆕 위치 정보 추가
-    })
-
-    // 📊 PDF 다운로드 로깅 추가
-if (user) {
-  const songIds = selectedSongs.map(s => s.id);
-  await logPDFDownload(songIds, undefined, user.id).catch(err => 
-    console.error('PDF 로깅 실패:', err)
-  );
-}
-
-    alert('✅ PDF가 생성되었습니다!')
-  } catch (error) {
-    console.error('PDF 생성 오류:', error)
-    alert('❌ PDF 생성 중 오류가 발생했습니다.')
-  } finally {
-    setDownloadingPDF(false)
-  }
-}
-
-// 🆕 사진파일로 다운로드 (각 곡을 개별 파일로)
-const downloadAsImageFiles = async () => {
-  setDownloadingImage(true)  // 변경
-
-  // 모바일에서 시작 전 안내
-if (isMobileDevice()) {
-const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
-if (isIOS) {
-alert('📱 iOS에서 이미지 저장 안내\n\n공유 화면이 나타나면 "이미지 저장"을 선택해주세요.')
-} else {
-alert('📱 모바일에서 이미지 저장 안내\n\n공유 화면이 나타나면 갤러리에 저장하거나,\n이미지를 길게 눌러서 저장해주세요.')
-}
-}
-  
-  try {
-    let downloadCount = 0
-    
-    console.log(`✅ 총 ${selectedSongs.length}개 곡 다운로드 시작`)
-    
-    for (let i = 0; i < selectedSongs.length; i++) {
-      const song = selectedSongs[i]
-      
-      if (!song.file_url) {
-        console.warn(`⚠️ ${song.song_name}: 파일이 없어서 건너뜁니다`)
-        continue
-      }
-      
-      console.log(`\n📥 처리 중 (${i + 1}/${selectedSongs.length}): ${song.song_name}`)
-      
-      try {
-        if (song.file_type === 'pdf') {
-          // PDF → JPG 변환
-          await downloadPdfAsJpg(song, i)
-        } else {
-          // JPG/PNG → 원본 형식 유지
-          await downloadImageWithForm(song, i)
-        }
-        downloadCount++
-      } catch (error) {
-        console.error(`❌ ${song.song_name} 다운로드 실패:`, error)
-        alert(`⚠️ ${song.song_name} 다운로드 중 오류가 발생했습니다.\n계속 진행합니다.`)
-      }
-      
-      // 다음 파일 다운로드 전 0.5초 대기
-      if (i < selectedSongs.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
-    }
-    
-    alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!\n\n※ 브라우저에서 여러 파일 다운로드를 차단한 경우\n설정에서 허용해주세요.`)
-  } catch (error) {
-    console.error('다운로드 오류:', error)
-    alert('❌ 다운로드 중 오류가 발생했습니다.')
-  } finally {
-    setDownloadingImage(false)  // 변경
-  }
-}
-
-// 🖼️ 이미지 파일에 송폼 추가해서 다운로드 (모바일 사진첩 지원)
-const downloadImageWithForm = async (song: Song, index: number) => {
-return new Promise<void>((resolve, reject) => {
-const img = new Image()
-img.crossOrigin = 'anonymous'
-
-img.onload = async () => {
-try {
-const canvas = document.createElement('canvas')
-canvas.width = img.width
-canvas.height = img.height
-
-const ctx = canvas.getContext('2d')
-if (!ctx) {
-reject(new Error('Canvas context를 가져올 수 없습니다'))
-return
-}
-
-ctx.drawImage(img, 0, 0)
-
-const selectedForms = songForms[song.id] || []
-if (selectedForms.length > 0) {
-const formText = selectedForms.join(' - ')
-const fontSize = Math.max(24, Math.floor(canvas.height / 30))
-ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-
-const textWidth = ctx.measureText(formText).width
-const padding = fontSize * 0.6
-const x = canvas.width - textWidth - padding * 2 - 30
-const y = 50
-
-ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
-ctx.fillRect(x - padding, y - fontSize - padding / 2, textWidth + padding * 2, fontSize + padding)
-
-ctx.fillStyle = 'rgb(102, 51, 204)'
-ctx.fillText(formText, x, y - padding / 2)
-}
-
-const mimeType = song.file_type === 'png' ? 'image/png' : 'image/jpeg'
-const extension = song.file_type === 'png' ? 'png' : 'jpg'
-const filename = `${index + 1}_${sanitizeFilename(song.song_name)}.${extension}`
-
-// 모바일에서는 Web Share API 사용
-if (isMobileDevice()) {
-canvas.toBlob(async (blob) => {
-if (!blob) {
-reject(new Error('Blob 생성 실패'))
-return
-}
-
-if (navigator.share && navigator.canShare) {
-try {
-const file = new File([blob], filename, { type: mimeType })
-if (navigator.canShare({ files: [file] })) {
-await navigator.share({ files: [file], title: song.song_name })
-console.log(`✅ 공유 완료: ${filename}`)
-resolve()
-return
-}
-} catch (shareError: any) {
-if (shareError.name !== 'AbortError') {
-console.log('Share API 실패:', shareError)
-} else {
-resolve()
-return
-}
-}
-}
-
-const url = URL.createObjectURL(blob)
-window.open(url, '_blank')
-setTimeout(() => URL.revokeObjectURL(url), 1000)
-resolve()
-}, mimeType, 0.95)
-} else {
-// PC 다운로드
-canvas.toBlob((blob) => {
-if (!blob) {
-reject(new Error('Blob 생성 실패'))
-return
-}
-
-const url = URL.createObjectURL(blob)
-const link = document.createElement('a')
-link.href = url
-link.download = filename
-link.click()
-URL.revokeObjectURL(url)
-resolve()
-}, mimeType, 0.95)
-}
-} catch (error) {
-reject(error)
-}
-}
-
-img.onerror = () => reject(new Error(`이미지 로드 실패: ${song.file_url}`))
-img.src = song.file_url!
-})
-}
-
-// 📑 PDF를 JPG로 변환해서 다운로드 (모바일 사진첩 지원)
-const downloadPdfAsJpg = async (song: Song, index: number) => {
-if (!window.pdfjsLib) {
-throw new Error('PDF.js가 로드되지 않았습니다')
-}
-
-try {
-const loadingTask = window.pdfjsLib.getDocument(song.file_url)
-const pdf = await loadingTask.promise
-const pageCount = pdf.numPages
-
-for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-const page = await pdf.getPage(pageNum)
-const viewport = page.getViewport({ scale: 2.0 })
-const canvas = document.createElement('canvas')
-const context = canvas.getContext('2d')
-
-if (!context) continue
-
-canvas.height = viewport.height
-canvas.width = viewport.width
-
-await page.render({ canvasContext: context, viewport: viewport }).promise
-
-if (pageNum === 1) {
-const selectedForms = songForms[song.id] || []
-if (selectedForms.length > 0) {
-const formText = selectedForms.join(' - ')
-const fontSize = Math.max(32, Math.floor(canvas.height / 30))
-context.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`
-
-const textWidth = context.measureText(formText).width
-const padding = fontSize * 0.6
-const x = canvas.width - textWidth - padding * 2 - 30
-const y = 50
-
-context.fillStyle = 'rgba(255, 255, 255, 0.95)'
-context.fillRect(x - padding, y - fontSize - padding / 2, textWidth + padding * 2, fontSize + padding)
-
-context.fillStyle = 'rgb(102, 51, 204)'
-context.fillText(formText, x, y - padding / 2)
-}
-}
-
-const filename = pageCount > 1
-? `${index + 1}_${sanitizeFilename(song.song_name)}_page${pageNum}.jpg`
-: `${index + 1}_${sanitizeFilename(song.song_name)}.jpg`
-
-if (isMobileDevice()) {
-await new Promise<void>((resolve, reject) => {
-canvas.toBlob(async (blob) => {
-if (!blob) {
-reject(new Error('Blob 생성 실패'))
-return
-}
-
-if (navigator.share && navigator.canShare) {
-try {
-const file = new File([blob], filename, { type: 'image/jpeg' })
-if (navigator.canShare({ files: [file] })) {
-await navigator.share({ files: [file], title: song.song_name })
-resolve()
-return
-}
-} catch (shareError: any) {
-if (shareError.name !== 'AbortError') {
-console.log('Share API 실패:', shareError)
-} else {
-resolve()
-return
-}
-}
-}
-
-const url = URL.createObjectURL(blob)
-window.open(url, '_blank')
-setTimeout(() => URL.revokeObjectURL(url), 1000)
-resolve()
-}, 'image/jpeg', 0.95)
-})
-} else {
-await new Promise<void>((resolve, reject) => {
-canvas.toBlob((blob) => {
-if (!blob) {
-reject(new Error('Blob 생성 실패'))
-return
-}
-
-const url = URL.createObjectURL(blob)
-const link = document.createElement('a')
-link.href = url
-link.download = filename
-link.click()
-URL.revokeObjectURL(url)
-resolve()
-}, 'image/jpeg', 0.95)
-})
-}
-
-if (pageNum < pageCount) {
-await new Promise(resolve => setTimeout(resolve, 300))
-}
-}
-} catch (error) {
-console.error('PDF 변환 오류:', error)
-throw error
-}
-}
-
-// 🆕 파일명에서 사용 불가능한 문자 제거
-const sanitizeFilename = (filename: string): string => {
-  return filename.replace(/[\\/:*?"<>|]/g, '_')
-}
-
-  // PPT 생성 함수
-  const generatePPTWithOptions = async (mode: 'form' | 'original') => {
-    if (selectedSongs.length === 0) {
-      alert('찬양을 선택해주세요.')
-      return
-    }
-
-    setDownloadingPPT(true)  // 👈 로딩 시작
-
-    try {
-      // 🆕 동적 import
-    const PptxGenJS = (await import('pptxgenjs')).default
-    const prs = new PptxGenJS()
-      
-      // 표지 슬라이드
-      const coverSlide = prs.addSlide()
-      coverSlide.background = { color: '1F2937' }
-      coverSlide.addText('찬양 콘티', {
-        x: 0.5,
-        y: 2.0,
-        w: 9,
-        h: 1.5,
-        fontSize: 60,
-        bold: true,
-        color: 'FFFFFF',
-        align: 'center'
-      })
-      coverSlide.addText(new Date().toLocaleDateString('ko-KR'), {
-        x: 0.5,
-        y: 3.8,
-        w: 9,
-        h: 0.5,
-        fontSize: 24,
-        color: '9CA3AF',
-        align: 'center'
-      })
-
-      // 각 곡 처리
-      for (const song of selectedSongs) {
-        const songForm = songForms[song.id]
-        
-        // 송폼 모드이고 송폼이 설정된 경우
-        if (mode === 'form' && songForm && songForm.length > 0 && song.song_structure) {
-          for (const abbr of songForm) {
-            const fullName = Object.keys(SECTION_ABBREVIATIONS).find(
-              key => SECTION_ABBREVIATIONS[key] === abbr
-            )
-            
-            if (fullName && song.song_structure[fullName]) {
-              const slide = prs.addSlide()
-              slide.background = { color: 'FFFFFF' }
-              
-              slide.addText(abbr, {
-                x: 0.5,
-                y: 0.3,
-                w: 9,
-                h: 0.5,
-                fontSize: 16,
-                bold: true,
-                color: '6B7280',
-                align: 'left'
-              })
-              
-              slide.addText(song.song_structure[fullName], {
-                x: 1,
-                y: 1.5,
-                w: 8,
-                h: 4,
-                fontSize: 28,
-                color: '111827',
-                align: 'center',
-                valign: 'middle'
-              })
-              
-              slide.addText(song.song_name, {
-                x: 0.5,
-                y: 6.5,
-                w: 9,
-                h: 0.3,
-                fontSize: 14,
-                color: '9CA3AF',
-                align: 'center'
-              })
-            }
-          }
-        } else {
-          // 원본 모드 또는 송폼 미설정: 악보 이미지 사용
-          if (song.file_url) {
-            const slide = prs.addSlide()
-            slide.addImage({
-              path: song.file_url,
-              x: 0,
-              y: 0,
-              w: '100%',
-              h: '100%',
-              sizing: { type: 'contain', w: '100%', h: '100%' }
-            })
-          }
-        }
-      }
-
-      await prs.writeFile({ fileName: `찬양콘티_${new Date().toISOString().split('T')[0]}.pptx` })
-
-      // 🆕 PPT 다운로드 로깅
-      if (user) {
-        await logPPTDownload(
-          selectedSongs.map(s => s.id),  // 🔹 첫 번째: 곡 ID 배열
-          undefined,                      // 🔹 두 번째: 콘티 ID (없으면 undefined)
-          user.id,                        // 🔹 세 번째: 사용자 ID
-          undefined                       // 🔹 네 번째: 팀 ID (없으면 undefined)
-        ).catch(error => {
-          console.error('Error logging PPT download:', error)
-        })
-      }
-
-      alert('✅ PPT가 생성되었습니다!')
-      setShowPPTModal(false)
-      
-    } catch (error) {
-      console.error('PPT 생성 오류:', error)
-      alert('❌ PPT 생성 중 오류가 발생했습니다.')
-    } finally {
-      setDownloadingPPT(false)  // 👈 로딩 종료
-    }
   }
 
-  const startPPTDownload = () => {
-    const hasSongForm = selectedSongs.some(song => 
-      songForms[song.id] && songForms[song.id].length > 0
-    )
-    
-    if (hasSongForm) {
-      setShowPPTModal(true)
-    } else {
-      generatePPTWithOptions('original')
-    }
-  }
 
   // 테마 다중 선택 토글
   const toggleThemeFilter = (theme: string) => {
@@ -2331,230 +1776,17 @@ onClick={() => setShowFilterPanel(false)}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row gap-3 md:gap-6">
           {/* 왼쪽: 필터 패널 */}
-<div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'}
-transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
-{showFilterPanel && (
-<div 
-className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] overflow-y-auto"
-onTouchStart={(e) => e.stopPropagation()}
-onTouchMove={(e) => e.stopPropagation()}
-onClick={(e) => e.stopPropagation()}
->
-{/* 모바일 닫기 버튼 */}
-{isMobile && (
-<div className="flex items-center justify-between mb-4 pb-2 border-b md:hidden">
-<h3 className="font-bold text-lg">필터</h3>
-<button
-onClick={() => setShowFilterPanel(false)}
-className="p-2 hover:bg-gray-100 rounded-lg"
->
-<X size={20} />
-</button>
-</div>
-)}
-<div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-lg">필터</h3>
-                  <button
-                    onClick={() => setFilters({
-                      season: '전체',
-                      themes: [],
-                      theme: '',
-                      key: '',
-                      isMinor: false,  // ← 추가!
-                      timeSignature: '',
-                      tempo: '',
-                      searchText: '',
-                      bpmMin: '',    // 👈 추가
-                      bpmMax: ''     // 👈 추가
-                    })}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    초기화
-                  </button>
-                </div>
-
-                {/* 절기 필터 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Calendar className="inline w-4 h-4 mr-1" />
-                    절기
-                  </label>
-                  <select
-                    value={filters.season}
-                    onChange={(e) => setFilters({ ...filters, season: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {SEASONS.map(season => (
-                      <option key={season} value={season}>{season}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 테마 필터 (다중 선택) */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Tag className="inline w-4 h-4 mr-1" />
-                    테마 (다중 선택)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {themes.map(theme => (
-                      <button
-                        key={theme}
-                        onClick={() => toggleThemeFilter(theme)}
-                        className={`px-3 py-1 rounded-full text-sm transition ${
-                          filters.themes.includes(theme)
-                            ? 'bg-[#C5D7F2] text-white'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
-                      >
-                        {theme}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Key 필터 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Music className="inline w-4 h-4 mr-1" />
-                    Key
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {keys.map(key => (
-                      <button
-                        key={key}
-                        onClick={() => setFilters({ 
-                          ...filters, 
-                          key: filters.key === key ? '' : key 
-                        })}
-                        className={`px-3 py-2 rounded text-sm font-medium transition ${
-                          filters.key === key
-                            ? 'bg-[#C5D7F2] text-white'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
-                      >
-                        {key}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Minor 버튼 추가 */}
-<button
-  onClick={() => setFilters({ ...filters, isMinor: !filters.isMinor })}
-  className={`w-full mt-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-    filters.isMinor
-      ? 'bg-[#C4BEE2] text-white'
-      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-  }`}
->
-  minor
-</button>
-</div>  {/* Key 필터 div 닫기 */}
-
-{/* 박자 필터 */}
-<div className="mb-6">
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    <Clock className="inline w-4 h-4 mr-1" />
-    박자
-  </label>
-  <select
-    value={filters.timeSignature}
-    onChange={(e) => setFilters({ ...filters, timeSignature: e.target.value })}
-    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-  >
-    <option value="">전체</option>
-    {timeSignatures.map(ts => (
-      <option key={ts} value={ts}>{ts}</option>
-    ))}
-  </select>
-</div>
-
-{/* 템포 필터 */}
-<div className="mb-6">
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    <Activity className="inline w-4 h-4 mr-1" />
-    템포
-  </label>
-  <div className="flex flex-wrap gap-2">
-    {tempos.map(tempo => (
-      <button
-        key={tempo}
-        onClick={() => setFilters({
-          ...filters,
-          tempo: filters.tempo === tempo ? '' : tempo
-        })}
-        className={`px-3 py-2 rounded text-sm transition whitespace-nowrap ${
-          filters.tempo === tempo
-            ? 'bg-[#C5D7F2] text-white'
-            : 'bg-gray-100 hover:bg-gray-200'
-        }`}
-      >
-        {tempo}
-      </button>
-    ))}
-  </div>
-</div>
-
-{/* BPM 범위 필터 */}
-<div className="mb-6">
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    <Activity className="inline w-4 h-4 mr-1" />
-    BPM 범위
-  </label>
-  <div className="flex items-center gap-2">
-    <input
-      type="number"
-      placeholder="최소"
-      value={filters.bpmMin}
-      onChange={(e) => setFilters({ ...filters, bpmMin: e.target.value })}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      min="0"
-    />
-    <span className="text-gray-500">~</span>
-    <input
-      type="number"
-      placeholder="최대"
-      value={filters.bpmMax}
-      onChange={(e) => setFilters({ ...filters, bpmMax: e.target.value })}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      min="0"
-    />
-  </div>
-  {/* 빠른 선택 버튼 */}
-  <div className="flex gap-2 mt-2">
-    <button
-      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '80' })}
-      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-    >
-      느림 (~80)
-    </button>
-    <button
-      onClick={() => setFilters({ ...filters, bpmMin: '80', bpmMax: '120' })}
-      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-    >
-      보통 (80-120)
-    </button>
-    <button
-      onClick={() => setFilters({ ...filters, bpmMin: '120', bpmMax: '' })}
-      className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-    >
-      빠름 (120~)
-    </button>
-  </div>
-  {/* 초기화 버튼 */}
-  {(filters.bpmMin || filters.bpmMax) && (
-    <button
-      onClick={() => setFilters({ ...filters, bpmMin: '', bpmMax: '' })}
-      className="w-full mt-2 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
-    >
-      BPM 필터 초기화
-    </button>
-  )}
-</div>
-
-</div>  
-)}
-</div>  {/* 필터 패널 전체 div 닫기 */}
+          <div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
+            <FilterPanel
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              onThemeToggle={toggleThemeFilter}
+              onReset={resetFilters}
+              onClose={() => setShowFilterPanel(false)}
+              isMobile={isMobile}
+              isVisible={showFilterPanel}
+            />
+          </div>
 
 {/* 오른쪽: 곡 목록 */}
 <div className="flex-1">
@@ -3697,137 +2929,18 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
       )}
 
       {/* 송폼 설정 모달 */}
-      {showFormModal && currentFormSong && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
-            <h3 className="text-2xl font-bold mb-4">
-              {currentFormSong.song_name} - 송폼 설정
-            </h3>
-
-            <div className="grid grid-cols-2 gap-6">
-              {/* 왼쪽: 사용 가능한 섹션 */}
-              <div>
-                <h4 className="font-bold mb-3 text-lg">사용 가능한 섹션</h4>
-                <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
-                  {availableSections.map(section => {
-                    const abbr = SECTION_ABBREVIATIONS[section]
-                    return (
-                      <button
-                        key={section}
-                        onClick={() => addSection(section)}
-                        className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
-                      >
-                        <span>{section}</span>
-                        <span className="text-sm bg-blue-200 px-2 py-1 
-rounded text-blue-900">{abbr}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-                
-                {/* 직접 입력 */}
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <h5 className="font-bold mb-2">직접 입력</h5>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={customSection}
-                      onChange={(e) => setCustomSection(e.target.value)}
-                      placeholder="예: 기도회, 멘트"
-                      className="flex-1 px-3 py-2 border rounded"
-                      onKeyPress={(e) => e.key === 'Enter' && addCustomSection()}
-                    />
-                    <button
-                      onClick={addCustomSection}
-                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                    >
-                      추가
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 오른쪽: 선택된 순서 */}
-<div className="flex flex-col h-[500px]">
-  <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
-  
-  {/* 스크롤 가능한 송폼 리스트 영역 */}
-  <div className="flex-1 overflow-y-auto border-2 border-dashed rounded-lg p-4 bg-gray-50">
-    {tempSelectedForm.length === 0 ? (
-      <p className="text-gray-400 text-center mt-20">
-        왼쪽에서 섹션을 선택하세요
-      </p>
-    ) : (
-      <div className="space-y-2">
-        {tempSelectedForm.map((abbr, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
-          >
-            <span className="font-bold text-green-900 flex-1 text-lg">
-              {index + 1}. {abbr}
-            </span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => moveSectionUp(index)}
-                disabled={index === 0}
-                className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                ↑
-              </button>
-              <button
-                onClick={() => moveSectionDown(index)}
-                disabled={index === tempSelectedForm.length - 1}
-                className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                ↓
-              </button>
-              <button
-                onClick={() => removeSection(index)}
-                className="px-2 py-1 bg-[#E26559] text-white rounded hover:bg-[#D14E42]"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-
-  {/* 미리보기 - 하단 고정 */}
-  {tempSelectedForm.length > 0 && (
-    <div className="flex-none mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-      <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
-      <p className="text-blue-800 font-mono">
-        {tempSelectedForm.join(' - ')}
-      </p>
-    </div>
-  )}
-</div>
-            </div>
-
-            {/* 버튼 */}
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowFormModal(false)
-                  setCurrentFormSong(null)
-                }}
-                className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium"
-              >
-                취소
-              </button>
-              <button
-                onClick={saveSongForm}
-                className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold"
-              >
-                저장
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SongFormModal
+        isOpen={showFormModal}
+        song={currentFormSong}
+        initialForm={currentFormSong ? (songForms[currentFormSong.id] || []) : []}
+        onSave={(songId, form) => {
+          setSongForms(prev => ({ ...prev, [songId]: form }))
+        }}
+        onClose={() => {
+          setShowFormModal(false)
+          setCurrentFormSong(null)
+        }}
+      />
 
       {/* 유튜브 모달 */}
       {youtubeModalSong && (
@@ -3870,62 +2983,11 @@ rounded text-blue-900">{abbr}</span>
         </div>
       )}
 
-      {/* 송폼 위치 선택 모달 */}
-{showPositionModal && (
-  <SongFormPositionModal
-    songs={selectedSongs.map(s => ({
-      id: s.id,
-      song_name: s.song_name,
-      file_url: s.file_url,
-      file_type: s.file_type,
-      selectedForm: songForms[s.id] || []
-    }))}
-    songForms={songForms}
-    onConfirm={generatePDF}
-    onCancel={() => setShowPositionModal(false)}
-  />
-)}
-
-      {/* ✅ 여기부터 새로 추가 ✅ */}
-      {/* PDF/PPT/이미지 다운로드 로딩 모달 */}
-{(downloadingPDF || downloadingPPT || downloadingImage) && (
-  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
-      {/* 스피너 */}
-      <div className="flex justify-center mb-4">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
-      </div>
-
-      {/* 제목 */}
-      <h3 className="text-xl font-bold text-gray-900 mb-2">
-        {downloadingPDF ? 'PDF 생성 중...' : downloadingImage ? '사진 다운로드 중...' : 'PPT 생성 중...'}
-      </h3>
-
-      {/* 설명 */}
-      <p className="text-gray-600 mb-4">
-        {downloadingPDF
-          ? '선택하신 곡들의 악보를 PDF로 생성하고 있습니다.'
-          : downloadingImage
-          ? '선택하신 곡들의 악보를 사진 파일로 다운로드하고 있습니다.'
-          : '선택하신 곡들의 가사를 PPT로 생성하고 있습니다.'}
-      </p>
-            
-            {/* 안내 메시지 */}
-            <p className="text-sm text-gray-500">
-              잠시만 기다려 주세요. 곡 수에 따라 시간이 소요될 수 있습니다.
-            </p>
-            
-            {/* 바운스 애니메이션 점들 */}
-            <div className="mt-6 flex justify-center gap-2">
-              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              <div className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ✅ 여기까지 새로 추가 ✅ */}
-      {/* ✅ 여기까지 새로 추가 ✅ */}
+      {/* 다운로드 로딩 모달 */}
+<DownloadLoadingModal 
+  isOpen={downloadingPDF || downloadingPPT || downloadingImage}
+  type={downloadingPDF ? 'pdf' : downloadingImage ? 'image' : 'ppt'}
+/>
 
       {/* 🎵 악보보기 모드 (전체화면) - 확대/축소 기능 추가 */}
 {showSheetViewer && currentSheetSong && (
@@ -4113,6 +3175,16 @@ rounded text-blue-900">{abbr}</span>
       </div>
     </div>
   </div>
+)}
+
+{/* 🆕 송폼 위치 선택 모달 */}
+{showPositionModal && (
+  <SongFormPositionModal
+    songs={selectedSongs.filter(song => songForms[song.id]?.length > 0)}
+    songForms={songForms}
+    onConfirm={(positions: any) => onPositionConfirm(positions)}
+    onCancel={onPositionCancel}
+  />
 )}
       
     </div>
