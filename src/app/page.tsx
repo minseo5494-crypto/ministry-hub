@@ -1681,7 +1681,7 @@ const hasMore = displayCount < filteredSongs.length
       </div>
 
       {/* 선택된 곡 상단바 */}
-      {selectedSongs.length > 0 && (
+      {selectedSongs.length > 0 && !(isMobile && showFilterPanel) && (
         <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
           <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
@@ -1770,12 +1770,12 @@ const hasMore = displayCount < filteredSongs.length
       )}
 
       {/* 모바일 필터 배경 오버레이 */}
-{isMobile && showFilterPanel && (
-<div 
-className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-onClick={() => setShowFilterPanel(false)}
-/>
-)}
+      {isMobile && showFilterPanel && (
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setShowFilterPanel(false)}
+        />
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row gap-3 md:gap-6">

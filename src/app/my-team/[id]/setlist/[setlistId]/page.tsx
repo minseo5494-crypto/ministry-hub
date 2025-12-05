@@ -1277,105 +1277,113 @@ const saveNote = async () => {
       {/* 헤더 */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.push(`/my-team/${teamId}`)}
-                className="mr-4 p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="text-2xl font-bold border-b-2 border-blue-500 focus:outline-none"
-                />
-              ) : (
-                <h1 className="text-2xl font-bold text-gray-900">{setlist.title}</h1>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              {isEditing ? (
-                <>
-                  {/* 편집 모드: 저장/취소 버튼 */}
-                  <button
-                    onClick={handleSaveEdit}
-                    className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
-                  >
-                    <Save className="mr-2" size={18} />
-                    저장
-                  </button>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                  >
-                    취소
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* 다운로드 버튼 - 모든 팀원 가능 */}
-                  <button
-                    onClick={generatePPTFile}
-                    disabled={downloadingPPT || songs.length === 0}
-                    className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center disabled:opacity-50"
-                    title="PPT 다운로드"
-                  >
-                    <Download className="mr-2" size={18} />
-                    {downloadingPPT ? 'PPT 생성 중...' : 'PPT'}
-                  </button>
-                  
-              
-              {/* 🎵 플레이리스트 공유 버튼 추가 */}
-              <button
-                onClick={handleSharePlaylist}
-                disabled={songs.length === 0}
-                className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50"
-                title="유튜브 플레이리스트 공유"
-              >
-                <Youtube className="mr-2" size={18} />
-                플레이리스트
-              </button>
-                  <button
-                    onClick={handleDownload}
-                    disabled={downloadingPDF || downloadingImage || songs.length === 0}
-                    className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50"
-                    title="악보 다운로드"
-                  >
-                    <FileDown className="mr-2" size={18} />
-                    {downloadingPDF || downloadingImage ? '다운로드 중...' : '악보 다운로드'}
-                  </button>
-                  
-                  {/* 수정/삭제 버튼 - leader/admin만 */}
-                  {canEdit() && (
-                    <>
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
-                      >
-                        <Edit className="mr-2" size={18} />
-                        수정
-                      </button>
-                      <button
-                        onClick={handleDeleteSetlist}
-                        className="px-4 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center"
-                      >
-                        <Trash2 className="mr-2" size={18} />
-                        삭제
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
+          {/* 상단: 제목 + 뒤로가기 */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => router.push(`/my-team/${teamId}`)}
+              className="p-2 hover:bg-gray-100 rounded-lg flex-shrink-0"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-xl md:text-2xl font-bold border-b-2 border-blue-500 focus:outline-none flex-1 min-w-0"
+              />
+            ) : (
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">{setlist.title}</h1>
+            )}
           </div>
 
-          {/* 콘티 정보 */}
-          {isEditing ? (
-            <div className="mt-4 grid grid-cols-2 gap-4">
+          {/* 콘티 정보 (날짜, 유형, 곡수) */}
+          {!isEditing && (
+            <div className="text-sm text-gray-600 mb-3">
+              {new Date(setlist.service_date).toLocaleDateString('ko-KR')} • {setlist.service_type} • {songs.length}곡
+            </div>
+          )}
+
+          {/* 버튼 영역 */}
+          <div className="flex flex-wrap items-center gap-2">
+            {isEditing ? (
+              <>
+                {/* 편집 모드: 저장/취소 버튼 */}
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center text-sm"
+                >
+                  <Save size={16} />
+                  <span className="ml-1.5">저장</span>
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="px-3 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
+                >
+                  취소
+                </button>
+              </>
+            ) : (
+              <>
+                {/* PPT 다운로드 */}
+                <button
+                  onClick={generatePPTFile}
+                  disabled={downloadingPPT || songs.length === 0}
+                  className="px-3 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
+                  title="PPT 다운로드"
+                >
+                  <Download size={16} />
+                  <span className="ml-1.5 hidden sm:inline">{downloadingPPT ? '생성중...' : 'PPT'}</span>
+                </button>
+
+                {/* 플레이리스트 공유 */}
+                <button
+                  onClick={handleSharePlaylist}
+                  disabled={songs.length === 0}
+                  className="px-3 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
+                  title="유튜브 플레이리스트 공유"
+                >
+                  <Youtube size={16} />
+                  <span className="ml-1.5 hidden sm:inline">플레이리스트</span>
+                </button>
+
+                {/* 악보 다운로드 */}
+                <button
+                  onClick={handleDownload}
+                  disabled={downloadingPDF || downloadingImage || songs.length === 0}
+                  className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
+                  title="악보 다운로드"
+                >
+                  <FileDown size={16} />
+                  <span className="ml-1.5 hidden sm:inline">{downloadingPDF || downloadingImage ? '다운로드중...' : '악보 다운로드'}</span>
+                </button>
+
+                {/* 수정/삭제 버튼 - leader/admin만 */}
+                {canEdit() && (
+                  <>
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center text-sm whitespace-nowrap"
+                    >
+                      <Edit size={16} />
+                      <span className="ml-1.5 hidden sm:inline">수정</span>
+                    </button>
+                    <button
+                      onClick={handleDeleteSetlist}
+                      className="px-3 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center text-sm whitespace-nowrap"
+                    >
+                      <Trash2 size={16} />
+                      <span className="ml-1.5 hidden sm:inline">삭제</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* 편집 모드: 날짜/유형 수정 */}
+          {isEditing && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-gray-600">예배 날짜</label>
                 <input
@@ -1394,10 +1402,6 @@ const saveNote = async () => {
                   className="w-full px-3 py-2 border rounded-lg"
                 />
               </div>
-            </div>
-          ) : (
-            <div className="mt-2 text-sm text-gray-600">
-              {new Date(setlist.service_date).toLocaleDateString('ko-KR')} • {setlist.service_type} • {songs.length}곡
             </div>
           )}
         </div>
