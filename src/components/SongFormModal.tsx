@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SECTION_ABBREVIATIONS } from '@/lib/supabase'
 
 interface Song {
@@ -35,6 +35,14 @@ export default function SongFormModal({
 }: SongFormModalProps) {
   const [tempSelectedForm, setTempSelectedForm] = useState<string[]>(initialForm)
   const [customSection, setCustomSection] = useState('')
+
+  // ✅ 곡이 바뀔 때마다 송폼 초기화
+useEffect(() => {
+  if (song && isOpen) {
+    setTempSelectedForm(initialForm)
+    setCustomSection('')
+  }
+}, [song?.id, isOpen])
 
   // 모달이 열릴 때마다 초기값 설정
   if (!isOpen || !song) return null

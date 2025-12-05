@@ -864,10 +864,22 @@ const handleTempoChange = (tempoValue: string) => {
       console.log('🔗 Public URL:', fileUrl)
     }
 
-    console.log('💾 DB에 곡 정보 저장 중...')
+    console.log('📝 DB에 곡 정보 저장 중...')
+    
+    // ✅ 디버깅: 저장할 데이터 확인
+    console.log('📋 저장할 곡 정보:', {
+      song_name: newSong.song_name,
+      team_name: newSong.team_name,
+      key: newSong.key,
+      time_signature: newSong.time_signature,  // ← 박자 값 확인
+      tempo: newSong.tempo,
+      bpm: newSong.bpm,
+      visibility: newSong.visibility
+    })
 
     // ✨ 핵심 변경: visibility에 따라 다른 테이블에 저장
     if (newSong.visibility === 'public') {
+
       // 전체 공개 → 승인 요청 테이블에 저장
       const { error: requestError } = await supabase
         .from('song_approval_requests')

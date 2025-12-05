@@ -12,6 +12,8 @@ interface SongApprovalRequest {
   team_name: string | null
   key: string | null
   bpm: number | null
+  time_signature: string | null  // ✅ 추가
+  tempo: string | null           // ✅ 추가
   themes: string[] | null
   season: string | null
   youtube_url: string | null
@@ -112,6 +114,8 @@ export default function SongApprovalsPage() {
           team_name: request.team_name,
           key: request.key,
           bpm: request.bpm,
+          time_signature: request.time_signature,  // ✅ 추가
+          tempo: request.tempo,                     // ✅ 추가
           themes: request.themes,
           season: request.season,
           youtube_url: request.youtube_url,
