@@ -414,6 +414,7 @@ const {
   onPositionConfirm,
   onPositionCancel,
   startDownloadWithFormat,
+  DownloadFormatModal,  // ✅ 추가
 } = useDownload({
   selectedSongs: downloadSongs,
   songForms: downloadSongForms,
@@ -1641,41 +1642,15 @@ const saveNote = async () => {
   </div>
 )}
 
-      {/* 🆕 다운로드 형식 선택 모달 */}
-{showFormatModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-      <h3 className="text-lg font-bold mb-4">다운로드 형식 선택</h3>
-      <div className="space-y-3">
-        <button
-          onClick={() => startDownloadWithFormat('pdf')}
-          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          📄 PDF로 다운로드
-        </button>
-        <button
-          onClick={() => startDownloadWithFormat('image')}
-          className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
-        >
-          🖼️ 이미지로 다운로드
-        </button>
-        <button
-          onClick={() => setShowFormatModal(false)}
-          className="w-full py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-        >
-          취소
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      {/* 🔄 다운로드 형식 선택 모달 - 공통 컴포넌트 */}
+<DownloadFormatModal />
       
-      {/* 🆕 송폼 위치 선택 모달 */}
+      {/* 📍 송폼 위치 선택 모달 */}
 {showPositionModal && (
   <SongFormPositionModal
     songs={downloadSongs.filter(song => downloadSongForms[song.id]?.length > 0)}
     songForms={downloadSongForms}
-    onConfirm={(positions: any, partTags: any) => (onPositionConfirm as any)(positions, partTags || {})}
+    onConfirm={onPositionConfirm}
     onCancel={onPositionCancel}
   />
 )}

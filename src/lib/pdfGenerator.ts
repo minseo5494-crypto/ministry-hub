@@ -565,3 +565,147 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     throw error
   }
 }
+
+/**
+ * 🆕 WYSIWYG 방식 PDF 생성 - 캔버스 이미지를 직접 PDF로 변환
+ */
+export const generatePDFFromCanvas = async (options: {
+  title: string
+  date: string
+  songs: PDFSong[]
+  canvasDataUrls: { [songId: string]: string }
+  includeCover?: boolean
+}) => {
+  const { title, date, songs, canvasDataUrls, includeCover = true } = options
+
+  if (songs.length === 0) {
+    throw new Error('곡이 없습니다.')
+  }
+
+  console.log('==================== WYSIWYG PDF 생성 시작 ====================')
+  console.log('곡 수:', songs.length)
+  console.log('캔버스 데이터:', Object.keys(canvasDataUrls))
+
+  try {
+    const pdfLib = await import('pdf-lib')
+    const { PDFDocument } = pdfLib
+    const jsPDFModule = await import('jspdf')
+    const jsPDF = jsPDFModule.default
+    const html2canvas = (await import('html2canvas')).default
+
+    const mergedPdf = await PDFDocument.create()
+
+    // A4 크기
+    const A4_WIDTH = 595.28
+    const A4_HEIGHT = 841.89
+
+    // 표지 생성
+    if (includeCover) {
+      const coverDiv = document.createElement('div')
+      coverDiv.style.cssText = `
+        width: 210mm;
+        height: 297mm;
+        padding: 60px;
+        background-color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        box-sizing: border-box;
+      `
+
+      coverDiv.innerHTML = `
+        <div style="text-align: center;">
+          <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
+            ${title}
+          </h1>
+          <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
+            ${date}
+          </p>
+        </div>
+        
+        <div style="margin-top: 80px;">
+          <h2 style="font-size: 24px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+            곡 목록
+          </h2>
+          <ol style="list-style: none; padding: 0; margin: 0;">
+            ${songs.map((song, i) => `
+              <li style="font-size: 18px; color: #4a5568; margin-bottom: 16px; padding-left: 30px; position: relative;">
+                <span style="position: absolute; left: 0; color: #3182ce; font-weight: 600;">${i + 1}.</span>
+                <strong style="color: #2d3748;">${song.song_name}</strong>
+                ${song.team_name ? `<span style="color: #718096;"> - ${song.team_name}</span>` : ''}
+                ${song.keyTransposed || song.key ? `<span style="color: #805ad5; margin-left: 10px;">(Key: ${song.keyTransposed || song.key})</span>` : ''}
+              </li>
+            `).join('')}
+          </ol>
+        </div>
+      `
+
+      document.body.appendChild(coverDiv)
+      const coverCanvas = await html2canvas(coverDiv, { scale: 2 })
+      document.body.removeChild(coverDiv)
+
+      const coverImgData = coverCanvas.toDataURL('image/png')
+      const coverPdf = new jsPDF('p', 'mm', 'a4')
+      coverPdf.addImage(coverImgData, 'PNG', 0, 0, 210, 297)
+      const coverPdfBytes = coverPdf.output('arraybuffer')
+      const coverDoc = await PDFDocument.load(coverPdfBytes)
+
+      const [coverPage] = await mergedPdf.copyPages(coverDoc, [0])
+      mergedPdf.addPage(coverPage)
+      console.log('✅ 표지 페이지 생성 완료')
+    }
+
+    // 각 곡의 캔버스 이미지를 PDF에 추가
+    for (let i = 0; i < songs.length; i++) {
+      const song = songs[i]
+      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
+
+      const canvasDataUrl = canvasDataUrls[song.id]
+      
+      if (!canvasDataUrl) {
+        console.warn(`⚠️ "${song.song_name}"의 캔버스 데이터가 없습니다. 건너뜁니다.`)
+        continue
+      }
+
+      try {
+        // Base64 데이터에서 이미지 추출
+        const base64Data = canvasDataUrl.split(',')[1]
+        const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+        
+        // PNG 이미지 임베드
+        const image = await mergedPdf.embedPng(imageBytes)
+        
+        // A4 페이지 생성
+        const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+        
+        // 이미지를 페이지 전체에 그리기
+        page.drawImage(image, {
+          x: 0,
+          y: 0,
+          width: A4_WIDTH,
+          height: A4_HEIGHT,
+        })
+
+        console.log(`✅ 페이지 추가 완료: ${song.song_name}`)
+        
+      } catch (error) {
+        console.error(`❌ "${song.song_name}" 처리 중 오류:`, error)
+      }
+    }
+
+    // PDF 다운로드
+    const pdfBytes = await mergedPdf.save()
+    const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${title}_${date.replace(/\./g, '')}.pdf`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    console.log('✅ WYSIWYG PDF 생성 완료!')
+    return true
+
+  } catch (error) {
+    console.error('PDF 생성 오류:', error)
+    throw error
+  }
+}
