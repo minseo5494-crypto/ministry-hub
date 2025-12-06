@@ -895,13 +895,14 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             {/* 미리보기 영역 */}
             <div className="flex-1 p-4 bg-gray-100 overflow-auto flex items-center justify-center">
               <div
-                ref={containerRef}
-                className="relative bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden cursor-crosshair"
-                style={{
-                  width: '480px',
-                  height: '680px',
-                  maxWidth: '100%'
-                }}
+  ref={containerRef}
+  className="relative bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden cursor-crosshair"
+  style={{
+    width: '480px',
+    aspectRatio: '210 / 297',
+    maxWidth: '100%',
+    maxHeight: 'calc(100vh - 350px)'
+  }}
                 onMouseDown={handlePreviewMouseDown}
                 onMouseMove={handlePreviewMouseMove}
                 onMouseUp={handlePreviewMouseUp}
@@ -942,28 +943,13 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 )}
 
                 {/* 드래그 안내 오버레이 */}
-                {draggingNewTag && (
-                  <div className="absolute inset-0 bg-purple-500 bg-opacity-10 border-4 border-dashed border-purple-400 flex items-center justify-center z-10 pointer-events-none">
-                    <p className="text-purple-600 font-bold text-lg">여기에 드롭하세요</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 현재 송폼 미리보기 텍스트 */}
-            <div className="p-3 bg-gray-50 border-t">
-              <div className="flex items-center justify-center gap-4">
-                <span className="text-sm text-gray-600">송폼:</span>
-                <span 
-                  className="font-bold px-3 py-1 rounded"
-                  style={{ 
-                    color: currentFormStyle.color,
-                    fontSize: `${Math.min(currentFormStyle.fontSize * 0.6, 24)}px`,
-                    opacity: currentFormStyle.opacity
-                  }}
-                >
-                  {formText || '(없음)'}
-                </span>
+{draggingNewTag && (
+  <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
+    <p className="bg-purple-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-lg">
+      여기에 드롭하세요
+    </p>
+  </div>
+)}
               </div>
             </div>
           </div>
