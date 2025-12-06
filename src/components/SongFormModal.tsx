@@ -20,10 +20,9 @@ interface SongFormModalProps {
 }
 
 const availableSections = [
-  'Intro', 'Verse1', 'Verse2', 'Verse3', 'Verse4',
-  'PreChorus', 'PreChorus1', 'PreChorus2',
-  'Chorus', 'Chorus1', 'Chorus2',
-  'Interlude', 'Bridge', 'Outro'
+  'Intro', 'Verse', 'Verse1', 'Verse2',
+  'PreChorus', 'Chorus', 'Interlude',
+  'Bridge', 'Tag', 'Outro'
 ]
 
 export default function SongFormModal({

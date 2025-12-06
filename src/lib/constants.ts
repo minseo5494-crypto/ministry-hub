@@ -33,12 +33,11 @@ export const TIME_SIGNATURES = ['3/4', '4/4', '6/8', '12/8'] as const;
 // 템포 목록
 export const TEMPOS = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름'] as const;
 
-// 송폼 섹션
+// 송폼 섹션 (10개로 단순화)
 export const SONG_FORM_SECTIONS = [
-  'Intro', 'Verse1', 'Verse2', 'Verse3', 'Verse4',
-  'PreChorus', 'PreChorus1', 'PreChorus2',
-  'Chorus', 'Chorus1', 'Chorus2',
-  'Interlude', 'Bridge', 'Outro'
+  'Intro', 'Verse', 'Verse1', 'Verse2',
+  'PreChorus', 'Chorus', 'Interlude',
+  'Bridge', 'Tag', 'Outro'
 ] as const;
 
 // 예배 유형
