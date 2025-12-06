@@ -8,7 +8,8 @@ import { parseLyrics } from '@/lib/lyricParser'
 import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
-  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown, BarChart3, Youtube, Trash2, Menu
+  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
+  BarChart3, Youtube, Trash2, Menu, Heart
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -57,10 +58,14 @@ export default function Home() {
   const USER_ID = user?.id || '00000000-0000-0000-0000-000000000001'
 
   // 기존 상태 유지
-  const [songs, setSongs] = useState<Song[]>([])
-  const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
-  const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
-  const [loading, setLoading] = useState(true)
+const [songs, setSongs] = useState<Song[]>([])
+const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
+const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
+const [loading, setLoading] = useState(true)
+
+// 🎵 좋아요 관련 상태
+const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
+const [sortBy, setSortBy] = useState<'recent' | 'likes' | 'name'>('recent')
 
   // 🆕 무한 스크롤을 위한 상태
 const [displayCount, setDisplayCount] = useState(20)
@@ -214,6 +219,13 @@ const {
   useEffect(() => {
     checkUser()
   }, [])
+
+  // 🎵 좋아요 데이터 로드
+useEffect(() => {
+  if (user) {
+    fetchLikeData()
+  }
+}, [user])
 
   // 🆕 PDF.js 초기화
   useEffect(() => {
@@ -746,6 +758,77 @@ const fetchSongs = async () => {
     }
   }
 
+  // 🎵 좋아요 데이터 로드
+const fetchLikeData = async () => {
+  if (!user) return
+  
+  try {
+    // 사용자의 좋아요 목록
+    const { data: userLikes } = await supabase
+      .from('song_likes')
+      .select('song_id')
+      .eq('user_id', user.id)
+    
+    if (userLikes) {
+      setLikedSongs(new Set(userLikes.map(l => l.song_id)))
+    }
+  } catch (error) {
+    console.error('좋아요 데이터 로드 실패:', error)
+  }
+}
+
+// 🎵 좋아요 토글
+const toggleLike = async (e: React.MouseEvent, songId: string) => {
+  e.stopPropagation()
+  
+  if (!user) {
+    alert('로그인이 필요합니다.')
+    return
+  }
+  
+  const isLiked = likedSongs.has(songId)
+  
+  try {
+    if (isLiked) {
+      // 좋아요 취소
+      await supabase
+        .from('song_likes')
+        .delete()
+        .eq('song_id', songId)
+        .eq('user_id', user.id)
+      
+      setLikedSongs(prev => {
+        const next = new Set(prev)
+        next.delete(songId)
+        return next
+      })
+      
+      // songs 상태에서 like_count 업데이트
+      setSongs(prev => prev.map(s => 
+        s.id === songId 
+          ? { ...s, like_count: Math.max(0, (s.like_count || 1) - 1) }
+          : s
+      ))
+    } else {
+      // 좋아요 추가
+      await supabase
+        .from('song_likes')
+        .insert({ song_id: songId, user_id: user.id })
+      
+      setLikedSongs(prev => new Set([...prev, songId]))
+      
+      // songs 상태에서 like_count 업데이트
+      setSongs(prev => prev.map(s => 
+        s.id === songId 
+          ? { ...s, like_count: (s.like_count || 0) + 1 }
+          : s
+      ))
+    }
+  } catch (error) {
+    console.error('좋아요 처리 실패:', error)
+  }
+}
+
   // 🆕 미리보기 토글
   const togglePreview = (songId: string) => {
     setPreviewStates(prev => ({
@@ -877,63 +960,70 @@ const handleTempoChange = (tempoValue: string) => {
       visibility: newSong.visibility
     })
 
-    // ✨ 핵심 변경: visibility에 따라 다른 테이블에 저장
-    if (newSong.visibility === 'public') {
+    // ✨ 임시 변경: 모든 곡을 바로 songs 테이블에 저장 (승인 프로세스 비활성화)
+// 나중에 복원하려면 이 주석 아래의 원본 코드 참고
 
-      // 전체 공개 → 승인 요청 테이블에 저장
-      const { error: requestError } = await supabase
-        .from('song_approval_requests')
-        .insert({
-          song_name: newSong.song_name.trim(),
-          team_name: newSong.team_name.trim() || null,
-          key: newSong.key || null,
-          time_signature: newSong.time_signature || null,
-          tempo: newSong.tempo || null,
-          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
-          themes: newSong.themes.length > 0 ? newSong.themes : null,
-          season: newSong.season || null,
-          youtube_url: newSong.youtube_url.trim() || null,
-          lyrics: newSong.lyrics.trim() || null,
-          file_url: fileUrl || null,
-          file_type: fileType || null,
-          requester_id: user.id,
-          visibility: 'public',
-          status: 'pending'
-        })
+const { error: insertError } = await supabase
+  .from('songs')
+  .insert({
+    song_name: newSong.song_name.trim(),
+    team_name: newSong.team_name.trim() || null,
+    key: newSong.key || null,
+    time_signature: newSong.time_signature || null,
+    tempo: newSong.tempo || null,
+    bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+    themes: newSong.themes.length > 0 ? newSong.themes : null,
+    season: newSong.season || null,
+    youtube_url: newSong.youtube_url.trim() || null,
+    lyrics: newSong.lyrics.trim() || null,
+    file_url: fileUrl || null,
+    file_type: fileType || null,
+    uploaded_by: user.id,
+    visibility: newSong.visibility,
+    shared_with_teams: newSong.visibility === 'teams'
+      ? newSong.shared_with_teams
+      : null,
+    is_user_uploaded: true
+  })
 
-      if (requestError) throw requestError
+if (insertError) throw insertError
 
-      alert('✅ 곡이 제출되었습니다!\n관리자 승인 후 전체 공개됩니다.')
+alert('✅ 곡이 추가되었습니다!')
 
-    } else {
-      // 팀 공개 또는 비공개 → 바로 songs 테이블에 저장
-      const { error: insertError } = await supabase
-        .from('songs')
-        .insert({
-          song_name: newSong.song_name.trim(),
-          team_name: newSong.team_name.trim() || null,
-          key: newSong.key || null,
-          time_signature: newSong.time_signature || null,
-          tempo: newSong.tempo || null,
-          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
-          themes: newSong.themes.length > 0 ? newSong.themes : null,
-          season: newSong.season || null,
-          youtube_url: newSong.youtube_url.trim() || null,
-          lyrics: newSong.lyrics.trim() || null,
-          file_url: fileUrl || null,
-          file_type: fileType || null,
-          uploaded_by: user.id,
-          visibility: newSong.visibility,
-          shared_with_teams: newSong.visibility === 'teams' 
-            ? newSong.shared_with_teams 
-            : null,
-          is_user_uploaded: true
-        })
+/* ========== 원본 코드 (나중에 복원용) ==========
+if (newSong.visibility === 'public') {
+  // 전체 공개 → 승인 요청 테이블에 저장
+  const { error: requestError } = await supabase
+    .from('song_approval_requests')
+    .insert({
+      song_name: newSong.song_name.trim(),
+      team_name: newSong.team_name.trim() || null,
+      key: newSong.key || null,
+      time_signature: newSong.time_signature || null,
+      tempo: newSong.tempo || null,
+      bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+      themes: newSong.themes.length > 0 ? newSong.themes : null,
+      season: newSong.season || null,
+      youtube_url: newSong.youtube_url.trim() || null,
+      lyrics: newSong.lyrics.trim() || null,
+      file_url: fileUrl || null,
+      file_type: fileType || null,
+      requester_id: user.id,
+      visibility: 'public',
+      status: 'pending'
+    })
 
-      if (insertError) throw insertError
-
-      alert('✅ 곡이 추가되었습니다!')
-    }
+  if (requestError) throw requestError
+  alert('✅ 곡이 제출되었습니다!\n관리자 승인 후 전체 공개됩니다.')
+} else {
+  // 팀 공개 또는 비공개 → 바로 songs 테이블에 저장
+  const { error: insertError } = await supabase
+    .from('songs')
+    .insert({...})
+  if (insertError) throw insertError
+  alert('✅ 곡이 추가되었습니다!')
+}
+========== 원본 코드 끝 ========== */
 
     console.log('✅ 곡 저장 완료')
 
@@ -1137,6 +1227,14 @@ const handleTempoChange = (tempoValue: string) => {
       })
     }
 
+    // 🎵 정렬 적용
+if (sortBy === 'likes') {
+  result.sort((a, b) => ((b as any).like_count || 0) - ((a as any).like_count || 0))
+} else if (sortBy === 'name') {
+  result.sort((a, b) => a.song_name.localeCompare(b.song_name, 'ko'))
+}
+// 'recent'는 기본 정렬 (created_at desc) 유지
+
     setFilteredSongs(result)
     setFocusedSongIndex(-1)
 
@@ -1154,7 +1252,7 @@ const handleTempoChange = (tempoValue: string) => {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user])
+  }, [songs, filters, user, sortBy])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1823,9 +1921,20 @@ const hasMore = displayCount < filteredSongs.length
   : `${filteredSongs.length}개의 찬양`
 }
 </span>
-      </div>
 
-      <div className="flex items-center gap-2">
+        {/* 🎵 정렬 드롭다운 */}
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="recent">최신순</option>
+          <option value="likes">좋아요순</option>
+          <option value="name">이름순</option>
+        </select>
+    </div>
+
+    <div className="flex items-center gap-2">
         <button
           onClick={() => setViewMode('grid')}
           className={`p-2 rounded-lg transition ${
@@ -2104,6 +2213,22 @@ const hasMore = displayCount < filteredSongs.length
             <Youtube size={18} />
           </button>
 
+          {/* 🎵 좋아요 버튼 */}
+          <button
+            onClick={(e) => toggleLike(e, song.id)}
+            className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
+              likedSongs.has(song.id)
+                ? 'text-red-500 bg-red-50'
+                : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+            }`}
+            title={likedSongs.has(song.id) ? '좋아요 취소' : '좋아요'}
+          >
+            <Heart size={18} fill={likedSongs.has(song.id) ? 'currentColor' : 'none'} />
+            {((song as any).like_count || 0) > 0 && (
+              <span className="text-xs">{(song as any).like_count}</span>
+            )}
+          </button>
+
           {/* 송폼 설정 버튼 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
@@ -2325,7 +2450,7 @@ autoComplete="off"
                       onChange={(e) => {
                         setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })
                         // ✨ 경고문 추가
-                        alert('⚠️ 전체 공개로 선택하시면 관리자 승인 후 공개됩니다.\n\n바로 사용하시려면 "팀 공유" 또는 "나만 보기"를 선택해주세요.')
+                        //alert('⚠️ 전체 공개로 선택하시면 관리자 승인 후 공개됩니다.\n\n바로 사용하시려면 "팀 공유" 또는 "나만 보기"를 선택해주세요.')
                       }}
                       className="mr-3"
                     />
@@ -2906,18 +3031,18 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
       {/* 송폼 설정 모달 */}
       <SongFormModal
-        isOpen={showFormModal}
-        song={currentFormSong}
-        initialForm={currentFormSong ? (songForms[currentFormSong.id] || []) : []}
-        onSave={(songId, form) => {
-          setSongForms(prev => ({ ...prev, [songId]: form }))
-        }}
-        onClose={() => {
-          setShowFormModal(false)
-          setCurrentFormSong(null)
-        }}
-      />
-
+  isOpen={showFormModal}
+  song={currentFormSong}
+  initialForm={currentFormSong ? (songForms[currentFormSong.id] || []) : []}
+  onSave={(songId, form) => {
+    setSongForms(prev => ({ ...prev, [songId]: form }))
+  }}
+  onClose={() => {
+    setShowFormModal(false)
+    setCurrentFormSong(null)
+  }}
+  userId={user?.id}
+/>
       {/* 유튜브 모달 */}
       {youtubeModalSong && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">

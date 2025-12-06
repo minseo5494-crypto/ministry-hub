@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, Globe,
-  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus
+  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart
 } from 'lucide-react'
 import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
@@ -53,8 +53,12 @@ export default function MyPagePage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [songs, setSongs] = useState<UploadedSong[]>([])
-  const [userTeams, setUserTeams] = useState<Team[]>([])
-  const [activeTab, setActiveTab] = useState<'songs'>('songs')
+const [userTeams, setUserTeams] = useState<Team[]>([])
+const [activeTab, setActiveTab] = useState<'uploaded' | 'liked'>('uploaded')
+
+// 🎵 좋아요한 곡 관련 상태
+const [likedSongs, setLikedSongs] = useState<UploadedSong[]>([])
+const [loadingLiked, setLoadingLiked] = useState(false)
 
   
   // 공유 설정 모달
@@ -165,6 +169,7 @@ const {
     if (user) {
       fetchUploadedSongs()
       fetchUserTeams()
+      fetchLikedSongs()  // 🎵 추가
     }
   }, [user])
 
@@ -258,6 +263,50 @@ const {
       console.log('팀 로드 완료:', teams.length)
     } catch (error) {
       console.error('Error fetching teams:', error)
+    }
+  }
+
+  // 🎵 좋아요한 곡 불러오기
+  const fetchLikedSongs = async () => {
+    if (!user) return
+    
+    setLoadingLiked(true)
+    try {
+      // 1. 사용자의 좋아요 목록 가져오기
+      const { data: likes, error: likesError } = await supabase
+        .from('song_likes')
+        .select('song_id, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      
+      if (likesError) throw likesError
+      
+      if (!likes || likes.length === 0) {
+        setLikedSongs([])
+        return
+      }
+      
+      // 2. 좋아요한 곡들의 상세 정보 가져오기
+      const songIds = likes.map(l => l.song_id)
+      const { data: songsData, error: songsError } = await supabase
+        .from('songs')
+        .select('*')
+        .in('id', songIds)
+      
+      if (songsError) throw songsError
+      
+      // 3. 좋아요 순서대로 정렬
+      const orderedSongs = songIds
+        .map(id => songsData?.find(s => s.id === id))
+        .filter(Boolean) as UploadedSong[]
+      
+      setLikedSongs(orderedSongs)
+      console.log(`✅ 좋아요한 곡 ${orderedSongs.length}개 로드`)
+    } catch (error) {
+      console.error('좋아요한 곡 로드 실패:', error)
+      setLikedSongs([])
+    } finally {
+      setLoadingLiked(false)
     }
   }
 
@@ -625,93 +674,174 @@ setNewSong({ ...newSong, tempo: tempoValue })
         {/* 곡 목록 */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
-            <h2 className="text-lg font-bold">
-              내가 추가한 곡 ({filteredSongs.length}개)
-            </h2>
+            {/* 🎵 탭 전환 */}
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab('uploaded')}
+                className={`text-lg font-bold pb-2 border-b-2 transition ${
+                  activeTab === 'uploaded'
+                    ? 'text-gray-900 border-blue-500'
+                    : 'text-gray-400 border-transparent hover:text-gray-600'
+                }`}
+              >
+                내가 추가한 곡 ({filteredSongs.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('liked')}
+                className={`text-lg font-bold pb-2 border-b-2 transition ${
+                  activeTab === 'liked'
+                    ? 'text-gray-900 border-red-500'
+                    : 'text-gray-400 border-transparent hover:text-gray-600'
+                }`}
+              >
+                ❤️ 좋아요한 곡 ({likedSongs.length})
+              </button>
+            </div>
           </div>
 
-          {filteredSongs.length === 0 ? (
-            <div className="text-center py-12">
-              <Music className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">
-                {searchText || visibilityFilter !== 'all'
-                  ? '검색 결과가 없습니다' 
-                  : '아직 추가한 곡이 없습니다'}
-              </p>
-              {!searchText && visibilityFilter === 'all' && (
-                <button
-                  onClick={() => setShowAddSongModal(true)}
-                  className="mt-4 px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] inline-flex items-center"
-                >
-                  <Plus className="mr-2" size={18} />
-                  첫 곡 업로드하기
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y">
-              {filteredSongs.map((song) => (
-                <div key={song.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        {song.team_name && <span>{song.team_name}</span>}
-                        {song.key && <span>Key: {song.key}</span>}
-                        {song.time_signature && <span>{song.time_signature}</span>}
-                        {song.tempo && <span>{song.tempo}</span>}
-                        {song.bpm && <span>{song.bpm}BPM</span>}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {renderVisibilityBadge(song)}
-                        {song.themes?.map(theme => (
-                          <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-                            {theme}
-                          </span>
-                        ))}
-                        {song.season && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
-                            {song.season}
-                          </span>
-                        )}
-                      </div>
-                      {song.usage_count !== undefined && song.usage_count > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          사용 횟수: {song.usage_count}회
-                          {song.usage_count_last_30_days !== undefined && song.usage_count_last_30_days > 0 && (
-                            <span className="ml-2">(최근 30일: {song.usage_count_last_30_days}회)</span>
+          {/* 🎵 내가 추가한 곡 탭 */}
+          {activeTab === 'uploaded' && (
+            <>
+              {filteredSongs.length === 0 ? (
+                <div className="text-center py-12">
+                  <Music className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">
+                    {searchText || visibilityFilter !== 'all'
+                      ? '검색 결과가 없습니다' 
+                      : '아직 추가한 곡이 없습니다'}
+                  </p>
+                  {!searchText && visibilityFilter === 'all' && (
+                    <button
+                      onClick={() => setShowAddSongModal(true)}
+                      className="mt-4 px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] inline-flex items-center"
+                    >
+                      <Plus className="mr-2" size={18} />
+                      첫 곡 업로드하기
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredSongs.map((song) => (
+                    <div key={song.id} className="p-4 hover:bg-gray-50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            {song.team_name && <span>{song.team_name}</span>}
+                            {song.key && <span>Key: {song.key}</span>}
+                            {song.time_signature && <span>{song.time_signature}</span>}
+                            {song.tempo && <span>{song.tempo}</span>}
+                            {song.bpm && <span>{song.bpm}BPM</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {renderVisibilityBadge(song)}
+                            {song.themes?.map(theme => (
+                              <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                {theme}
+                              </span>
+                            ))}
+                            {song.season && (
+                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
+                                {song.season}
+                              </span>
+                            )}
+                          </div>
+                          {song.usage_count !== undefined && song.usage_count > 0 && (
+                            <div className="mt-2 text-xs text-gray-500">
+                              사용 횟수: {song.usage_count}회
+                              {song.usage_count_last_30_days !== undefined && song.usage_count_last_30_days > 0 && (
+                                <span className="ml-2">(최근 30일: {song.usage_count_last_30_days}회)</span>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex gap-2 ml-4">
-{song.file_url && (
-<button
-onClick={() => setPreviewSong(song)}
-className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-title="미리보기"
->
-<Eye size={20} />
-</button>
-)}
-<button
-onClick={() => handleDeleteSong(song)}
-disabled={deleting === song.id}
-className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
-title="삭제"
->
-{deleting === song.id ? (
-  <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-) : (
-  <Trash2 size={20} />
-)}
-</button>
-</div>
-                  </div>
+                        <div className="flex gap-2 ml-4">
+                          {song.file_url && (
+                            <button
+                              onClick={() => setPreviewSong(song)}
+                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                              title="미리보기"
+                            >
+                              <Eye size={20} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteSong(song)}
+                            disabled={deleting === song.id}
+                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
+                            title="삭제"
+                          >
+                            {deleting === song.id ? (
+                              <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 size={20} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          )}
+
+          {/* 🎵 좋아요한 곡 탭 */}
+          {activeTab === 'liked' && (
+            <>
+              {loadingLiked ? (
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <p className="mt-4 text-gray-600">불러오는 중...</p>
+                </div>
+              ) : likedSongs.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Heart size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg">좋아요한 곡이 없습니다</p>
+                  <p className="text-sm mt-2">메인 페이지에서 마음에 드는 곡에 ❤️를 눌러보세요!</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {likedSongs.map((song) => (
+                    <div
+                      key={song.id}
+                      className="p-4 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setPreviewSong(song)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            {song.team_name && <span>{song.team_name}</span>}
+                            {song.key && <span>Key: {song.key}</span>}
+                            {song.time_signature && <span>{song.time_signature}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {song.themes?.map(theme => (
+                              <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                {theme}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {song.file_url && (
+                            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
+                              악보
+                            </span>
+                          )}
+                          <span className="text-xs px-2 py-1 bg-red-100 text-red-500 rounded flex items-center gap-1">
+                            <Heart size={12} fill="currentColor" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -747,31 +877,7 @@ title="삭제"
               </button>
             </div>
 
-            {/* ✨ 새로 추가: 탭 네비게이션 ✨ */}
-<div className="flex gap-4 mb-8 border-b">
-  <button
-    onClick={() => setActiveTab('songs')}
-    className={`pb-3 px-4 font-medium transition-colors relative ${
-      activeTab === 'songs'
-        ? 'text-blue-600'
-        : 'text-gray-600 hover:text-gray-900'
-    }`}
-  >
-    <div className="flex items-center gap-2">
-      <Music size={18} />
-      내가 추가한 곡
-    </div>
-    {activeTab === 'songs' && (
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#C5D7F2]"></div>
-    )}
-  </button>
-
-  <button
-    onClick={() => router.push('/my-page/settings')}
-    className="pb-3 px-4 font-medium text-gray-600 hover:text-gray-900 transition-colors"
-  >
-  </button>
-</div>
+            
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
               <div>

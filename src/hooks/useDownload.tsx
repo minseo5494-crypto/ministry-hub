@@ -228,34 +228,6 @@ export function useDownload({
                 </div>
               </label>
             )}
-            
-            {/* 여백 조절 */}
-            <div className="p-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium">📐 악보 크기 조절</span>
-                <span className="text-sm text-blue-600 font-medium">
-                  {downloadOptions.marginPercent === 0 ? '기본' : `+${downloadOptions.marginPercent}%`}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="30"
-                step="5"
-                value={downloadOptions.marginPercent}
-                onChange={(e) => setDownloadOptions(prev => ({
-                  ...prev, marginPercent: Number(e.target.value)
-                }))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>기본</span>
-                <span>크게</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                여백을 줄여 악보를 더 크게 표시합니다
-              </p>
-            </div>
           </div>
           
           {/* 형식 선택 */}

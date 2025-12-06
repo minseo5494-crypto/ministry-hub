@@ -82,8 +82,9 @@ export interface Song {
   is_part_specific?: boolean
   part?: string
   version_info?: string
-  visibility?: 'private' | 'team' | 'public'
+  visibility?: 'private' | 'teams' | 'public'
   upload_status?: 'pending' | 'completed' | 'failed'
+  like_count?: number  // 🎵 좋아요 수 추가
 }
 
 // Folder 타입 정의
@@ -131,22 +132,17 @@ export interface SetlistSong {
   updated_at?: string
 }
 
-// 송폼 섹션 타입
-export type SongSection = 
-  | 'Intro' 
+// 송폼 섹션 타입 (10개로 단순화)
+export type SongSection =
+  | 'Intro'
   | 'Verse'
-  | 'Verse1' 
-  | 'Verse2' 
-  | 'Verse3'
-  | 'Verse4'
+  | 'Verse1'
+  | 'Verse2'
   | 'PreChorus'
-  | 'PreChorus1' 
-  | 'PreChorus2'
   | 'Chorus'
-  | 'Chorus1'
-  | 'Chorus2'
-  | 'Interlude' 
-  | 'Bridge' 
+  | 'Interlude'
+  | 'Bridge'
+  | 'Tag'
   | 'Outro'
 
 // 송폼 축약어 매핑
@@ -155,16 +151,11 @@ export const SECTION_ABBREVIATIONS: { [key: string]: string } = {
   'Verse': 'V',
   'Verse1': 'V1',
   'Verse2': 'V2',
-  'Verse3': 'V3',
-  'Verse4': 'V4',
   'PreChorus': 'Pc',
-  'PreChorus1': 'Pc1',
-  'PreChorus2': 'Pc2',
   'Chorus': 'C',
-  'Chorus1': 'C1',
-  'Chorus2': 'C2',
   'Interlude': '간주',
   'Bridge': 'B',
+  'Tag': 'T',
   'Outro': 'Out'
 }
 
