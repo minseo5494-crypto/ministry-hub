@@ -54,7 +54,7 @@ interface UseDownloadReturn {
   onPositionConfirm: (
     songFormStyles: { [key: string]: SongFormStyle },
     partTagStyles: { [songId: string]: PartTagStyle[] },
-    canvasDataUrls: { [songId: string]: string }
+    canvasDataUrls: { [songId: string]: string[] }
   ) => void
   onPositionCancel: () => void
   startDownloadWithFormat: (format: 'pdf' | 'image') => void
@@ -131,7 +131,7 @@ export function useDownload({
   const onPositionConfirm = useCallback((
     songFormStyles: { [key: string]: SongFormStyle },
     partTagStyles: { [songId: string]: PartTagStyle[] },
-    canvasDataUrls: { [songId: string]: string }
+    canvasDataUrls: { [songId: string]: string[] }
   ): void => {
     console.log('📦 useDownload - songFormStyles 받음:', songFormStyles)
     console.log('🏷️ useDownload - partTagStyles 받음:', partTagStyles)
@@ -269,53 +269,62 @@ export function useDownload({
   }, [showFormatModal, downloadOptions, hasSongsWithForms, startDownloadWithFormat])
   
   // ========================================
-  // canvasDataUrls에서 이미지 다운로드
+  // 🆕 canvasDataUrls에서 이미지 다운로드 (다중 페이지 지원)
   // ========================================
-  const downloadImagesFromCanvas = async (canvasDataUrls: { [songId: string]: string }) => {
+  const downloadImagesFromCanvas = async (canvasDataUrls: { [songId: string]: string[] }) => {
     setDownloadingImage(true)
-    
+
     const currentSongs = selectedSongsRef.current
-    const opts = downloadOptionsRef.current
-    
+
     try {
-      console.log(`✅ 캔버스 이미지 다운로드 시작: ${Object.keys(canvasDataUrls).length}개`)
-      
+      console.log(`✅ 캔버스 이미지 다운로드 시작: ${Object.keys(canvasDataUrls).length}개 곡`)
+
       let downloadCount = 0
-      
+
       for (let i = 0; i < currentSongs.length; i++) {
         const song = currentSongs[i]
-        const canvasDataUrl = canvasDataUrls[song.id]
-        
-        if (!canvasDataUrl) {
+        const canvasDataUrlArray = canvasDataUrls[song.id]
+
+        if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
           if (song.file_url) {
             await downloadOriginalFile(song, i)
             downloadCount++
           }
           continue
         }
-        
+
         try {
-          const jpgBlob = await convertToJpg(canvasDataUrl)
-          
-          const filename = sanitizeFilename(`${String(i + 1).padStart(2, '0')}_${song.song_name}`)
-          
-          if (isMobileDevice() && navigator.share) {
-            const file = new File([jpgBlob], `${filename}.jpg`, { type: 'image/jpeg' })
-            await navigator.share({ files: [file] })
-          } else {
-            const url = URL.createObjectURL(jpgBlob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${filename}.jpg`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
+          // 🆕 모든 페이지 다운로드
+          for (let pageIdx = 0; pageIdx < canvasDataUrlArray.length; pageIdx++) {
+            const canvasDataUrl = canvasDataUrlArray[pageIdx]
+            const jpgBlob = await convertToJpg(canvasDataUrl)
+
+            const pageSuffix = canvasDataUrlArray.length > 1 ? `_p${pageIdx + 1}` : ''
+            const filename = sanitizeFilename(`${String(i + 1).padStart(2, '0')}_${song.song_name}${pageSuffix}`)
+
+            if (isMobileDevice() && navigator.share) {
+              const file = new File([jpgBlob], `${filename}.jpg`, { type: 'image/jpeg' })
+              await navigator.share({ files: [file] })
+            } else {
+              const url = URL.createObjectURL(jpgBlob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${filename}.jpg`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              URL.revokeObjectURL(url)
+            }
+
+            // 페이지 간 딜레이
+            if (pageIdx < canvasDataUrlArray.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 200))
+            }
           }
-          
+
           downloadCount++
-          console.log(`✅ 다운로드 완료: ${song.song_name}`)
-          
+          console.log(`✅ 다운로드 완료: ${song.song_name} (${canvasDataUrlArray.length}페이지)`)
+
           if (i < currentSongs.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 300))
           }
@@ -323,7 +332,7 @@ export function useDownload({
           console.error(`❌ ${song.song_name} 다운로드 실패:`, error)
         }
       }
-      
+
       alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!\n\n※ 브라우저에서 여러 파일 다운로드를 차단한 경우\n설정에서 허용해주세요.`)
     } catch (error) {
       console.error('다운로드 오류:', error)
@@ -391,9 +400,9 @@ export function useDownload({
   }
   
   // ========================================
-  // WYSIWYG PDF 생성 (canvasDataUrls 사용)
+  // 🆕 WYSIWYG PDF 생성 (다중 페이지 지원)
   // ========================================
-  const generatePDFFromCanvasData = async (canvasDataUrls: { [songId: string]: string }) => {
+  const generatePDFFromCanvasData = async (canvasDataUrls: { [songId: string]: string[] }) => {
     setDownloadingPDF(true)
     
     try {

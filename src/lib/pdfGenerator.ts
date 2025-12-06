@@ -567,13 +567,13 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
 }
 
 /**
- * 🆕 WYSIWYG 방식 PDF 생성 - 캔버스 이미지를 직접 PDF로 변환
+ * 🆕 WYSIWYG 방식 PDF 생성 - 다중 페이지 지원
  */
 export const generatePDFFromCanvas = async (options: {
   title: string
   date: string
   songs: PDFSong[]
-  canvasDataUrls: { [songId: string]: string }
+  canvasDataUrls: { [songId: string]: string[] }  // 🆕 다중 페이지
   includeCover?: boolean
 }) => {
   const { title, date, songs, canvasDataUrls, includeCover = true } = options
@@ -582,7 +582,7 @@ export const generatePDFFromCanvas = async (options: {
     throw new Error('곡이 없습니다.')
   }
 
-  console.log('==================== WYSIWYG PDF 생성 시작 ====================')
+  console.log('==================== WYSIWYG PDF 생성 시작 (다중 페이지) ====================')
   console.log('곡 수:', songs.length)
   console.log('캔버스 데이터:', Object.keys(canvasDataUrls))
 
@@ -620,7 +620,7 @@ export const generatePDFFromCanvas = async (options: {
             ${date}
           </p>
         </div>
-        
+
         <div style="margin-top: 80px;">
           <h2 style="font-size: 24px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
             곡 목록
@@ -653,39 +653,46 @@ export const generatePDFFromCanvas = async (options: {
       console.log('✅ 표지 페이지 생성 완료')
     }
 
-    // 각 곡의 캔버스 이미지를 PDF에 추가
+    // 🆕 각 곡의 모든 페이지를 PDF에 추가
     for (let i = 0; i < songs.length; i++) {
       const song = songs[i]
-      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
+      const canvasDataUrlArray = canvasDataUrls[song.id]
 
-      const canvasDataUrl = canvasDataUrls[song.id]
-      
-      if (!canvasDataUrl) {
+      if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
         console.warn(`⚠️ "${song.song_name}"의 캔버스 데이터가 없습니다. 건너뜁니다.`)
         continue
       }
 
-      try {
-        // Base64 데이터에서 이미지 추출
-        const base64Data = canvasDataUrl.split(',')[1]
-        const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
-        
-        // PNG 이미지 임베드
-        const image = await mergedPdf.embedPng(imageBytes)
-        
-        // A4 페이지 생성
-        const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
-        
-        // 이미지를 페이지 전체에 그리기
-        page.drawImage(image, {
-          x: 0,
-          y: 0,
-          width: A4_WIDTH,
-          height: A4_HEIGHT,
-        })
+      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name} (${canvasDataUrlArray.length}페이지)`)
 
-        console.log(`✅ 페이지 추가 완료: ${song.song_name}`)
-        
+      try {
+        // 🆕 모든 페이지 순회
+        for (let pageIdx = 0; pageIdx < canvasDataUrlArray.length; pageIdx++) {
+          const canvasDataUrl = canvasDataUrlArray[pageIdx]
+          
+          // Base64 데이터에서 이미지 추출
+          const base64Data = canvasDataUrl.split(',')[1]
+          const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+
+          // PNG 이미지 임베드
+          const image = await mergedPdf.embedPng(imageBytes)
+
+          // A4 페이지 생성
+          const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+
+          // 이미지를 페이지 전체에 그리기
+          page.drawImage(image, {
+            x: 0,
+            y: 0,
+            width: A4_WIDTH,
+            height: A4_HEIGHT,
+          })
+
+          console.log(`  ✅ 페이지 ${pageIdx + 1}/${canvasDataUrlArray.length} 추가 완료`)
+        }
+
+        console.log(`✅ ${song.song_name} 완료 (${canvasDataUrlArray.length}페이지)`)
+
       } catch (error) {
         console.error(`❌ "${song.song_name}" 처리 중 오류:`, error)
       }
