@@ -87,6 +87,7 @@ const {
   showFormatModal,
   showPositionModal,
   showPPTModal,
+  downloadProgress,  // 진행률 상태 추가
   setShowFormatModal,
   setShowPositionModal,
   setShowPPTModal,
@@ -3085,9 +3086,10 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
       )}
 
       {/* 다운로드 로딩 모달 */}
-<DownloadLoadingModal 
+<DownloadLoadingModal
   isOpen={downloadingPDF || downloadingPPT || downloadingImage}
   type={downloadingPDF ? 'pdf' : downloadingImage ? 'image' : 'ppt'}
+  progress={downloadProgress || undefined}
 />
 
       {/* 🎵 악보보기 모드 (전체화면) - 확대/축소 기능 추가 */}

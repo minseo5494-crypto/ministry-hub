@@ -40,6 +40,8 @@ export interface PDFGenerateOptions {
   partTags?: { [songId: string]: PartTag[] }  // 🆕 추가
   includeCover?: boolean
   marginPercent?: number
+  customFileName?: string  // 사용자 지정 파일명
+  onProgress?: (current: number, total: number, songName?: string) => void  // 진행률 콜백
 }
 
 const getSizeConfig = (size: string) => {
@@ -105,15 +107,17 @@ const calculatePositionFromPercent = (
  * PDF 생성 함수
  */
 export const generatePDF = async (options: PDFGenerateOptions) => {
-  const { 
-    title, 
-    date, 
-    songs, 
-    songForms, 
-    songFormPositions, 
+  const {
+    title,
+    date,
+    songs,
+    songForms,
+    songFormPositions,
     partTags,
     includeCover = true,      // 🆕 기본값 true
-    marginPercent = 0         // 🆕 기본값 0
+    marginPercent = 0,        // 🆕 기본값 0
+    customFileName,           // 사용자 지정 파일명
+    onProgress                // 진행률 콜백
   } = options
 
   if (songs.length === 0) {
@@ -219,14 +223,48 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
       const song = songs[i]
       console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
 
+      // 진행률 콜백 호출
+      if (onProgress) {
+        onProgress(i + 1, songs.length, song.song_name)
+        // UI가 업데이트될 시간을 주기 위해 지연
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
       if (!song.file_url) {
         console.warn(`⚠️ "${song.song_name}"에 악보 파일이 없습니다. 건너뜁니다.`)
         continue
       }
 
       try {
-        const response = await fetch(song.file_url)
-        const arrayBuffer = await response.arrayBuffer()
+        // 네트워크 오류 시 재시도 로직 (최대 3회)
+        let arrayBuffer: ArrayBuffer | null = null
+        let lastError: Error | null = null
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            // cache: 'no-store'로 캐시 무시, 네트워크 직접 요청
+            const response = await fetch(song.file_url, {
+              cache: 'no-store',
+              mode: 'cors',
+            })
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`)
+            }
+            arrayBuffer = await response.arrayBuffer()
+            break // 성공 시 루프 탈출
+          } catch (fetchError) {
+            lastError = fetchError as Error
+            console.warn(`⚠️ 파일 다운로드 시도 ${attempt}/3 실패:`, fetchError)
+            if (attempt < 3) {
+              // 재시도 전 대기 (1초, 2초) - 더 긴 대기 시간
+              await new Promise(resolve => setTimeout(resolve, attempt * 1000))
+            }
+          }
+        }
+
+        if (!arrayBuffer) {
+          throw lastError || new Error('파일 다운로드 실패')
+        }
 
         // 송폼 정보 가져오기
         const selectedForms = songForms[song.id] || song.selectedForm || []
@@ -554,7 +592,11 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${title}_${date.replace(/\./g, '')}.pdf`
+    // 사용자 지정 파일명 또는 기본 파일명 사용
+    const fileName = customFileName
+      ? `${customFileName.replace(/[\\/:*?"<>|]/g, '_')}.pdf`
+      : `${title}_${date.replace(/\./g, '')}.pdf`
+    link.download = fileName
     link.click()
     URL.revokeObjectURL(url)
 
@@ -575,8 +617,10 @@ export const generatePDFFromCanvas = async (options: {
   songs: PDFSong[]
   canvasDataUrls: { [songId: string]: string[] }  // 🆕 다중 페이지
   includeCover?: boolean
+  customFileName?: string  // 사용자 지정 파일명
+  onProgress?: (current: number, total: number, songName?: string) => void  // 진행률 콜백
 }) => {
-  const { title, date, songs, canvasDataUrls, includeCover = true } = options
+  const { title, date, songs, canvasDataUrls, includeCover = true, customFileName, onProgress } = options
 
   if (songs.length === 0) {
     throw new Error('곡이 없습니다.')
@@ -658,6 +702,13 @@ export const generatePDFFromCanvas = async (options: {
       const song = songs[i]
       const canvasDataUrlArray = canvasDataUrls[song.id]
 
+      // 진행률 콜백 호출 (곡 처리 시작 전)
+      if (onProgress) {
+        onProgress(i + 1, songs.length, song.song_name)
+        // UI가 업데이트될 시간을 주기 위해 지연
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
       if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
         console.warn(`⚠️ "${song.song_name}"의 캔버스 데이터가 없습니다. 건너뜁니다.`)
         continue
@@ -669,7 +720,7 @@ export const generatePDFFromCanvas = async (options: {
         // 🆕 모든 페이지 순회
         for (let pageIdx = 0; pageIdx < canvasDataUrlArray.length; pageIdx++) {
           const canvasDataUrl = canvasDataUrlArray[pageIdx]
-          
+
           // Base64 데이터에서 이미지 추출
           const base64Data = canvasDataUrl.split(',')[1]
           const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
@@ -689,6 +740,9 @@ export const generatePDFFromCanvas = async (options: {
           })
 
           console.log(`  ✅ 페이지 ${pageIdx + 1}/${canvasDataUrlArray.length} 추가 완료`)
+
+          // 각 페이지 처리 후 UI 업데이트 시간 확보
+          await new Promise(resolve => setTimeout(resolve, 30))
         }
 
         console.log(`✅ ${song.song_name} 완료 (${canvasDataUrlArray.length}페이지)`)
@@ -704,7 +758,11 @@ export const generatePDFFromCanvas = async (options: {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${title}_${date.replace(/\./g, '')}.pdf`
+    // 사용자 지정 파일명 또는 기본 파일명 사용
+    const fileName = customFileName
+      ? `${customFileName.replace(/[\\/:*?"<>|]/g, '_')}.pdf`
+      : `${title}_${date.replace(/\./g, '')}.pdf`
+    link.download = fileName
     link.click()
     URL.revokeObjectURL(url)
 

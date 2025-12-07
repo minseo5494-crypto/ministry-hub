@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
+import DownloadLoadingModal from '@/components/DownloadLoadingModal'
 
 interface SetlistSong {
   id: string
@@ -357,9 +358,8 @@ export default function TeamSetlistDetailPage() {
     '간주', 'Interlude', 'B', 'Bridge', 'Out', 'Outro', 'Ending'
   ]
 
-  // 다운로드 상태
+  // PPT 다운로드 상태 (자체 PPT 생성 함수용)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
-
 
   // 🎵 악보보기 모드 전용 상태 추가
   const [showSheetViewer, setShowSheetViewer] = useState(false)
@@ -408,6 +408,7 @@ const {
   downloadingImage,
   showFormatModal,
   showPositionModal,
+  downloadProgress,  // 진행률 상태 추가
   setShowFormatModal,
   setShowPositionModal,
   handleDownload,
@@ -1924,6 +1925,13 @@ const saveNote = async () => {
           </div>
         </div>
       )}
+
+      {/* 다운로드 로딩 모달 */}
+      <DownloadLoadingModal
+        isOpen={downloadingPDF || downloadingPPT || downloadingImage}
+        type={downloadingPDF ? 'pdf' : downloadingImage ? 'image' : 'ppt'}
+        progress={downloadProgress || undefined}
+      />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, ChevronLeft, ChevronRight, GripVertical, Trash2, Download } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Trash2, Download } from 'lucide-react'
 
 // 전역 타입 선언
 declare global {
@@ -18,7 +18,7 @@ interface Song {
   selectedForm?: string[]
 }
 
-// 🆕 새로운 스타일 인터페이스
+// 스타일 인터페이스
 export interface SongFormStyle {
   x: number           // 0-100 (퍼센트)
   y: number           // 0-100 (퍼센트)
@@ -35,7 +35,7 @@ export interface PartTagStyle {
   fontSize: number    // 10-60 (pt)
   color: string       // hex 색상
   opacity: number     // 0-1
-  pageIndex?: number  // 🆕 페이지 인덱스 (0부터 시작)
+  pageIndex?: number  // 페이지 인덱스 (0부터 시작)
 }
 
 interface Props {
@@ -44,7 +44,7 @@ interface Props {
   onConfirm: (
     songFormStyles: { [key: string]: SongFormStyle },
     partTagStyles: { [songId: string]: PartTagStyle[] },
-    canvasDataUrls: { [songId: string]: string[] }  // 🆕 다중 페이지 지원
+    canvasDataUrls: { [songId: string]: string[] }
   ) => void
   onCancel: () => void
 }
@@ -102,25 +102,25 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   })
 
   const [currentSongIndex, setCurrentSongIndex] = useState(0)
-  const [currentPageIndex, setCurrentPageIndex] = useState(0)  // 🆕 현재 페이지 인덱스
-  
-  // 🆕 새로운 스타일 상태
+  const [currentPageIndex, setCurrentPageIndex] = useState(0)
+
+  // 스타일 상태
   const [songFormStyles, setSongFormStyles] = useState<{ [key: string]: SongFormStyle }>({})
   const [partTagStyles, setPartTagStyles] = useState<{ [songId: string]: PartTagStyle[] }>({})
-  
-  // 🆕 다중 페이지 캔버스 데이터 저장용 ref
+
+  // 다중 페이지 캔버스 데이터 저장용 ref
   const canvasDataUrlsRef = useRef<{ [songId: string]: string[] }>({})
-  
+
   // 캔버스 관련
   const mainCanvasRef = useRef<HTMLCanvasElement>(null)
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  
+
   const [isLoadingFile, setIsLoadingFile] = useState(false)
-  // 🆕 다중 페이지 배경 이미지
+  // 다중 페이지 배경 이미지
   const [backgroundImages, setBackgroundImages] = useState<HTMLImageElement[]>([])
   const [totalPages, setTotalPages] = useState(1)
-  
+
   // 드래그 상태
   const [draggingItem, setDraggingItem] = useState<{ type: 'songForm' | 'partTag', id?: string } | null>(null)
   const [draggingNewTag, setDraggingNewTag] = useState<string | null>(null)
@@ -165,12 +165,12 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     color: '#7C3AED',
     opacity: 1
   }
-  
-  // 🆕 현재 페이지의 파트 태그만 필터링
+
+  // 현재 페이지의 파트 태그만 필터링
   const currentPartTags: PartTagStyle[] = (partTagStyles[currentSong.id] || []).filter(
     tag => (tag.pageIndex || 0) === currentPageIndex
   )
-  
+
   // 현재 페이지의 배경 이미지
   const currentBackgroundImage = backgroundImages[currentPageIndex] || null
 
@@ -192,27 +192,27 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     })
   }, [songsWithForms.length])
 
-  // 🆕 곡이 변경될 때 페이지 인덱스 리셋
+  // 곡이 변경될 때 페이지 인덱스 리셋
   useEffect(() => {
     setCurrentPageIndex(0)
   }, [currentSongIndex])
 
-  // 🆕 다중 페이지 악보 이미지 로드
+  // 다중 페이지 악보 이미지 로드
   useEffect(() => {
     let isCancelled = false
-    
+
     const loadFile = async () => {
       const fileUrl = currentSong.file_url
       if (!fileUrl) return
-      
+
       setIsLoadingFile(true)
       setBackgroundImages([])
       setTotalPages(1)
       setCurrentPageIndex(0)
-      
-      const isPDF = currentSong.file_type === 'pdf' || 
+
+      const isPDF = currentSong.file_type === 'pdf' ||
                     fileUrl.toLowerCase().endsWith('.pdf')
-      
+
       try {
         if (isPDF) {
           const pdfjsLib = window.pdfjsLib
@@ -221,24 +221,24 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             setIsLoadingFile(false)
             return
           }
-          
+
           const loadingTask = pdfjsLib.getDocument(fileUrl)
           const pdf = await loadingTask.promise
-          
+
           if (isCancelled) return
-          
+
           const pageCount = pdf.numPages
           setTotalPages(pageCount)
           console.log(`📄 PDF 페이지 수: ${pageCount}`)
-          
+
           const loadedImages: HTMLImageElement[] = []
-          
-          // 🆕 모든 페이지 로드
+
+          // 모든 페이지 로드
           for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
             if (isCancelled) return
-            
+
             const page = await pdf.getPage(pageNum)
-            
+
             // 고해상도로 렌더링 (A4 2배)
             const originalViewport = page.getViewport({ scale: 1 })
             const scale = Math.min(
@@ -246,36 +246,36 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               A4_HEIGHT / originalViewport.height
             ) * 0.95
             const viewport = page.getViewport({ scale })
-            
+
             const offscreenCanvas = document.createElement('canvas')
             offscreenCanvas.width = A4_WIDTH
             offscreenCanvas.height = A4_HEIGHT
             const offscreenCtx = offscreenCanvas.getContext('2d')
-            
+
             if (!offscreenCtx) continue
-            
+
             // 흰색 배경
             offscreenCtx.fillStyle = '#FFFFFF'
             offscreenCtx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT)
-            
+
             // 중앙 정렬
             const offsetX = (A4_WIDTH - viewport.width) / 2
             const offsetY = (A4_HEIGHT - viewport.height) / 2
-            
+
             offscreenCtx.save()
             offscreenCtx.translate(offsetX, offsetY)
-            
+
             await page.render({
               canvasContext: offscreenCtx,
               viewport: viewport
             }).promise
-            
+
             offscreenCtx.restore()
-            
+
             if (isCancelled) return
-            
+
             const imageDataUrl = offscreenCanvas.toDataURL('image/png')
-            
+
             // 이미지 객체로 변환
             const img = await new Promise<HTMLImageElement>((resolve, reject) => {
               const image = new Image()
@@ -284,133 +284,133 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               image.onerror = reject
               image.src = imageDataUrl
             })
-            
+
             loadedImages.push(img)
             console.log(`✅ 페이지 ${pageNum}/${pageCount} 로드 완료`)
           }
-          
+
           if (!isCancelled) {
             setBackgroundImages(loadedImages)
             setIsLoadingFile(false)
           }
-          
+
         } else {
           // 이미지 파일
           const img = new Image()
           img.crossOrigin = 'anonymous'
-          
+
           img.onload = () => {
             if (isCancelled) return
             setBackgroundImages([img])
             setTotalPages(1)
             setIsLoadingFile(false)
           }
-          
+
           img.onerror = () => {
             console.error('이미지 로드 실패')
             setIsLoadingFile(false)
           }
-          
+
           img.src = fileUrl
         }
-        
+
       } catch (error) {
         console.error('파일 렌더링 오류:', error)
         setIsLoadingFile(false)
       }
     }
-    
+
     loadFile()
-    
+
     return () => {
       isCancelled = true
     }
   }, [currentSong.id])
 
-  // 🆕 메인 캔버스에 현재 페이지 렌더링
+  // 메인 캔버스에 현재 페이지 렌더링
   const renderMainCanvas = useCallback(() => {
     if (!mainCanvasRef.current || !currentBackgroundImage || !fontLoaded) return
-    
+
     const canvas = mainCanvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    
+
     // 캔버스 크기 설정 (A4 2배 해상도)
     canvas.width = A4_WIDTH
     canvas.height = A4_HEIGHT
-    
+
     // 배경 이미지 그리기
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT)
-    
+
     // 이미지를 A4 크기에 맞게 그리기
     const scale = Math.min(
       A4_WIDTH / currentBackgroundImage.naturalWidth,
       A4_HEIGHT / currentBackgroundImage.naturalHeight
     ) * 0.95
-    
+
     const imgWidth = currentBackgroundImage.naturalWidth * scale
     const imgHeight = currentBackgroundImage.naturalHeight * scale
     const imgX = (A4_WIDTH - imgWidth) / 2
     const imgY = (A4_HEIGHT - imgHeight) / 2
-    
+
     ctx.drawImage(currentBackgroundImage, imgX, imgY, imgWidth, imgHeight)
-    
-    // 🆕 송폼 텍스트 - 첫 페이지에만 표시
-    if (currentPageIndex === 0 && currentForms.length > 0) {
+
+    // 송폼 텍스트 - 모든 페이지에 표시
+    if (currentForms.length > 0) {
       const style = currentFormStyle
       const fontSize = style.fontSize * 2
-      
+
       ctx.save()
       ctx.globalAlpha = style.opacity
       ctx.font = `bold ${fontSize}px Arial, "Noto Sans KR", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      
+
       const x = (style.x / 100) * A4_WIDTH
       const y = (style.y / 100) * A4_HEIGHT
-      
+
       // 흰색 외곽선
       ctx.strokeStyle = '#FFFFFF'
       ctx.lineWidth = fontSize * 0.15
       ctx.lineJoin = 'round'
       ctx.miterLimit = 2
       ctx.strokeText(formText, x, y)
-      
+
       // 본문 텍스트
       ctx.fillStyle = style.color
       ctx.fillText(formText, x, y)
-      
+
       ctx.restore()
     }
-    
-    // 🆕 현재 페이지의 파트 태그 그리기
+
+    // 현재 페이지의 파트 태그 그리기
     currentPartTags.forEach(tag => {
       const fontSize = tag.fontSize * 2
-      
+
       ctx.save()
       ctx.globalAlpha = tag.opacity
       ctx.font = `bold ${fontSize}px Arial, "Noto Sans KR", sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      
+
       const x = (tag.x / 100) * A4_WIDTH
       const y = (tag.y / 100) * A4_HEIGHT
-      
+
       // 흰색 외곽선
       ctx.strokeStyle = '#FFFFFF'
       ctx.lineWidth = fontSize * 0.15
       ctx.lineJoin = 'round'
       ctx.miterLimit = 2
       ctx.strokeText(tag.label, x, y)
-      
+
       // 본문 텍스트
       ctx.fillStyle = tag.color
       ctx.fillText(tag.label, x, y)
-      
+
       ctx.restore()
     })
-    
+
     // 미리보기 캔버스에도 그리기
     if (previewCanvasRef.current) {
       const preview = previewCanvasRef.current
@@ -421,7 +421,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
         previewCtx.drawImage(canvas, 0, 0, 480, 680)
       }
     }
-    
+
   }, [currentBackgroundImage, currentForms, currentFormStyle, currentPartTags, fontLoaded, currentPageIndex, formText])
 
   // 배경 이미지나 스타일 변경 시 캔버스 다시 그리기
@@ -449,7 +449,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }))
   }
 
-  // 🆕 파트 태그 추가 - 현재 페이지에 추가
+  // 파트 태그 추가 - 현재 페이지에 추가
   const addPartTag = (key: string, x: number, y: number) => {
     const newTag: PartTagStyle = {
       id: `${key}-${Date.now()}`,
@@ -459,9 +459,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
       fontSize: 28,
       color: PART_COLORS[key] || '#6B7280',
       opacity: 1,
-      pageIndex: currentPageIndex  // 🆕 현재 페이지 인덱스 저장
+      pageIndex: currentPageIndex
     }
-    
+
     setPartTagStyles(prev => ({
       ...prev,
       [currentSong.id]: [...(prev[currentSong.id] || []), newTag]
@@ -479,24 +479,24 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   // 드래그 핸들러
   const handlePreviewMouseDown = (e: React.MouseEvent) => {
     if (!containerRef.current) return
-    
+
     const rect = containerRef.current.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
-    
-    // 🆕 송폼 클릭 체크 - 첫 페이지에서만
-    if (currentPageIndex === 0 && currentForms.length > 0) {
+
+    // 송폼 클릭 체크 - 모든 페이지에서
+    if (currentForms.length > 0) {
       const formStyle = currentFormStyle
       const formX = formStyle.x
       const formY = formStyle.y
       const hitRadius = 10
-      
+
       if (Math.abs(x - formX) < hitRadius && Math.abs(y - formY) < hitRadius) {
         setDraggingItem({ type: 'songForm' })
         return
       }
     }
-    
+
     // 파트 태그 클릭 체크
     for (const tag of currentPartTags) {
       const hitRadius = 5
@@ -509,11 +509,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
   const handlePreviewMouseMove = (e: React.MouseEvent) => {
     if (!draggingItem || !containerRef.current) return
-    
+
     const rect = containerRef.current.getBoundingClientRect()
     const x = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100))
     const y = Math.max(3, Math.min(97, ((e.clientY - rect.top) / rect.height) * 100))
-    
+
     if (draggingItem.type === 'songForm') {
       updateFormStyle({ x, y })
     } else if (draggingItem.type === 'partTag' && draggingItem.id) {
@@ -529,11 +529,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     if (!draggingNewTag || !containerRef.current) return
-    
+
     const rect = containerRef.current.getBoundingClientRect()
     const x = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100))
     const y = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100))
-    
+
     addPartTag(draggingNewTag, x, y)
     setDraggingNewTag(null)
   }
@@ -541,7 +541,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   // 모든 곡에 적용
   const applyToAll = () => {
     if (!confirm('현재 송폼 스타일을 모든 곡에 적용하시겠습니까?')) return
-    
+
     const newStyles: { [key: string]: SongFormStyle } = {}
     songsWithForms.forEach(song => {
       newStyles[song.id] = { ...currentFormStyle }
@@ -550,106 +550,106 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     alert('✅ 모든 곡에 적용되었습니다!')
   }
 
-  // 🆕 현재 곡의 모든 페이지 캔버스 저장
+  // 현재 곡의 모든 페이지 캔버스 저장
   const saveAllPagesCanvas = () => {
     if (backgroundImages.length === 0) {
       console.warn('⚠️ backgroundImages가 없습니다!')
       return
     }
-    
+
     const styleToSave = songFormStyles[currentSong.id] || {
       x: 50, y: 5, fontSize: 36, color: '#7C3AED', opacity: 1
     }
     const allTagsToSave = partTagStyles[currentSong.id] || []
     const forms = songForms[currentSong.id] || currentSong.selectedForm || []
     const songFormText = forms.join(' - ')
-    
+
     const pageDataUrls: string[] = []
-    
+
     // 모든 페이지에 대해 캔버스 생성
     for (let pageIdx = 0; pageIdx < backgroundImages.length; pageIdx++) {
       const bgImage = backgroundImages[pageIdx]
-      
+
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       if (!ctx) continue
-      
+
       canvas.width = A4_WIDTH
       canvas.height = A4_HEIGHT
-      
+
       // 배경
       ctx.fillStyle = '#FFFFFF'
       ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT)
-      
+
       // 이미지
       const scale = Math.min(
         A4_WIDTH / bgImage.naturalWidth,
         A4_HEIGHT / bgImage.naturalHeight
       ) * 0.95
-      
+
       const imgWidth = bgImage.naturalWidth * scale
       const imgHeight = bgImage.naturalHeight * scale
       const imgX = (A4_WIDTH - imgWidth) / 2
       const imgY = (A4_HEIGHT - imgHeight) / 2
-      
+
       ctx.drawImage(bgImage, imgX, imgY, imgWidth, imgHeight)
-      
-      // 🆕 송폼 - 첫 페이지에만
-      if (pageIdx === 0 && forms.length > 0) {
+
+      // 송폼 - 모든 페이지에 표시
+      if (forms.length > 0) {
         const fontSize = styleToSave.fontSize * 2
-        
+
         ctx.save()
         ctx.globalAlpha = styleToSave.opacity
         ctx.font = `bold ${fontSize}px Arial, "Noto Sans KR", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
-        
+
         const x = (styleToSave.x / 100) * A4_WIDTH
         const y = (styleToSave.y / 100) * A4_HEIGHT
-        
+
         ctx.strokeStyle = '#FFFFFF'
         ctx.lineWidth = fontSize * 0.15
         ctx.lineJoin = 'round'
         ctx.miterLimit = 2
         ctx.strokeText(songFormText, x, y)
-        
+
         ctx.fillStyle = styleToSave.color
         ctx.fillText(songFormText, x, y)
-        
+
         ctx.restore()
       }
-      
-      // 🆕 해당 페이지의 파트 태그만
+
+      // 해당 페이지의 파트 태그만
       const pageTags = allTagsToSave.filter(tag => (tag.pageIndex || 0) === pageIdx)
-      
+
       pageTags.forEach(tag => {
         const fontSize = tag.fontSize * 2
-        
+
         ctx.save()
         ctx.globalAlpha = tag.opacity
         ctx.font = `bold ${fontSize}px Arial, "Noto Sans KR", sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        
+
         const x = (tag.x / 100) * A4_WIDTH
         const y = (tag.y / 100) * A4_HEIGHT
-        
+
         ctx.strokeStyle = '#FFFFFF'
         ctx.lineWidth = fontSize * 0.15
         ctx.lineJoin = 'round'
         ctx.miterLimit = 2
         ctx.strokeText(tag.label, x, y)
-        
+
         ctx.fillStyle = tag.color
         ctx.fillText(tag.label, x, y)
-        
+
         ctx.restore()
       })
-      
+
       const dataUrl = canvas.toDataURL('image/png', 1.0)
       pageDataUrls.push(dataUrl)
     }
-    
+
     canvasDataUrlsRef.current[currentSong.id] = pageDataUrls
     console.log(`✅ ${currentSong.song_name}: ${pageDataUrls.length}페이지 저장 완료`)
   }
@@ -666,7 +666,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
       console.log('🎵 확정 - songFormStyles:', songFormStyles)
       console.log('🏷️ 확정 - partTagStyles:', partTagStyles)
       console.log('🖼️ 확정 - canvasDataUrls:', canvasDataUrlsRef.current)
-      
+
       onConfirm(songFormStyles, partTagStyles, canvasDataUrlsRef.current)
     }
   }
@@ -679,7 +679,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }
   }
 
-  // 🆕 페이지 네비게이션
+  // 페이지 네비게이션
   const handlePrevPage = () => {
     if (currentPageIndex > 0) {
       setCurrentPageIndex(currentPageIndex - 1)
@@ -729,8 +729,8 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             {/* 송폼 설정 */}
             <div className="mb-6">
               <h3 className="font-semibold text-gray-700 mb-3">송폼 설정</h3>
-              <p className="text-xs text-gray-500 mb-2">※ 송폼은 첫 페이지에만 표시됩니다</p>
-              
+              <p className="text-xs text-gray-500 mb-2">※ 송폼은 모든 페이지에 표시됩니다</p>
+
               {/* 크기 슬라이더 */}
               <div className="mb-4">
                 <label className="text-sm text-gray-600 block mb-1">
@@ -749,7 +749,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   <span>72pt</span>
                 </div>
               </div>
-              
+
               {/* 색상 선택 */}
               <div className="mb-4">
                 <label className="text-sm text-gray-600 block mb-2">색상</label>
@@ -828,7 +828,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   {currentPartTags.map(tag => (
                     <div key={tag.id} className="bg-white p-2 rounded border">
                       <div className="flex items-center justify-between mb-2">
-                        <span 
+                        <span
                           className="px-2 py-0.5 rounded text-white text-sm font-bold"
                           style={{ backgroundColor: tag.color }}
                         >
@@ -863,11 +863,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* 안내 메시지 */}
             <div className="p-3 bg-blue-50 border-b text-sm text-blue-700">
-              💡 <strong>송폼과 파트 태그를 드래그</strong>해서 원하는 위치로 이동하세요. 
+              💡 <strong>송폼과 파트 태그를 드래그</strong>해서 원하는 위치로 이동하세요.
               보이는 그대로 PDF로 저장됩니다!
             </div>
 
-            {/* 🆕 페이지 네비게이션 */}
+            {/* 페이지 네비게이션 */}
             {totalPages > 1 && (
               <div className="p-2 bg-gray-100 border-b flex items-center justify-center gap-4">
                 <button
@@ -895,14 +895,14 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             {/* 미리보기 영역 */}
             <div className="flex-1 p-4 bg-gray-100 overflow-auto flex items-center justify-center">
               <div
-  ref={containerRef}
-  className="relative bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden cursor-crosshair"
-  style={{
-    width: '480px',
-    aspectRatio: '210 / 297',
-    maxWidth: '100%',
-    maxHeight: 'calc(100vh - 350px)'
-  }}
+                ref={containerRef}
+                className="relative bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden cursor-crosshair"
+                style={{
+                  width: '480px',
+                  aspectRatio: '210 / 297',
+                  maxWidth: '100%',
+                  maxHeight: 'calc(100vh - 350px)'
+                }}
                 onMouseDown={handlePreviewMouseDown}
                 onMouseMove={handlePreviewMouseMove}
                 onMouseUp={handlePreviewMouseUp}
@@ -943,13 +943,13 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 )}
 
                 {/* 드래그 안내 오버레이 */}
-{draggingNewTag && (
-  <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
-    <p className="bg-purple-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-lg">
-      여기에 드롭하세요
-    </p>
-  </div>
-)}
+                {draggingNewTag && (
+                  <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
+                    <p className="bg-purple-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-lg">
+                      여기에 드롭하세요
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

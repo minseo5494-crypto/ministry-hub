@@ -3,11 +3,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Song } from '@/lib/supabase'
-import { SongFormPosition } from '@/lib/types'
 import { generatePDF as generatePDFFile, generatePDFFromCanvas, PDFSong } from '@/lib/pdfGenerator'
 import { logPDFDownload, logPPTDownload } from '@/lib/activityLogger'
 import { SECTION_ABBREVIATIONS } from '@/lib/supabase'
 import { SongFormStyle, PartTagStyle } from '@/components/SongFormPositionModal'
+import { DownloadProgress } from '@/components/DownloadLoadingModal'
 
 // 모바일 기기 감지
 const isMobileDevice = () => {
@@ -32,6 +32,7 @@ export interface DownloadOptions {
   includeCover: boolean
   includeSongForm: boolean
   marginPercent: number
+  customFileName: string  // 사용자 지정 파일명
 }
 
 interface UseDownloadReturn {
@@ -41,15 +42,18 @@ interface UseDownloadReturn {
   showFormatModal: boolean
   showPositionModal: boolean
   showPPTModal: boolean
-  
+
+  // 진행률 상태
+  downloadProgress: DownloadProgress | null
+
   setShowFormatModal: (show: boolean) => void
   setShowPositionModal: (show: boolean) => void
   setShowPPTModal: (show: boolean) => void
-  
+
   downloadOptions: DownloadOptions
   setDownloadOptions: React.Dispatch<React.SetStateAction<DownloadOptions>>
   hasSongsWithForms: () => boolean
-  
+
   handleDownload: () => void
   onPositionConfirm: (
     songFormStyles: { [key: string]: SongFormStyle },
@@ -60,7 +64,7 @@ interface UseDownloadReturn {
   startDownloadWithFormat: (format: 'pdf' | 'image') => void
   startPPTDownload: () => void
   generatePPTWithOptions: (mode: 'form' | 'original') => Promise<void>
-  
+
   // ✅ 새로 추가: 공통 모달 컴포넌트
   DownloadFormatModal: () => React.ReactElement | null
 }
@@ -76,17 +80,34 @@ export function useDownload({
   const [downloadingPDF, setDownloadingPDF] = useState(false)
   const [downloadingImage, setDownloadingImage] = useState(false)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
+
+  // 진행률 상태
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null)
   
   // 모달 상태
   const [showFormatModal, setShowFormatModal] = useState(false)
   const [showPositionModal, setShowPositionModal] = useState(false)
   const [showPPTModal, setShowPPTModal] = useState(false)
   
+  // 기본 파일명 생성
+  const getDefaultFileName = useCallback(() => {
+    if (selectedSongs.length === 1) {
+      // 단일 곡: 곡 이름
+      return selectedSongs[0].song_name
+    } else {
+      // 콘티: 콘티 제목 + 예배 날짜
+      const title = setlistTitle || '찬양 콘티'
+      const date = setlistDate || new Date().toLocaleDateString('ko-KR')
+      return `${title}_${date}`
+    }
+  }, [selectedSongs, setlistTitle, setlistDate])
+
   // 다운로드 옵션 상태
   const [downloadOptions, setDownloadOptions] = useState<DownloadOptions>({
     includeCover: true,
     includeSongForm: true,
-    marginPercent: 0
+    marginPercent: 0,
+    customFileName: ''
   })
   
   // Ref로 최신 값 유지 (클로저 문제 해결)
@@ -124,8 +145,13 @@ export function useDownload({
       alert('찬양을 선택해주세요.')
       return
     }
+    // 모달 열 때 기본 파일명 설정
+    setDownloadOptions(prev => ({
+      ...prev,
+      customFileName: getDefaultFileName()
+    }))
     setShowFormatModal(true)
-  }, [selectedSongs.length])
+  }, [selectedSongs.length, getDefaultFileName])
   
   // 송폼 위치 선택 완료 → canvasDataUrls를 PDF/이미지 모두 사용
   const onPositionConfirm = useCallback((
@@ -190,7 +216,27 @@ export function useDownload({
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-lg w-full max-w-md p-6">
           <h3 className="text-xl font-bold mb-4">다운로드 설정</h3>
-          
+
+          {/* 파일명 입력 */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              📁 파일명
+            </label>
+            <input
+              type="text"
+              value={downloadOptions.customFileName}
+              onChange={(e) => setDownloadOptions(prev => ({
+                ...prev,
+                customFileName: e.target.value
+              }))}
+              placeholder="파일명을 입력하세요"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              확장자(.pdf, .jpg 등)는 자동으로 추가됩니다
+            </p>
+          </div>
+
           {/* 옵션 섹션 */}
           <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-3">
             <h4 className="font-medium text-gray-700 mb-2">다운로드 옵션</h4>
@@ -275,6 +321,7 @@ export function useDownload({
     setDownloadingImage(true)
 
     const currentSongs = selectedSongsRef.current
+    const opts = downloadOptionsRef.current
 
     try {
       console.log(`✅ 캔버스 이미지 다운로드 시작: ${Object.keys(canvasDataUrls).length}개 곡`)
@@ -285,9 +332,17 @@ export function useDownload({
         const song = currentSongs[i]
         const canvasDataUrlArray = canvasDataUrls[song.id]
 
+        // 진행률 업데이트
+        setDownloadProgress({
+          current: i + 1,
+          total: currentSongs.length,
+          songName: song.song_name,
+          stage: '이미지 변환 중...'
+        })
+
         if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
           if (song.file_url) {
-            await downloadOriginalFile(song, i)
+            await downloadOriginalFile(song, i, opts.customFileName)
             downloadCount++
           }
           continue
@@ -297,10 +352,25 @@ export function useDownload({
           // 🆕 모든 페이지 다운로드
           for (let pageIdx = 0; pageIdx < canvasDataUrlArray.length; pageIdx++) {
             const canvasDataUrl = canvasDataUrlArray[pageIdx]
+
+            // 다중 페이지 진행률 업데이트
+            if (canvasDataUrlArray.length > 1) {
+              setDownloadProgress({
+                current: i + 1,
+                total: currentSongs.length,
+                songName: song.song_name,
+                stage: `페이지 ${pageIdx + 1}/${canvasDataUrlArray.length} 변환 중...`
+              })
+            }
+
             const jpgBlob = await convertToJpg(canvasDataUrl)
 
             const pageSuffix = canvasDataUrlArray.length > 1 ? `_p${pageIdx + 1}` : ''
-            const filename = sanitizeFilename(`${String(i + 1).padStart(2, '0')}_${song.song_name}${pageSuffix}`)
+            // 단일 곡: 사용자 지정 파일명, 다중 곡: 번호_곡이름 형식
+            const baseFilename = currentSongs.length === 1 && opts.customFileName
+              ? opts.customFileName
+              : `${String(i + 1).padStart(2, '0')}_${song.song_name}`
+            const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`)
 
             if (isMobileDevice() && navigator.share) {
               const file = new File([jpgBlob], `${filename}.jpg`, { type: 'image/jpeg' })
@@ -339,6 +409,7 @@ export function useDownload({
       alert('❌ 다운로드 중 오류가 발생했습니다.')
     } finally {
       setDownloadingImage(false)
+      setDownloadProgress(null)
     }
   }
   
@@ -376,16 +447,21 @@ export function useDownload({
   }
   
   // 원본 파일 다운로드 (송폼 없는 곡용)
-  const downloadOriginalFile = async (song: Song, index: number): Promise<void> => {
+  const downloadOriginalFile = async (song: Song, index: number, customFileName?: string): Promise<void> => {
     if (!song.file_url) return
-    
+
     try {
       const response = await fetch(song.file_url)
       const blob = await response.blob()
-      
-      const filename = sanitizeFilename(`${String(index + 1).padStart(2, '0')}_${song.song_name}`)
+
+      // 단일 곡이고 사용자 지정 파일명이 있으면 사용
+      const currentSongs = selectedSongsRef.current
+      const baseFilename = currentSongs.length === 1 && customFileName
+        ? customFileName
+        : `${String(index + 1).padStart(2, '0')}_${song.song_name}`
+      const filename = sanitizeFilename(baseFilename)
       const extension = song.file_type === 'pdf' ? 'pdf' : 'jpg'
-      
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -404,11 +480,14 @@ export function useDownload({
   // ========================================
   const generatePDFFromCanvasData = async (canvasDataUrls: { [songId: string]: string[] }) => {
     setDownloadingPDF(true)
-    
+
     try {
       const currentSongs = selectedSongsRef.current
       const opts = downloadOptionsRef.current
-      
+
+      // 진행률 초기화 (1부터 시작하여 바로 진행 중임을 표시)
+      setDownloadProgress({ current: 1, total: currentSongs.length, stage: 'PDF 준비 중...' })
+
       const pdfSongs: PDFSong[] = currentSongs.map(song => ({
         id: song.id,
         song_name: song.song_name,
@@ -419,32 +498,43 @@ export function useDownload({
         lyrics: song.lyrics,
         selectedForm: songFormsRef.current[song.id] || [],
       }))
-      
+
       console.log('🖼️ WYSIWYG PDF 생성 시작')
       console.log('📊 곡 수:', pdfSongs.length)
       console.log('📊 캔버스 데이터:', Object.keys(canvasDataUrls).length)
-      
+
+      // 진행률 콜백 전달
       await generatePDFFromCanvas({
         title: setlistTitle || '찬양 콘티',
         date: setlistDate || new Date().toLocaleDateString('ko-KR'),
         songs: pdfSongs,
         canvasDataUrls,
         includeCover: opts.includeCover,
+        customFileName: opts.customFileName || undefined,
+        onProgress: (current, total, songName) => {
+          setDownloadProgress({
+            current,
+            total,
+            songName,
+            stage: 'PDF 페이지 생성 중...'
+          })
+        }
       })
-      
+
       if (userId) {
         const songIds = currentSongs.map(s => s.id)
         await logPDFDownload(songIds, undefined, userId).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
       }
-      
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('WYSIWYG PDF 생성 오류:', error)
       alert('❌ PDF 생성 중 오류가 발생했습니다.')
     } finally {
       setDownloadingPDF(false)
+      setDownloadProgress(null)
     }
   }
   
@@ -453,11 +543,11 @@ export function useDownload({
   // ========================================
   const generatePDFNoForm = async () => {
     setDownloadingPDF(true)
-    
+
     try {
       const currentSongs = selectedSongsRef.current
       const opts = downloadOptionsRef.current
-      
+
       const pdfSongs: PDFSong[] = currentSongs.map(song => ({
         id: song.id,
         song_name: song.song_name,
@@ -468,7 +558,10 @@ export function useDownload({
         lyrics: song.lyrics,
         selectedForm: [],
       }))
-      
+
+      // 진행률 초기화
+      setDownloadProgress({ current: 1, total: currentSongs.length, songName: pdfSongs[0]?.song_name, stage: 'PDF 준비 중...' })
+
       await generatePDFFile({
         title: setlistTitle || '찬양 콘티',
         date: setlistDate || new Date().toLocaleDateString('ko-KR'),
@@ -477,22 +570,32 @@ export function useDownload({
         songFormPositions: undefined,
         partTags: {},
         includeCover: opts.includeCover,
-        marginPercent: opts.marginPercent
+        marginPercent: opts.marginPercent,
+        customFileName: opts.customFileName || undefined,
+        onProgress: (current, total, songName) => {
+          setDownloadProgress({
+            current,
+            total,
+            songName,
+            stage: 'PDF 페이지 생성 중...'
+          })
+        }
       })
-      
+
       if (userId) {
         const songIds = currentSongs.map(s => s.id)
         await logPDFDownload(songIds, undefined, userId).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
       }
-      
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('PDF 생성 오류:', error)
       alert('❌ PDF 생성 중 오류가 발생했습니다.')
     } finally {
       setDownloadingPDF(false)
+      setDownloadProgress(null)
     }
   }
   
@@ -500,16 +603,16 @@ export function useDownload({
   // 레거시: 기존 방식 PDF 생성 (fallback)
   // ========================================
   const generatePDFLegacy = async (
-    songFormStyles: { [key: string]: SongFormStyle },
+    _songFormStyles: { [key: string]: SongFormStyle },
     partTagStyles: { [songId: string]: PartTagStyle[] }
   ) => {
     setDownloadingPDF(true)
-    
+
     try {
       const currentSongs = selectedSongsRef.current
       const currentSongForms = songFormsRef.current
       const opts = downloadOptionsRef.current
-      
+
       const pdfSongs: PDFSong[] = currentSongs.map(song => ({
         id: song.id,
         song_name: song.song_name,
@@ -520,7 +623,10 @@ export function useDownload({
         lyrics: song.lyrics,
         selectedForm: currentSongForms[song.id] || [],
       }))
-      
+
+      // 진행률 초기화
+      setDownloadProgress({ current: 1, total: currentSongs.length, songName: pdfSongs[0]?.song_name, stage: 'PDF 준비 중...' })
+
       await generatePDFFile({
         title: setlistTitle || '찬양 콘티',
         date: setlistDate || new Date().toLocaleDateString('ko-KR'),
@@ -529,22 +635,32 @@ export function useDownload({
         songFormPositions: undefined,
         partTags: opts.includeSongForm ? partTagStyles : {},
         includeCover: opts.includeCover,
-        marginPercent: opts.marginPercent
+        marginPercent: opts.marginPercent,
+        customFileName: opts.customFileName || undefined,
+        onProgress: (current, total, songName) => {
+          setDownloadProgress({
+            current,
+            total,
+            songName,
+            stage: 'PDF 페이지 생성 중...'
+          })
+        }
       })
-      
+
       if (userId) {
         const songIds = currentSongs.map(s => s.id)
         await logPDFDownload(songIds, undefined, userId).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
       }
-      
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('PDF 생성 오류:', error)
       alert('❌ PDF 생성 중 오류가 발생했습니다.')
     } finally {
       setDownloadingPDF(false)
+      setDownloadProgress(null)
     }
   }
   
@@ -553,52 +669,62 @@ export function useDownload({
   // ========================================
   const downloadAsImageFilesNoForm = async () => {
     setDownloadingImage(true)
-    
+
     const currentSongs = selectedSongsRef.current
-    
+    const opts = downloadOptionsRef.current
+
     try {
       let downloadCount = 0
       console.log(`✅ 총 ${currentSongs.length}개 곡 다운로드 시작 (송폼 없음)`)
-      
+
       for (let i = 0; i < currentSongs.length; i++) {
         const song = currentSongs[i]
-        
+
+        // 진행률 업데이트
+        setDownloadProgress({
+          current: i + 1,
+          total: currentSongs.length,
+          songName: song.song_name,
+          stage: song.file_type === 'pdf' ? 'PDF 변환 중...' : '이미지 다운로드 중...'
+        })
+
         if (!song.file_url) {
           console.warn(`⚠️ ${song.song_name}: 파일이 없어서 건너뜁니다`)
           continue
         }
-        
+
         try {
           if (song.file_type === 'pdf') {
-            await downloadPdfAsJpgNoForm(song, i)
+            await downloadPdfAsJpgNoForm(song, i, opts.customFileName)
           } else {
-            await downloadImageNoForm(song, i)
+            await downloadImageNoForm(song, i, opts.customFileName)
           }
           downloadCount++
         } catch (error) {
           console.error(`❌ ${song.song_name} 다운로드 실패:`, error)
         }
-        
+
         if (i < currentSongs.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500))
         }
       }
-      
+
       alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!`)
     } catch (error) {
       console.error('다운로드 오류:', error)
       alert('❌ 다운로드 중 오류가 발생했습니다.')
     } finally {
       setDownloadingImage(false)
+      setDownloadProgress(null)
     }
   }
-  
+
   // 이미지 다운로드 (송폼 없음)
-  const downloadImageNoForm = async (song: Song, index: number): Promise<void> => {
+  const downloadImageNoForm = async (song: Song, index: number, customFileName?: string): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
       const img = new Image()
       img.crossOrigin = 'anonymous'
-      
+
       img.onload = async () => {
         try {
           const canvas = document.createElement('canvas')
@@ -607,19 +733,24 @@ export function useDownload({
             reject(new Error('Canvas context not available'))
             return
           }
-          
+
           canvas.width = img.naturalWidth
           canvas.height = img.naturalHeight
           ctx.drawImage(img, 0, 0)
-          
+
           canvas.toBlob((blob) => {
             if (!blob) {
               reject(new Error('Blob 생성 실패'))
               return
             }
-            
-            const filename = sanitizeFilename(`${String(index + 1).padStart(2, '0')}_${song.song_name}`)
-            
+
+            // 단일 곡이고 사용자 지정 파일명이 있으면 사용
+            const currentSongs = selectedSongsRef.current
+            const baseFilename = currentSongs.length === 1 && customFileName
+              ? customFileName
+              : `${String(index + 1).padStart(2, '0')}_${song.song_name}`
+            const filename = sanitizeFilename(baseFilename)
+
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
@@ -641,41 +772,47 @@ export function useDownload({
   }
   
   // PDF를 JPG로 변환 (송폼 없음)
-  const downloadPdfAsJpgNoForm = async (song: Song, index: number): Promise<void> => {
+  const downloadPdfAsJpgNoForm = async (song: Song, index: number, customFileName?: string): Promise<void> => {
     try {
       const pdfjsLib = (window as any).pdfjsLib
       if (!pdfjsLib) {
         throw new Error('PDF.js 라이브러리가 로드되지 않았습니다.')
       }
-      
+
       const loadingTask = pdfjsLib.getDocument(song.file_url)
       const pdf = await loadingTask.promise
       const pageCount = pdf.numPages
-      
+
+      // 단일 곡이고 사용자 지정 파일명이 있으면 사용
+      const currentSongs = selectedSongsRef.current
+      const baseFilename = currentSongs.length === 1 && customFileName
+        ? customFileName
+        : `${String(index + 1).padStart(2, '0')}_${song.song_name}`
+
       for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
         const page = await pdf.getPage(pageNum)
         const scale = 2.0
         const viewport = page.getViewport({ scale })
-        
+
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         if (!ctx) continue
-        
+
         canvas.width = viewport.width
         canvas.height = viewport.height
-        
+
         await page.render({ canvasContext: ctx, viewport }).promise
-        
+
         await new Promise<void>((resolve) => {
           canvas.toBlob((blob) => {
             if (!blob) {
               resolve()
               return
             }
-            
+
             const pageSuffix = pageCount > 1 ? `_p${pageNum}` : ''
-            const filename = sanitizeFilename(`${String(index + 1).padStart(2, '0')}_${song.song_name}${pageSuffix}`)
-            
+            const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`)
+
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
@@ -687,7 +824,7 @@ export function useDownload({
             resolve()
           }, 'image/jpeg', 0.95)
         })
-        
+
         if (pageNum < pageCount) {
           await new Promise(resolve => setTimeout(resolve, 300))
         }
@@ -700,8 +837,8 @@ export function useDownload({
   
   // 레거시: 기존 방식 이미지 다운로드 (fallback)
   const downloadAsImageFilesLegacy = async (
-    songFormStyles: { [key: string]: SongFormStyle },
-    partTagStyles: { [songId: string]: PartTagStyle[] }
+    _songFormStyles: { [key: string]: SongFormStyle },
+    _partTagStyles: { [songId: string]: PartTagStyle[] }
   ) => {
     await downloadAsImageFilesNoForm()
   }
@@ -824,15 +961,18 @@ export function useDownload({
     showFormatModal,
     showPositionModal,
     showPPTModal,
-    
+
+    // 진행률 상태
+    downloadProgress,
+
     setShowFormatModal,
     setShowPositionModal,
     setShowPPTModal,
-    
+
     downloadOptions,
     setDownloadOptions,
     hasSongsWithForms,
-    
+
     handleDownload,
     onPositionConfirm,
     onPositionCancel,
