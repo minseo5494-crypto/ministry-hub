@@ -9,9 +9,12 @@ import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
 import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
   Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
-  Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon
+  Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon, Pencil
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
+import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
+import SheetMusicEditor from '@/components/SheetMusicEditor'
+import { PageAnnotation } from '@/lib/supabase'
 
 interface TeamInfo {
   id: string
@@ -116,6 +119,18 @@ const [showFixedSongSheet, setShowFixedSongSheet] = useState(false)
 const [currentSheetSong, setCurrentSheetSong] = useState<any>(null)
 const [youtubeModalSong, setYoutubeModalSong] = useState<any>(null)
 const [downloadingFixed, setDownloadingFixed] = useState(false)
+
+// 🆕 필기 노트 에디터 상태 (다중 곡 모드)
+const [showNoteEditor, setShowNoteEditor] = useState(false)
+const [noteEditorSongs, setNoteEditorSongs] = useState<{
+  song_id: string
+  song_name: string
+  team_name?: string
+  file_url: string
+  file_type: 'pdf' | 'image'
+  songForms?: string[]
+}[]>([])
+const [noteEditorSetlistTitle, setNoteEditorSetlistTitle] = useState('')
 
 // 🆕 모바일 상태 추가
 const [showFilters, setShowFilters] = useState(true)
@@ -551,7 +566,7 @@ const downloadSelectedFixedSongs = async () => {
     }
   }
 
-  // ✅ 콘티 복사 기능
+  // ✅ 콘티 복사 기능 (인도자/관리자용 - 팀 콘티로 복사)
   const handleCopySetlist = async (setlist: Setlist) => {
     if (!confirm(`"${setlist.title}" 콘티를 복사하시겠습니까?`)) return
 
@@ -612,8 +627,8 @@ const downloadSelectedFixedSongs = async () => {
         })
       }
 
-      alert('✅ 콘티가 복사되었습니다!')
-      
+      // alert 제거 - 바로 편집 모달로 이동
+
       // 5. 복사된 콘티를 바로 편집 모달로 열기 (제목 수정하도록)
       setQuickEditModal({
         show: true,
@@ -631,6 +646,142 @@ const downloadSelectedFixedSongs = async () => {
     } finally {
       setCopying(false)
     }
+  }
+
+  // ✅ 콘티를 내 필기 노트에 복사 (모든 팀원용) - 에디터로 열기
+  const { saveNote } = useSheetMusicNotes()
+
+  const handleCopySetlistToNotes = async (setlist: Setlist) => {
+    if (!user) {
+      alert('로그인이 필요합니다.')
+      return
+    }
+
+    setCopying(true)
+
+    try {
+      // 1. 콘티의 곡들과 악보 정보 가져오기 (selected_form 포함)
+      const { data: setlistSongs, error: songsError } = await supabase
+        .from('team_setlist_songs')
+        .select(`
+          *,
+          selected_form,
+          song:song_id (
+            id,
+            song_name,
+            team_name,
+            file_url,
+            file_type
+          )
+        `)
+        .eq('setlist_id', setlist.id)
+        .order('order_number', { ascending: true })
+
+      if (songsError) throw songsError
+
+      if (!setlistSongs || setlistSongs.length === 0) {
+        alert('복사할 곡이 없습니다.')
+        return
+      }
+
+      // 2. 악보가 있는 곡들만 필터링
+      const songsWithSheets = setlistSongs.filter(
+        (item: any) => item.song?.file_url
+      )
+
+      if (songsWithSheets.length === 0) {
+        alert('악보가 있는 곡이 없습니다.')
+        return
+      }
+
+      // 3. 에디터에 모든 곡을 한번에 전달 (다중 곡 모드)
+      const songsForEditor = songsWithSheets.map((item: any) => ({
+        song_id: item.song.id,
+        song_name: item.song.song_name,
+        team_name: item.song.team_name || '',
+        file_url: item.song.file_url,
+        file_type: item.song.file_type === 'pdf' ? 'pdf' as const : 'image' as const,
+        songForms: item.selected_form || []  // 송폼 데이터 포함
+      }))
+
+      // 다중 곡 모드로 에디터 열기
+      setNoteEditorSongs(songsForEditor)
+      setNoteEditorSetlistTitle(setlist.title)
+      setShowNoteEditor(true)
+    } catch (error: any) {
+      console.error('Error copying to notes:', error)
+      alert(`복사 실패: ${error.message}`)
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  // ✅ 필기 노트 전체 저장 핸들러 (다중 곡 모드)
+  const handleSaveAllNotes = async (data: { song: any, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: any, partTags: any[] } }[]) => {
+    if (!user) return
+
+    console.log('💾 handleSaveAllNotes 호출됨:', data.map(d => ({
+      song: d.song.song_name,
+      annotationsLength: d.annotations.length,
+      strokes: d.annotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0),
+      hasExtra: !!d.extra
+    })))
+
+    let savedCount = 0
+    for (const item of data) {
+      // 실제 필기(strokes) 또는 텍스트가 있는지 체크
+      const hasContent = item.annotations.some(
+        ann => (ann.strokes?.length || 0) > 0 || (ann.textElements?.length || 0) > 0
+      )
+
+      // 필기가 있거나, 단일 곡 모드이면 저장
+      if (hasContent || data.length === 1) {
+        console.log(`📝 저장 중: ${item.song.song_name}`, item.annotations, item.extra)
+        const result = await saveNote({
+          user_id: user.id,
+          song_id: item.song.song_id,
+          song_name: item.song.song_name,
+          team_name: item.song.team_name || undefined,
+          file_url: item.song.file_url,
+          file_type: item.song.file_type,
+          title: `${noteEditorSetlistTitle} - ${item.song.song_name}`,
+          annotations: item.annotations,
+          // 메인 페이지와 동일하게 송폼 관련 데이터 저장
+          songForms: item.song.songForms || [],
+          songFormEnabled: item.extra?.songFormEnabled ?? ((item.song.songForms?.length || 0) > 0),
+          songFormStyle: item.extra?.songFormStyle,
+          partTags: item.extra?.partTags,
+        })
+        if (result) {
+          console.log(`✅ 저장 성공: ${item.song.song_name}`)
+          savedCount++
+        } else {
+          console.error(`❌ 저장 실패: ${item.song.song_name}`)
+        }
+      }
+    }
+
+    setShowNoteEditor(false)
+    setNoteEditorSongs([])
+    setNoteEditorSetlistTitle('')
+
+    if (savedCount > 0) {
+      alert(`✅ ${savedCount}개의 필기가 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.`)
+    } else {
+      alert('저장할 필기가 없습니다.')
+    }
+  }
+
+  // ✅ 필기 노트 에디터 닫기 핸들러
+  const handleCloseNoteEditor = () => {
+    if (noteEditorSongs.length > 0) {
+      if (!confirm('필기 내용이 저장되지 않습니다. 정말 닫으시겠습니까?')) {
+        return
+      }
+    }
+    setShowNoteEditor(false)
+    setNoteEditorSongs([])
+    setNoteEditorSetlistTitle('')
   }
 
   const handleDeleteSetlist = async () => {
@@ -1174,6 +1325,20 @@ const downloadSelectedFixedSongs = async () => {
                           </div>
                         </>
                       )}
+
+                      {/* ✅ 모든 팀원용: 내 필기에 복사 버튼 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCopySetlistToNotes(setlist)
+                        }}
+                        disabled={copying}
+                        className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
+                        title="내 필기 노트에 복사"
+                      >
+                        <Pencil size={18} />
+                      </button>
+
                       <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 group-hover:text-blue-600 transition flex-shrink-0" />
                     </div>
                   </div>
@@ -1596,6 +1761,19 @@ title={currentSheetSong.song_name}
       </div>
     </div>
   </div>
+)}
+
+{/* ✅ 필기 노트 에디터 모달 (다중 곡 모드) */}
+{showNoteEditor && noteEditorSongs.length > 0 && (
+  <SheetMusicEditor
+    fileUrl=""
+    fileType="image"
+    songName=""
+    songs={noteEditorSongs}
+    setlistTitle={noteEditorSetlistTitle}
+    onSaveAll={handleSaveAllNotes}
+    onClose={handleCloseNoteEditor}
+  />
 )}
     </div>
   )

@@ -160,8 +160,57 @@ export const SECTION_ABBREVIATIONS: { [key: string]: string } = {
 }
 
 // 축약어 → 전체 이름 역매핑
-export const ABBREVIATION_TO_SECTION: { [key: string]: string } = 
+export const ABBREVIATION_TO_SECTION: { [key: string]: string } =
   Object.fromEntries(
     Object.entries(SECTION_ABBREVIATIONS).map(([k, v]) => [v, k])
   )
+
+// ===== 필기 노트 타입 정의 =====
+
+// 필기 스트로크 포인트
+export interface StrokePoint {
+  x: number
+  y: number
+  pressure?: number  // Apple Pencil 압력 감지 (0~1)
+}
+
+// 필기 스트로크
+export interface Stroke {
+  id: string
+  tool: 'pen' | 'highlighter' | 'eraser'
+  color: string
+  size: number
+  opacity: number
+  points: StrokePoint[]
+}
+
+// 텍스트 요소
+export interface TextElement {
+  id: string
+  x: number
+  y: number
+  text: string
+  fontSize: number
+  color: string
+  fontFamily?: string
+}
+
+// 페이지별 필기 데이터
+export interface PageAnnotation {
+  pageNumber: number
+  strokes: Stroke[]
+  textElements: TextElement[]
+}
+
+// 악보 필기 노트 (Supabase 테이블)
+export interface SheetMusicNote {
+  id: string
+  user_id: string
+  song_id: string
+  title: string
+  annotations: PageAnnotation[]  // JSON으로 저장
+  thumbnail_url?: string  // 미리보기 이미지
+  created_at?: string
+  updated_at?: string
+}
 

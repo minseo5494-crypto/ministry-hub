@@ -9,7 +9,7 @@ import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -24,6 +24,8 @@ import SongFormPositionModal from '@/components/SongFormPositionModal'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
+import SheetMusicEditor from '@/components/SheetMusicEditor'
+import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
 import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
@@ -137,6 +139,11 @@ const ZOOM_STEP = 0.25
   const [focusedSongIndex, setFocusedSongIndex] = useState<number>(-1)
   // 👇 이 줄 추가!
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
+
+  // 📝 필기 에디터 상태
+  const [showNoteEditor, setShowNoteEditor] = useState(false)
+  const [editingSong, setEditingSong] = useState<Song | null>(null)
+  const { saveNote } = useSheetMusicNotes()
 
   // 콘티 저장 관련 상태
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -1587,6 +1594,18 @@ const hasMore = displayCount < filteredSongs.length
               <span>My Page</span>
             </button>
 
+            {/* 📝 내 필기 */}
+            <button
+              onClick={() => {
+                router.push('/my-notes')
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            >
+              <FileText size={20} />
+              <span>내 필기</span>
+            </button>
+
             <div className="border-t my-2"></div>
 
             {/* 곡 추가 */}
@@ -1990,16 +2009,30 @@ const hasMore = displayCount < filteredSongs.length
           <div className="flex gap-1 ml-2">
             {/* 악보 미리보기 버튼 - 모달로 열기 */}
             {song.file_url && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewSong(song)
-                }}
-                className="p-1 text-blue-600 hover:bg-blue-100 rounded"
-                title="악보 보기"
-              >
-                <Eye size={18} />
-              </button>
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewSong(song)
+                  }}
+                  className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                  title="악보 보기"
+                >
+                  <Eye size={18} />
+                </button>
+                {/* 📝 필기 버튼 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingSong(song)
+                    setShowNoteEditor(true)
+                  }}
+                  className="p-1 text-gray-700 hover:bg-gray-100 rounded"
+                  title="필기하기"
+                >
+                  <Pencil size={18} />
+                </button>
+              </>
             )}
             {/* 유튜브 버튼 - 항상 표시 */}
             <button
@@ -2176,6 +2209,21 @@ const hasMore = displayCount < filteredSongs.length
               title="악보 전체화면"
             >
               <Presentation size={18} />
+            </button>
+          )}
+
+          {/* 📝 필기 버튼 */}
+          {song.file_url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingSong(song)
+                setShowNoteEditor(true)
+              }}
+              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              title="필기하기"
+            >
+              <Pencil size={18} />
             </button>
           )}
 
@@ -3289,7 +3337,57 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     onCancel={onPositionCancel}
   />
 )}
-      
+
+{/* 📝 필기 에디터 */}
+{showNoteEditor && editingSong && editingSong.file_url && (
+  <SheetMusicEditor
+    fileUrl={editingSong.file_url}
+    fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
+    songName={editingSong.song_name}
+    songForms={songForms[editingSong.id]}
+    onSave={async (annotations, extra) => {
+      console.log('🟢 메인페이지 onSave 호출됨:', {
+        annotationCount: annotations.length,
+        strokeCount: annotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0),
+        songFormEnabled: extra?.songFormEnabled
+      })
+      if (!user) {
+        alert('로그인이 필요합니다.')
+        return
+      }
+      // 새로운 LocalSheetMusicNote 형식으로 저장 (송폼 정보 포함)
+      console.log('📝 saveNote 호출 직전, annotations:', annotations)
+      const result = await saveNote({
+        user_id: user.id,
+        song_id: editingSong.id,
+        song_name: editingSong.song_name,
+        team_name: editingSong.team_name || undefined,
+        file_url: editingSong.file_url,
+        file_type: editingSong.file_type === 'pdf' ? 'pdf' : 'image',
+        title: `${editingSong.song_name} 필기`,
+        annotations,
+        songForms: songForms[editingSong.id],  // 곡의 송폼 정보도 저장
+        songFormEnabled: extra?.songFormEnabled,
+        songFormStyle: extra?.songFormStyle,
+        partTags: extra?.partTags,
+      })
+      console.log('📝 saveNote 결과:', result)
+      if (result) {
+        alert('필기가 my-page에 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.')
+        setShowNoteEditor(false)
+        setEditingSong(null)
+      } else {
+        console.error('❌ saveNote 실패')
+        alert('저장에 실패했습니다.')
+      }
+    }}
+    onClose={() => {
+      setShowNoteEditor(false)
+      setEditingSong(null)
+    }}
+  />
+)}
+
     </div>
   )
 }

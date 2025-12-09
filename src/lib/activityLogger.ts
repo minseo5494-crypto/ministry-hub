@@ -58,12 +58,14 @@ export const logActivity = async (params: LogActivityParams): Promise<void> => {
       });
 
     if (error) {
-      console.error('❌ Activity log error:', error);
-    } else {
-      console.log(`✅ Logged: ${params.actionType}`);
+      // activity_logs 테이블이 없거나 권한 문제일 경우 조용히 무시
+      // 로깅 실패가 앱 기능에 영향을 주지 않도록 함
+      if (process.env.NODE_ENV === 'development') {
+        // 개발 환경에서도 너무 많은 로그를 출력하지 않음
+      }
     }
   } catch (error) {
-    console.error('💥 Activity logging failed:', error);
+    // 로깅 실패는 조용히 무시
   }
 };
 
