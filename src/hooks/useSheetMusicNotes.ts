@@ -58,6 +58,7 @@ interface UseSheetMusicNotesReturn {
   fetchNotesBySong: (userId: string, songId: string) => Promise<LocalSheetMusicNote[]>
   saveNote: (note: Omit<LocalSheetMusicNote, 'id' | 'created_at' | 'updated_at'>) => Promise<LocalSheetMusicNote | null>
   updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[] }) => Promise<boolean>
+  updateNoteTitle: (id: string, title: string) => Promise<boolean>
   deleteNote: (id: string) => Promise<boolean>
   getNoteById: (id: string) => LocalSheetMusicNote | undefined
 }
@@ -232,6 +233,43 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     }
   }, [])
 
+  // 노트 제목만 업데이트
+  const updateNoteTitle = useCallback(async (id: string, title: string): Promise<boolean> => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const allNotes = getStoredNotes()
+      const noteIndex = allNotes.findIndex(n => n.id === id)
+
+      if (noteIndex === -1) {
+        throw new Error('노트를 찾을 수 없습니다.')
+      }
+
+      const now = new Date().toISOString()
+      allNotes[noteIndex] = {
+        ...allNotes[noteIndex],
+        title,
+        updated_at: now,
+      }
+
+      setStoredNotes(allNotes)
+
+      // 상태 업데이트
+      setNotes(prev =>
+        prev.map(n => n.id === id ? allNotes[noteIndex] : n)
+      )
+
+      return true
+    } catch (err) {
+      console.error('노트 제목 업데이트 오류:', err)
+      setError('노트 제목 업데이트에 실패했습니다.')
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   // 노트 삭제
   const deleteNote = useCallback(async (id: string): Promise<boolean> => {
     setLoading(true)
@@ -261,6 +299,7 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     fetchNotesBySong,
     saveNote,
     updateNote,
+    updateNoteTitle,
     deleteNote,
     getNoteById,
   }

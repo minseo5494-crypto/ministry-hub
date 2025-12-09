@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, Globe,
-  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText
+  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Download, Pencil
 } from 'lucide-react'
 import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
@@ -68,10 +68,19 @@ const {
   loading: notesLoading,
   fetchNotes: fetchSheetMusicNotes,
   updateNote: updateSheetMusicNote,
+  updateNoteTitle: updateSheetMusicNoteTitle,
   deleteNote: deleteSheetMusicNote,
 } = useSheetMusicNotes()
 const [editingNote, setEditingNote] = useState<LocalSheetMusicNote | null>(null)
 const [showNoteEditor, setShowNoteEditor] = useState(false)
+
+// 📝 파일명 수정 및 다운로드 모달 상태
+const [showRenameModal, setShowRenameModal] = useState(false)
+const [renameNote, setRenameNote] = useState<LocalSheetMusicNote | null>(null)
+const [newTitle, setNewTitle] = useState('')
+const [showDownloadModal, setShowDownloadModal] = useState(false)
+const [downloadNote, setDownloadNote] = useState<LocalSheetMusicNote | null>(null)
+const [downloadFileName, setDownloadFileName] = useState('')
 
   
   // 공유 설정 모달
@@ -949,6 +958,28 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             편집
                           </button>
                           <button
+                            onClick={() => {
+                              setRenameNote(note)
+                              setNewTitle(note.title)
+                              setShowRenameModal(true)
+                            }}
+                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                            title="파일명 변경"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDownloadNote(note)
+                              setDownloadFileName(note.title)
+                              setShowDownloadModal(true)
+                            }}
+                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-green-100 hover:text-green-600"
+                            title="다운로드"
+                          >
+                            <Download size={14} />
+                          </button>
+                          <button
                             onClick={async () => {
                               if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
                               const success = await deleteSheetMusicNote(note.id)
@@ -1437,6 +1468,128 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 className="flex-1 px-6 py-3 bg-[#C5D7F2] hover:bg-[#A8C4E8] text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {uploading ? '추가 중...' : '곡 추가'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📝 파일명 수정 모달 */}
+      {showRenameModal && renameNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">파일명 변경</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              "{renameNote.song_name}"의 파일명을 변경합니다.
+            </p>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="새 파일명 입력..."
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              autoFocus
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowRenameModal(false)
+                  setRenameNote(null)
+                  setNewTitle('')
+                }}
+                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  if (!newTitle.trim()) {
+                    alert('파일명을 입력해주세요.')
+                    return
+                  }
+                  const success = await updateSheetMusicNoteTitle(renameNote.id, newTitle.trim())
+                  if (success) {
+                    alert('파일명이 변경되었습니다.')
+                    setShowRenameModal(false)
+                    setRenameNote(null)
+                    setNewTitle('')
+                  }
+                }}
+                disabled={!newTitle.trim()}
+                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:bg-gray-400"
+              >
+                변경
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📝 다운로드 모달 */}
+      {showDownloadModal && downloadNote && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">파일 다운로드</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              저장할 파일 이름을 입력하세요. (확장자는 자동으로 추가됩니다)
+            </p>
+            <input
+              type="text"
+              value={downloadFileName}
+              onChange={(e) => setDownloadFileName(e.target.value)}
+              placeholder="저장할 파일명..."
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              저장될 파일명: {downloadFileName || '(파일명 입력)'}.{downloadNote.file_type === 'pdf' ? 'pdf' : 'png'}
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowDownloadModal(false)
+                  setDownloadNote(null)
+                  setDownloadFileName('')
+                }}
+                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  if (!downloadFileName.trim()) {
+                    alert('파일명을 입력해주세요.')
+                    return
+                  }
+                  try {
+                    // 파일 다운로드
+                    const response = await fetch(downloadNote.file_url)
+                    const blob = await response.blob()
+                    const extension = downloadNote.file_type === 'pdf' ? 'pdf' : 'png'
+                    const filename = `${downloadFileName.trim()}.${extension}`
+
+                    const url = window.URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = filename
+                    document.body.appendChild(a)
+                    a.click()
+                    window.URL.revokeObjectURL(url)
+                    document.body.removeChild(a)
+
+                    setShowDownloadModal(false)
+                    setDownloadNote(null)
+                    setDownloadFileName('')
+                  } catch (error) {
+                    console.error('다운로드 오류:', error)
+                    alert('다운로드에 실패했습니다.')
+                  }
+                }}
+                disabled={!downloadFileName.trim()}
+                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                다운로드
               </button>
             </div>
           </div>
