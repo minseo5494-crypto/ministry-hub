@@ -1161,30 +1161,76 @@ export default function SheetMusicEditor({
     }
   }, [handleZoom])
 
-  // 핀치 투 줌 (모바일)
+  // 핀치 투 줌 & 스와이프 페이지 넘기기 (모바일/태블릿)
   const lastTouchDistance = useRef<number | null>(null)
+  const swipeStartX = useRef<number | null>(null)
+  const swipeStartY = useRef<number | null>(null)
+  const isSwiping = useRef<boolean>(false)
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
+      // 핀치 줌 시작
       const dx = e.touches[0].clientX - e.touches[1].clientX
       const dy = e.touches[0].clientY - e.touches[1].clientY
       lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
+      isSwiping.current = false
+    } else if (e.touches.length === 1 && isViewMode) {
+      // 스와이프 시작 (보기 모드에서만)
+      swipeStartX.current = e.touches[0].clientX
+      swipeStartY.current = e.touches[0].clientY
+      isSwiping.current = true
     }
-  }, [])
+  }, [isViewMode])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      // 핀치 줌
       const dx = e.touches[0].clientX - e.touches[1].clientX
       const dy = e.touches[0].clientY - e.touches[1].clientY
       const distance = Math.sqrt(dx * dx + dy * dy)
       const delta = (distance - lastTouchDistance.current) * 0.005
       handleZoom(delta)
       lastTouchDistance.current = distance
+      isSwiping.current = false
     }
   }, [handleZoom])
 
-  const handleTouchEnd = useCallback(() => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // 핀치 줌 종료
     lastTouchDistance.current = null
-  }, [])
+
+    // 스와이프 감지 (보기 모드에서만)
+    if (isSwiping.current && swipeStartX.current !== null && swipeStartY.current !== null && e.changedTouches.length > 0) {
+      const endX = e.changedTouches[0].clientX
+      const endY = e.changedTouches[0].clientY
+      const deltaX = endX - swipeStartX.current
+      const deltaY = endY - swipeStartY.current
+
+      // 수평 스와이프가 수직보다 크고, 최소 50px 이상 이동했을 때
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        if (deltaX > 0) {
+          // 오른쪽 스와이프 -> 이전 페이지/이전 곡
+          if (totalPages > 1 && currentPage > 1) {
+            setCurrentPage(p => p - 1)
+          } else if (isMultiSongMode && currentSongIndex > 0) {
+            setCurrentSongIndex(i => i - 1)
+          }
+        } else {
+          // 왼쪽 스와이프 -> 다음 페이지/다음 곡
+          if (totalPages > 1 && currentPage < totalPages) {
+            setCurrentPage(p => p + 1)
+          } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
+            setCurrentSongIndex(i => i + 1)
+          }
+        }
+      }
+    }
+
+    // 스와이프 상태 초기화
+    swipeStartX.current = null
+    swipeStartY.current = null
+    isSwiping.current = false
+  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
   useEffect(() => {
