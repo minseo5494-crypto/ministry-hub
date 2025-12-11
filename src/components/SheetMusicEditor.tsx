@@ -1307,169 +1307,242 @@ export default function SheetMusicEditor({
 
   // ===== 내보내기 (PDF/이미지) - 캔버스 기반으로 화면 그대로 렌더링 =====
   const handleExport = useCallback(async (format: 'pdf' | 'image') => {
-    if (!pdfCanvasRef.current && !canvasRef.current) return
-
     setExporting(true)
     setShowExportModal(false)
 
     try {
-      // 원본 이미지/PDF 캔버스 크기 가져오기
-      const sourceCanvas = effectiveFileType === 'pdf' ? pdfCanvasRef.current : null
-      let baseWidth = 0
-      let baseHeight = 0
+      const { jsPDF } = await import('jspdf')
 
-      if (effectiveFileType === 'pdf' && sourceCanvas) {
-        baseWidth = sourceCanvas.width
-        baseHeight = sourceCanvas.height
-      } else if (effectiveFileType === 'image') {
-        // 이미지인 경우 로드해서 크기 가져오기
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve()
-          img.src = effectiveFileUrl
-        })
-        baseWidth = img.width * 2 // 고해상도
-        baseHeight = img.height * 2
+      // 내보낼 곡 목록 결정 (다중 곡 모드면 모든 곡, 단일 곡이면 현재 곡만)
+      const songsToExport = isMultiSongMode ? songs : [{
+        song_id: 'single',
+        song_name: songName,
+        team_name: artistName,
+        file_url: fileUrl,
+        file_type: fileType,
+        songForms: songForms,
+      }]
+
+      // 렌더링할 페이지 데이터 수집
+      type PageExportData = {
+        songName: string
+        pageNum: number
+        imageDataUrl: string
+        width: number
+        height: number
       }
+      const allPages: PageExportData[] = []
 
-      // 내보내기용 캔버스 생성
-      const exportCanvas = document.createElement('canvas')
-      exportCanvas.width = baseWidth
-      exportCanvas.height = baseHeight
-      const ctx = exportCanvas.getContext('2d')
-      if (!ctx) throw new Error('Canvas context 생성 실패')
+      for (const song of songsToExport) {
+        // 각 곡의 어노테이션 가져오기
+        const songAnnotations = isMultiSongMode
+          ? (allAnnotations[song.song_id] || [])
+          : annotationsRef.current
 
-      // 1. 배경색 채우기
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, baseWidth, baseHeight)
+        // PDF인 경우 페이지 수 계산 필요
+        let songTotalPages = 1
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let pdfDoc: any = null
 
-      // 2. 원본 이미지/PDF 렌더링
-      if (effectiveFileType === 'pdf' && sourceCanvas) {
-        ctx.drawImage(sourceCanvas, 0, 0)
-      } else if (effectiveFileType === 'image') {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve()
-          img.src = effectiveFileUrl
-        })
-        ctx.drawImage(img, 0, 0, baseWidth, baseHeight)
-      }
+        if (song.file_type === 'pdf') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const pdfjsLib = (window as any).pdfjsLib
+          if (pdfjsLib) {
+            pdfDoc = await pdfjsLib.getDocument(song.file_url).promise
+            songTotalPages = pdfDoc.numPages
+          }
+        }
 
-      // 3. 송폼 렌더링 (활성화된 경우에만)
-      if (songFormEnabled && effectiveSongForms.length > 0) {
-        const songFormText = effectiveSongForms.join(' - ')
-        // 화면에서 보이는 것과 동일한 크기로 계산: (fontSize / 36) * (canvasHeight * 0.025)
-        const adjustedFontSize = (songFormStyle.fontSize / 36) * (baseHeight * 0.025)
-        ctx.font = `900 ${adjustedFontSize}px Arial, sans-serif`
-        ctx.fillStyle = songFormStyle.color
-        ctx.globalAlpha = songFormStyle.opacity
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'top'
+        // 각 페이지 렌더링
+        for (let pageNum = 1; pageNum <= songTotalPages; pageNum++) {
+          const exportCanvas = document.createElement('canvas')
+          const ctx = exportCanvas.getContext('2d')
+          if (!ctx) continue
 
-        const formX = (songFormStyle.x / 100) * baseWidth
-        const formY = (songFormStyle.y / 100) * baseHeight
-        ctx.fillText(songFormText, formX, formY)
-        ctx.globalAlpha = 1
-      }
+          let baseWidth = 0
+          let baseHeight = 0
 
-      // 4. 파트 태그 렌더링
-      const currentPageTags = partTags.filter(tag =>
-        tag.pageIndex === undefined || tag.pageIndex === currentPage - 1
-      )
-      currentPageTags.forEach(tag => {
-        // 화면에서 보이는 것과 동일한 크기로 계산: (fontSize / 36) * (canvasHeight * 0.025)
-        const adjustedFontSize = (tag.fontSize / 36) * (baseHeight * 0.025)
-        ctx.font = `bold ${adjustedFontSize}px Arial, sans-serif`
-        ctx.fillStyle = tag.color
-        ctx.globalAlpha = tag.opacity
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+          // 1. 원본 이미지/PDF 렌더링
+          if (song.file_type === 'pdf' && pdfDoc) {
+            const page = await pdfDoc.getPage(pageNum)
+            const viewport = page.getViewport({ scale: 2 })
+            baseWidth = viewport.width
+            baseHeight = viewport.height
+            exportCanvas.width = baseWidth
+            exportCanvas.height = baseHeight
 
-        const tagX = (tag.x / 100) * baseWidth
-        const tagY = (tag.y / 100) * baseHeight
-        ctx.fillText(tag.label, tagX, tagY)
-        ctx.globalAlpha = 1
-      })
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, baseWidth, baseHeight)
 
-      // 5. 필기(스트로크) 렌더링
-      // 스트로크 좌표는 이미 2배 크기의 canvasRef 좌표계에 저장되어 있음
-      // baseWidth/Height도 2배 크기이므로 좌표 변환 없이 그대로 사용
-      const currentPageAnnotation = annotationsRef.current.find(a => a.pageNumber === currentPage)
-      if (currentPageAnnotation) {
-        currentPageAnnotation.strokes.forEach(stroke => {
-          if (stroke.points.length < 2) return
+            await page.render({
+              canvasContext: ctx,
+              viewport: viewport
+            }).promise
+          } else {
+            // 이미지인 경우
+            const img = new Image()
+            img.crossOrigin = 'anonymous'
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve()
+              img.onerror = reject
+              img.src = song.file_url
+            })
+            baseWidth = img.width * 2
+            baseHeight = img.height * 2
+            exportCanvas.width = baseWidth
+            exportCanvas.height = baseHeight
 
-          const strokeOutline = getStroke(stroke.points, {
-            size: stroke.size,
-            thinning: 0.5,
-            smoothing: 0.5,
-            streamline: 0.5,
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, baseWidth, baseHeight)
+            ctx.drawImage(img, 0, 0, baseWidth, baseHeight)
+          }
+
+          // 2. 송폼 렌더링 (활성화된 경우, 첫 페이지에만)
+          if (pageNum === 1 && songFormEnabled && song.songForms && song.songForms.length > 0) {
+            const songFormText = song.songForms.join(' - ')
+            const adjustedFontSize = (songFormStyle.fontSize / 36) * (baseHeight * 0.025)
+            ctx.font = `900 ${adjustedFontSize}px Arial, sans-serif`
+            ctx.fillStyle = songFormStyle.color
+            ctx.globalAlpha = songFormStyle.opacity
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'top'
+
+            const formX = (songFormStyle.x / 100) * baseWidth
+            const formY = (songFormStyle.y / 100) * baseHeight
+            ctx.fillText(songFormText, formX, formY)
+            ctx.globalAlpha = 1
+          }
+
+          // 3. 파트 태그 렌더링 (해당 페이지의 태그만)
+          const pageTags = partTags.filter(tag =>
+            tag.pageIndex === undefined || tag.pageIndex === pageNum - 1
+          )
+          pageTags.forEach(tag => {
+            const adjustedFontSize = (tag.fontSize / 36) * (baseHeight * 0.025)
+            ctx.font = `bold ${adjustedFontSize}px Arial, sans-serif`
+            ctx.fillStyle = tag.color
+            ctx.globalAlpha = tag.opacity
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+
+            const tagX = (tag.x / 100) * baseWidth
+            const tagY = (tag.y / 100) * baseHeight
+            ctx.fillText(tag.label, tagX, tagY)
+            ctx.globalAlpha = 1
           })
 
-          if (strokeOutline.length < 2) return
+          // 4. 필기(스트로크) 렌더링
+          const pageAnnotation = songAnnotations.find(a => a.pageNumber === pageNum)
+          if (pageAnnotation) {
+            pageAnnotation.strokes.forEach(stroke => {
+              if (stroke.points.length < 2) return
 
-          ctx.fillStyle = stroke.color
-          ctx.globalAlpha = stroke.opacity
-          ctx.beginPath()
-          ctx.moveTo(strokeOutline[0][0], strokeOutline[0][1])
-          for (let i = 1; i < strokeOutline.length; i++) {
-            ctx.lineTo(strokeOutline[i][0], strokeOutline[i][1])
+              const strokeOutline = getStroke(stroke.points, {
+                size: stroke.size,
+                thinning: 0.5,
+                smoothing: 0.5,
+                streamline: 0.5,
+              })
+
+              if (strokeOutline.length < 2) return
+
+              ctx.fillStyle = stroke.color
+              ctx.globalAlpha = stroke.opacity
+              ctx.beginPath()
+              ctx.moveTo(strokeOutline[0][0], strokeOutline[0][1])
+              for (let i = 1; i < strokeOutline.length; i++) {
+                ctx.lineTo(strokeOutline[i][0], strokeOutline[i][1])
+              }
+              ctx.closePath()
+              ctx.fill()
+              ctx.globalAlpha = 1
+            })
+
+            // 텍스트 요소 렌더링
+            pageAnnotation.textElements.forEach(text => {
+              ctx.font = `${text.fontSize}px ${text.fontFamily || 'sans-serif'}`
+              ctx.fillStyle = text.color
+              ctx.textAlign = 'left'
+              ctx.textBaseline = 'top'
+              ctx.fillText(text.text, text.x, text.y)
+            })
           }
-          ctx.closePath()
-          ctx.fill()
-          ctx.globalAlpha = 1
-        })
 
-        // 텍스트 요소 렌더링
-        currentPageAnnotation.textElements.forEach(text => {
-          ctx.font = `${text.fontSize}px ${text.fontFamily || 'sans-serif'}`
-          ctx.fillStyle = text.color
-          ctx.textAlign = 'left'
-          ctx.textBaseline = 'top'
-          ctx.fillText(text.text, text.x, text.y)
-        })
+          allPages.push({
+            songName: song.song_name,
+            pageNum,
+            imageDataUrl: exportCanvas.toDataURL('image/png'),
+            width: baseWidth,
+            height: baseHeight,
+          })
+        }
       }
 
       // 파일명 생성
-      const fileName = `${effectiveSongName}_필기_${new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '')}`
+      const dateStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '')
+      const baseName = isMultiSongMode && setlistTitle
+        ? `${setlistTitle}_필기_${dateStr}`
+        : `${effectiveSongName}_필기_${dateStr}`
 
       if (format === 'image') {
-        // 이미지(PNG) 다운로드
-        const link = document.createElement('a')
-        link.download = `${fileName}.png`
-        link.href = exportCanvas.toDataURL('image/png')
-        link.click()
+        // 이미지: 여러 페이지면 ZIP으로, 단일 페이지면 바로 다운로드
+        if (allPages.length === 1) {
+          const link = document.createElement('a')
+          link.download = `${baseName}.png`
+          link.href = allPages[0].imageDataUrl
+          link.click()
+        } else {
+          // 다중 페이지: JSZip 사용
+          const JSZip = (await import('jszip')).default
+          const zip = new JSZip()
+
+          allPages.forEach((page, idx) => {
+            const base64Data = page.imageDataUrl.split(',')[1]
+            const fileName = allPages.length > 1 && songsToExport.length > 1
+              ? `${page.songName}_p${page.pageNum}.png`
+              : `${idx + 1}.png`
+            zip.file(fileName, base64Data, { base64: true })
+          })
+
+          const zipBlob = await zip.generateAsync({ type: 'blob' })
+          const link = document.createElement('a')
+          link.download = `${baseName}.zip`
+          link.href = URL.createObjectURL(zipBlob)
+          link.click()
+          URL.revokeObjectURL(link.href)
+        }
       } else {
-        // PDF 다운로드 (jspdf 사용)
-        const { jsPDF } = await import('jspdf')
+        // PDF: 모든 페이지를 하나의 PDF로
+        let pdf: import('jspdf').jsPDF | null = null
 
-        // 캔버스 크기에 맞춰 PDF 생성 (가로/세로 자동 판단)
-        const imgWidth = exportCanvas.width
-        const imgHeight = exportCanvas.height
-        const orientation = imgWidth > imgHeight ? 'landscape' : 'portrait'
+        allPages.forEach((page, idx) => {
+          const imgWidth = page.width
+          const imgHeight = page.height
+          const orientation = imgWidth > imgHeight ? 'landscape' : 'portrait'
 
-        // A4 크기 기준
-        const pdfWidth = orientation === 'landscape' ? 297 : 210
-        const pdfHeight = orientation === 'landscape' ? 210 : 297
+          const pdfWidth = orientation === 'landscape' ? 297 : 210
+          const pdfHeight = orientation === 'landscape' ? 210 : 297
 
-        // 이미지 비율 유지하면서 PDF에 맞추기
-        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
-        const scaledWidth = imgWidth * ratio
-        const scaledHeight = imgHeight * ratio
-        const offsetX = (pdfWidth - scaledWidth) / 2
-        const offsetY = (pdfHeight - scaledHeight) / 2
+          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
+          const scaledWidth = imgWidth * ratio
+          const scaledHeight = imgHeight * ratio
+          const offsetX = (pdfWidth - scaledWidth) / 2
+          const offsetY = (pdfHeight - scaledHeight) / 2
 
-        const pdf = new jsPDF({
-          orientation,
-          unit: 'mm',
-          format: 'a4'
+          if (idx === 0) {
+            pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
+          } else if (pdf) {
+            pdf.addPage([pdfWidth, pdfHeight], orientation)
+          }
+
+          if (pdf) {
+            pdf.addImage(page.imageDataUrl, 'PNG', offsetX, offsetY, scaledWidth, scaledHeight)
+          }
         })
 
-        const imgData = exportCanvas.toDataURL('image/png')
-        pdf.addImage(imgData, 'PNG', offsetX, offsetY, scaledWidth, scaledHeight)
-        pdf.save(`${fileName}.pdf`)
+        if (pdf) {
+          (pdf as import('jspdf').jsPDF).save(`${baseName}.pdf`)
+        }
       }
     } catch (error) {
       console.error('내보내기 실패:', error)
@@ -1477,7 +1550,7 @@ export default function SheetMusicEditor({
     } finally {
       setExporting(false)
     }
-  }, [effectiveSongName, effectiveFileType, effectiveFileUrl, songFormEnabled, effectiveSongForms, songFormStyle, partTags, currentPage])
+  }, [isMultiSongMode, songs, songName, artistName, fileUrl, fileType, songForms, allAnnotations, songFormEnabled, songFormStyle, partTags, effectiveSongName, setlistTitle])
 
   // ===== 전체 지우기 =====
   const clearCurrentPage = useCallback(() => {
