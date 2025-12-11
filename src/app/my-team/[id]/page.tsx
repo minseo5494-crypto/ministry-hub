@@ -1771,6 +1771,7 @@ title={currentSheetSong.song_name}
     songName=""
     songs={noteEditorSongs}
     setlistTitle={noteEditorSetlistTitle}
+    initialMode="view"
     onSaveAll={handleSaveAllNotes}
     onClose={handleCloseNoteEditor}
   />

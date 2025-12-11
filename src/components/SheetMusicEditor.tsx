@@ -73,6 +73,8 @@ interface EditorProps {
   songs?: EditorSong[]
   setlistTitle?: string
   onSaveAll?: (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[] } }[]) => void
+  // 보기/편집 모드 통합
+  initialMode?: 'view' | 'edit'  // 초기 모드 (기본: edit)
 }
 
 // 올가미 선택 영역 타입
@@ -200,9 +202,16 @@ export default function SheetMusicEditor({
   songs = [],
   setlistTitle,
   onSaveAll,
+  // 보기/편집 모드
+  initialMode = 'edit',
 }: EditorProps) {
   // ===== 모바일 감지 =====
   const isMobile = useMobile()
+
+  // ===== 보기/편집 모드 상태 =====
+  const [editorMode, setEditorMode] = useState<'view' | 'edit'>(initialMode)
+  const isViewMode = editorMode === 'view'
+  const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
   // ===== 다중 곡 모드 지원 =====
   const isMultiSongMode = songs.length > 0
@@ -272,6 +281,17 @@ export default function SheetMusicEditor({
       setEraserSize(prev => prev < 30 ? 30 : prev)  // 모바일: 최소 30
     }
   }, [isMobile])
+
+  // view 모드에서는 pan 도구로 자동 전환, edit 모드로 돌아오면 이전 도구 복원
+  useEffect(() => {
+    if (isViewMode) {
+      prevToolRef.current = tool
+      setTool('pan')
+    } else if (prevToolRef.current !== 'pan') {
+      // edit 모드로 전환 시 이전 도구 복원 (pan이 아닌 경우에만)
+      setTool(prevToolRef.current)
+    }
+  }, [isViewMode])
 
   // 지우개 커서 위치
   const [eraserPosition, setEraserPosition] = useState<{ x: number; y: number } | null>(null)
@@ -1122,8 +1142,56 @@ export default function SheetMusicEditor({
 
   // ===== 줌 컨트롤 =====
   const handleZoom = useCallback((delta: number) => {
-    setScale((prev) => Math.max(0.5, Math.min(3, prev + delta)))
+    setScale((prev) => Math.max(0.2, Math.min(3, prev + delta)))
   }, [])
+
+  // 화면에 맞추기 버튼용
+  const handleFitToScreen = useCallback(() => {
+    if (canvasSize.width > 0 && canvasSize.height > 0) {
+      fitToScreen(canvasSize.width, canvasSize.height)
+    }
+  }, [canvasSize, fitToScreen])
+
+  // 마우스 휠로 줌 (데스크톱)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      handleZoom(delta)
+    }
+  }, [handleZoom])
+
+  // 핀치 투 줌 (모바일)
+  const lastTouchDistance = useRef<number | null>(null)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
+    }
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const delta = (distance - lastTouchDistance.current) * 0.005
+      handleZoom(delta)
+      lastTouchDistance.current = distance
+    }
+  }, [handleZoom])
+
+  const handleTouchEnd = useCallback(() => {
+    lastTouchDistance.current = null
+  }, [])
+
+  // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
+  useEffect(() => {
+    if (isViewMode && canvasReady && canvasSize.width > 0 && canvasSize.height > 0) {
+      fitToScreen(canvasSize.width, canvasSize.height)
+    }
+  }, [isViewMode, canvasReady, canvasSize.width, canvasSize.height, fitToScreen])
 
   // ===== 송폼/파트 태그 드래그 핸들러 =====
   const handleFormDragMove = useCallback((e: React.MouseEvent) => {
@@ -1501,10 +1569,10 @@ export default function SheetMusicEditor({
     <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
       <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'}`}>
-        {/* 모바일: 2줄 레이아웃, 데스크톱: 1줄 레이아웃 */}
-        <div className={`flex items-center ${isMobile ? 'flex-wrap gap-2' : 'justify-between'}`}>
+        {/* 1줄 레이아웃: 왼쪽(닫기+곡정보) | 중앙(네비게이션) | 오른쪽(모드+버튼) */}
+        <div className={`flex items-center ${isMobile ? 'flex-wrap gap-2' : 'justify-between gap-4'}`}>
           {/* 왼쪽: 닫기 + 곡 정보 */}
-          <div className={`flex items-center gap-2 ${isMobile ? 'flex-1 min-w-0' : ''}`}>
+          <div className={`flex items-center gap-2 ${isMobile ? 'flex-1 min-w-0' : 'flex-shrink-0'}`}>
             <button
               onClick={onClose}
               className={`hover:bg-gray-100 rounded text-gray-700 ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
@@ -1534,54 +1602,166 @@ export default function SheetMusicEditor({
             )}
           </div>
 
-          {/* 저장/내보내기 버튼 - 모바일에서는 오른쪽 끝에 */}
-          <div className={`flex items-center gap-1.5 ${isMobile ? '' : 'gap-2'}`}>
+          {/* 중앙: 네비게이션 (데스크톱에서만 첫 번째 줄에 표시) */}
+          {!isMobile && (isMultiSongMode || totalPages > 1) && (
+            <div className="flex items-center gap-3 flex-1 justify-center">
+              {/* 곡 네비게이션 (다중 곡 모드) */}
+              {isMultiSongMode && songs.length > 1 && (
+                <div className="flex items-center gap-1.5 text-gray-700 bg-purple-50 rounded-lg px-2 py-1">
+                  <button
+                    onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
+                    disabled={currentSongIndex === 0}
+                    className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
+                    title="이전 곡"
+                  >
+                    ⏮
+                  </button>
+                  <span className="text-sm font-medium text-purple-700 text-center min-w-[70px]">
+                    {effectiveSongName.length > 8 ? effectiveSongName.slice(0, 8) + '..' : effectiveSongName}
+                  </span>
+                  <button
+                    onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
+                    disabled={currentSongIndex === songs.length - 1}
+                    className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
+                    title="다음 곡"
+                  >
+                    ⏭
+                  </button>
+                </div>
+              )}
+
+              {/* 페이지 네비게이션 (PDF 다중 페이지) */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5 text-gray-700 bg-gray-100 rounded-lg px-2 py-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1 hover:bg-gray-200 rounded disabled:opacity-50"
+                  >
+                    ◀
+                  </button>
+                  <span className="text-sm font-medium min-w-[40px] text-center">
+                    {currentPage}/{totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1 hover:bg-gray-200 rounded disabled:opacity-50"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 오른쪽: 모드 전환 + 저장/내보내기 버튼 */}
+          <div className={`flex items-center gap-1.5 ${isMobile ? '' : 'gap-2 flex-shrink-0'}`}>
             {!isMultiSongMode && queueInfo && queueInfo.nextSongName && !isMobile && (
               <span className="text-xs text-gray-500">
                 다음: {queueInfo.nextSongName}
               </span>
             )}
-            <button
-              onClick={() => setShowExportModal(true)}
-              className={`bg-green-50 hover:bg-green-100 border border-green-200 rounded font-medium text-green-700 ${
-                isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
-              }`}
-              disabled={exporting}
-            >
-              {exporting ? '...' : (isMobile ? '📤' : '내보내기')}
-            </button>
-            <button
-              onClick={handleSave}
-              className={`bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium text-blue-700 ${
-                isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
-              }`}
-            >
-              {isMobile ? '💾' : (isMultiSongMode ? '전체 저장' : (queueInfo && queueInfo.current < queueInfo.total ? '저장 & 다음' : '저장'))}
-            </button>
+
+            {/* 모드 전환 버튼 */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setEditorMode('view')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  isViewMode
+                    ? 'bg-white shadow text-gray-800'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="악보 보기"
+              >
+                {isMobile ? '👁' : '👁 보기'}
+              </button>
+              <button
+                onClick={() => setEditorMode('edit')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  !isViewMode
+                    ? 'bg-white shadow text-gray-800'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+                title="필기 모드"
+              >
+                {isMobile ? '✏️' : '✏️ 필기'}
+              </button>
+            </div>
+
+            {/* 줌 컨트롤 - 뷰 모드에서 표시 */}
+            {isViewMode && (
+              <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1'} bg-gray-100 rounded-lg px-2 py-1`}>
+                <button
+                  onClick={() => handleZoom(-0.1)}
+                  className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
+                  title="축소"
+                >
+                  ➖
+                </button>
+                <button
+                  onClick={handleFitToScreen}
+                  className={`hover:bg-gray-200 rounded text-xs font-medium ${isMobile ? 'px-1.5 py-1' : 'px-2 py-1'}`}
+                  title="화면에 맞추기"
+                >
+                  {Math.round(scale * 100)}%
+                </button>
+                <button
+                  onClick={() => handleZoom(0.1)}
+                  className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
+                  title="확대"
+                >
+                  ➕
+                </button>
+              </div>
+            )}
+
+            {/* 내보내기/저장 버튼 - 편집 모드에서만 표시 */}
+            {!isViewMode && (
+              <>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className={`bg-green-50 hover:bg-green-100 border border-green-200 rounded font-medium text-green-700 ${
+                    isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
+                  }`}
+                  disabled={exporting}
+                >
+                  {exporting ? '...' : (isMobile ? '📤' : '내보내기')}
+                </button>
+                <button
+                  onClick={handleSave}
+                  className={`bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium text-blue-700 ${
+                    isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
+                  }`}
+                >
+                  {isMobile ? '💾' : (isMultiSongMode ? '전체 저장' : (queueInfo && queueInfo.current < queueInfo.total ? '저장 & 다음' : '저장'))}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* 네비게이션 - 모바일에서는 두 번째 줄 */}
-        {(isMultiSongMode || totalPages > 1) && (
-          <div className={`flex items-center justify-center gap-4 ${isMobile ? 'mt-1.5 pt-1.5 border-t border-gray-100' : 'hidden'}`}>
+        {/* 모바일에서만 네비게이션 두 번째 줄에 표시 */}
+        {isMobile && (isMultiSongMode || totalPages > 1) && (
+          <div className="flex items-center justify-center gap-4 mt-1.5 pt-1.5 border-t border-gray-100">
             {/* 곡 네비게이션 (다중 곡 모드) */}
             {isMultiSongMode && songs.length > 1 && (
-              <div className="flex items-center gap-2 text-gray-700 bg-purple-50 px-2 py-1 rounded-lg">
+              <div className="flex items-center gap-2 text-gray-700 bg-purple-50 rounded-lg px-2 py-1">
                 <button
                   onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
                   disabled={currentSongIndex === 0}
-                  className={`hover:bg-purple-100 rounded disabled:opacity-30 ${isMobile ? 'p-1.5' : 'p-1'}`}
+                  className="p-1.5 hover:bg-purple-100 rounded disabled:opacity-30"
                   title="이전 곡"
                 >
                   ⏮
                 </button>
-                <span className="text-xs font-medium text-purple-700 min-w-[50px] text-center">
+                <span className="text-xs font-medium text-purple-700 text-center min-w-[50px]">
                   {effectiveSongName.length > 6 ? effectiveSongName.slice(0, 6) + '..' : effectiveSongName}
                 </span>
                 <button
                   onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
                   disabled={currentSongIndex === songs.length - 1}
-                  className={`hover:bg-purple-100 rounded disabled:opacity-30 ${isMobile ? 'p-1.5' : 'p-1'}`}
+                  className="p-1.5 hover:bg-purple-100 rounded disabled:opacity-30"
                   title="다음 곡"
                 >
                   ⏭
@@ -1591,11 +1771,11 @@ export default function SheetMusicEditor({
 
             {/* 페이지 네비게이션 (PDF 다중 페이지) */}
             {totalPages > 1 && (
-              <div className="flex items-center gap-1 text-gray-700">
+              <div className="flex items-center gap-1 text-gray-700 bg-gray-100 rounded-lg px-2 py-1">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className={`hover:bg-gray-100 rounded disabled:opacity-50 ${isMobile ? 'p-1.5' : 'p-2'}`}
+                  className="p-1.5 hover:bg-gray-200 rounded disabled:opacity-50"
                 >
                   ◀
                 </button>
@@ -1605,60 +1785,7 @@ export default function SheetMusicEditor({
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className={`hover:bg-gray-100 rounded disabled:opacity-50 ${isMobile ? 'p-1.5' : 'p-2'}`}
-                >
-                  ▶
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 데스크톱에서의 네비게이션 - 기존 위치 */}
-        {!isMobile && (isMultiSongMode || totalPages > 1) && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-4">
-            {/* 곡 네비게이션 (다중 곡 모드) */}
-            {isMultiSongMode && songs.length > 1 && (
-              <div className="flex items-center gap-2 text-gray-700 bg-purple-50 px-3 py-1 rounded-lg">
-                <button
-                  onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
-                  disabled={currentSongIndex === 0}
-                  className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
-                  title="이전 곡"
-                >
-                  ⏮
-                </button>
-                <span className="text-sm font-medium text-purple-700 min-w-[60px] text-center">
-                  {effectiveSongName.length > 8 ? effectiveSongName.slice(0, 8) + '...' : effectiveSongName}
-                </span>
-                <button
-                  onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
-                  disabled={currentSongIndex === songs.length - 1}
-                  className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
-                  title="다음 곡"
-                >
-                  ⏭
-                </button>
-              </div>
-            )}
-
-            {/* 페이지 네비게이션 (PDF 다중 페이지) */}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2 text-gray-700">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
-                >
-                  ◀
-                </button>
-                <span>
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-2 hover:bg-gray-100 rounded disabled:opacity-50"
+                  className="p-1.5 hover:bg-gray-200 rounded disabled:opacity-50"
                 >
                   ▶
                 </button>
@@ -1668,8 +1795,10 @@ export default function SheetMusicEditor({
         )}
       </div>
 
-      {/* 도구 모음 - 밝은 테마 (모바일 최적화) */}
-      <div className={`bg-gray-50 border-b border-gray-200 flex items-center overflow-x-auto ${isMobile ? 'p-1.5 gap-2' : 'p-2 gap-4'}`}>
+      {/* 도구 모음 - 밝은 테마 (모바일 최적화) - 편집 모드에서만 표시 */}
+      <div className={`bg-gray-50 border-b border-gray-200 flex items-center overflow-x-auto transition-all duration-300 ${
+        isViewMode ? 'max-h-0 overflow-hidden opacity-0 p-0 border-b-0' : `${isMobile ? 'p-1.5 gap-2 max-h-20 opacity-100' : 'p-2 gap-4 max-h-20 opacity-100'}`
+      }`}>
         {/* 도구 선택 - 굿노트 스타일 순서 */}
         <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'}`}>
           {/* 손 모드 (기본) - 화면 이동 */}
@@ -1887,6 +2016,10 @@ export default function SheetMusicEditor({
         onMouseLeave={handleFormDragEnd}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handlePartTagDrop}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div
           style={{
@@ -2042,8 +2175,8 @@ export default function SheetMusicEditor({
         />
       )}
 
-      {/* 송폼 설정 사이드 패널 (모바일: 바닥 시트 스타일) */}
-      {effectiveSongForms.length > 0 && showSongFormPanel && (
+      {/* 송폼 설정 사이드 패널 (모바일: 바닥 시트 스타일) - 편집 모드에서만 */}
+      {effectiveSongForms.length > 0 && showSongFormPanel && !isViewMode && (
         <div className={`bg-white shadow-xl border border-gray-200 overflow-y-auto z-30 ${
           isMobile
             ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'

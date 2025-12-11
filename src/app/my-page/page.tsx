@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, Globe,
-  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Download, Pencil
+  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Pencil, Image, Download
 } from 'lucide-react'
 import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
@@ -74,13 +74,14 @@ const {
 const [editingNote, setEditingNote] = useState<LocalSheetMusicNote | null>(null)
 const [showNoteEditor, setShowNoteEditor] = useState(false)
 
-// 📝 파일명 수정 및 다운로드 모달 상태
+// 📝 파일명 수정 및 공유 모달 상태
 const [showRenameModal, setShowRenameModal] = useState(false)
 const [renameNote, setRenameNote] = useState<LocalSheetMusicNote | null>(null)
 const [newTitle, setNewTitle] = useState('')
-const [showDownloadModal, setShowDownloadModal] = useState(false)
-const [downloadNote, setDownloadNote] = useState<LocalSheetMusicNote | null>(null)
-const [downloadFileName, setDownloadFileName] = useState('')
+const [showShareModal2, setShowShareModal2] = useState(false)
+const [shareNote, setShareNote] = useState<LocalSheetMusicNote | null>(null)
+const [shareFileName, setShareFileName] = useState('')
+const [sharing, setSharing] = useState(false)
 
   
   // 공유 설정 모달
@@ -970,14 +971,14 @@ setNewSong({ ...newSong, tempo: tempoValue })
                           </button>
                           <button
                             onClick={() => {
-                              setDownloadNote(note)
-                              setDownloadFileName(note.title)
-                              setShowDownloadModal(true)
+                              setShareNote(note)
+                              setShareFileName(note.title)
+                              setShowShareModal2(true)
                             }}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-green-100 hover:text-green-600"
-                            title="다운로드"
+                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                            title="내보내기"
                           >
-                            <Download size={14} />
+                            <Upload size={14} />
                           </button>
                           <button
                             onClick={async () => {
@@ -1525,73 +1526,243 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         </div>
       )}
 
-      {/* 📝 다운로드 모달 */}
-      {showDownloadModal && downloadNote && (
+      {/* 📝 공유/다운로드 모달 */}
+      {showShareModal2 && shareNote && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">파일 다운로드</h2>
+            <h2 className="text-xl font-bold mb-4">악보 내보내기</h2>
             <p className="text-sm text-gray-600 mb-4">
-              저장할 파일 이름을 입력하세요. (확장자는 자동으로 추가됩니다)
+              형식을 선택하고 공유하거나 다운로드하세요.
             </p>
-            <input
-              type="text"
-              value={downloadFileName}
-              onChange={(e) => setDownloadFileName(e.target.value)}
-              placeholder="저장할 파일명..."
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              저장될 파일명: {downloadFileName || '(파일명 입력)'}.{downloadNote.file_type === 'pdf' ? 'pdf' : 'png'}
-            </p>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowDownloadModal(false)
-                  setDownloadNote(null)
-                  setDownloadFileName('')
-                }}
-                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
-              >
-                취소
-              </button>
+
+            {/* 파일명 입력 */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">파일명</label>
+              <input
+                type="text"
+                value={shareFileName}
+                onChange={(e) => setShareFileName(e.target.value)}
+                placeholder="파일명 입력..."
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* 공유 섹션 */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Share2 size={14} className="inline mr-1" />
+                공유하기
+              </label>
+              <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={async () => {
-                  if (!downloadFileName.trim()) {
+                  if (!shareFileName.trim()) {
                     alert('파일명을 입력해주세요.')
                     return
                   }
+                  setSharing(true)
                   try {
-                    // 파일 다운로드
-                    const response = await fetch(downloadNote.file_url)
+                    // PDF 파일 가져오기
+                    const response = await fetch(shareNote.file_url)
                     const blob = await response.blob()
-                    const extension = downloadNote.file_type === 'pdf' ? 'pdf' : 'png'
-                    const filename = `${downloadFileName.trim()}.${extension}`
+                    const file = new File([blob], `${shareFileName.trim()}.pdf`, { type: 'application/pdf' })
 
-                    const url = window.URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = filename
-                    document.body.appendChild(a)
-                    a.click()
-                    window.URL.revokeObjectURL(url)
-                    document.body.removeChild(a)
+                    // Web Share API 지원 확인
+                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                      await navigator.share({
+                        title: shareFileName,
+                        text: `${shareNote.song_name} 악보`,
+                        files: [file]
+                      })
+                    } else {
+                      // Web Share API 미지원 시 다운로드로 대체
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `${shareFileName.trim()}.pdf`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+                      alert('이 브라우저에서는 직접 공유가 지원되지 않아 파일이 다운로드됩니다.')
+                    }
 
-                    setShowDownloadModal(false)
-                    setDownloadNote(null)
-                    setDownloadFileName('')
-                  } catch (error) {
-                    console.error('다운로드 오류:', error)
-                    alert('다운로드에 실패했습니다.')
+                    setShowShareModal2(false)
+                    setShareNote(null)
+                    setShareFileName('')
+                  } catch (error: any) {
+                    if (error.name !== 'AbortError') {
+                      console.error('공유 오류:', error)
+                      alert('공유에 실패했습니다.')
+                    }
+                  } finally {
+                    setSharing(false)
                   }
                 }}
-                disabled={!downloadFileName.trim()}
-                className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 flex items-center justify-center gap-2"
+                disabled={sharing || !shareFileName.trim()}
+                className="flex flex-col items-center justify-center p-4 bg-red-50 hover:bg-red-100 border-2 border-red-200 rounded-lg transition disabled:opacity-50"
               >
-                <Download size={18} />
-                다운로드
+                <FileText size={32} className="text-red-600 mb-2" />
+                <span className="font-medium text-red-700">PDF</span>
+                <span className="text-xs text-red-500 mt-1">PDF 공유</span>
               </button>
+
+              <button
+                onClick={async () => {
+                  if (!shareFileName.trim()) {
+                    alert('파일명을 입력해주세요.')
+                    return
+                  }
+                  setSharing(true)
+                  try {
+                    // 이미지로 변환하여 공유
+                    const response = await fetch(shareNote.file_url)
+                    const blob = await response.blob()
+
+                    // 이미지인 경우 그대로 사용
+                    const file = new File([blob], `${shareFileName.trim()}.png`, { type: 'image/png' })
+
+                    // Web Share API 지원 확인
+                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                      await navigator.share({
+                        title: shareFileName,
+                        text: `${shareNote.song_name} 악보`,
+                        files: [file]
+                      })
+                    } else {
+                      // Web Share API 미지원 시 다운로드로 대체
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `${shareFileName.trim()}.png`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+                      alert('이 브라우저에서는 직접 공유가 지원되지 않아 파일이 다운로드됩니다.')
+                    }
+
+                    setShowShareModal2(false)
+                    setShareNote(null)
+                    setShareFileName('')
+                  } catch (error: any) {
+                    if (error.name !== 'AbortError') {
+                      console.error('공유 오류:', error)
+                      alert('공유에 실패했습니다.')
+                    }
+                  } finally {
+                    setSharing(false)
+                  }
+                }}
+                disabled={sharing || !shareFileName.trim()}
+                className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition disabled:opacity-50"
+              >
+                <Image size={32} className="text-blue-600 mb-2" />
+                <span className="font-medium text-blue-700">이미지</span>
+                <span className="text-xs text-blue-500 mt-1">PNG 공유</span>
+              </button>
+              </div>
             </div>
+
+            {/* 다운로드 섹션 */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Download size={14} className="inline mr-1" />
+                다운로드
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={async () => {
+                    if (!shareFileName.trim()) {
+                      alert('파일명을 입력해주세요.')
+                      return
+                    }
+                    setSharing(true)
+                    try {
+                      const response = await fetch(shareNote.file_url)
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `${shareFileName.trim()}.pdf`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+
+                      setShowShareModal2(false)
+                      setShareNote(null)
+                      setShareFileName('')
+                    } catch (error) {
+                      console.error('다운로드 오류:', error)
+                      alert('다운로드에 실패했습니다.')
+                    } finally {
+                      setSharing(false)
+                    }
+                  }}
+                  disabled={sharing || !shareFileName.trim()}
+                  className="flex flex-col items-center justify-center p-3 bg-gray-50 hover:bg-gray-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
+                >
+                  <FileText size={24} className="text-gray-600 mb-1" />
+                  <span className="font-medium text-gray-700 text-sm">PDF</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!shareFileName.trim()) {
+                      alert('파일명을 입력해주세요.')
+                      return
+                    }
+                    setSharing(true)
+                    try {
+                      const response = await fetch(shareNote.file_url)
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `${shareFileName.trim()}.png`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+
+                      setShowShareModal2(false)
+                      setShareNote(null)
+                      setShareFileName('')
+                    } catch (error) {
+                      console.error('다운로드 오류:', error)
+                      alert('다운로드에 실패했습니다.')
+                    } finally {
+                      setSharing(false)
+                    }
+                  }}
+                  disabled={sharing || !shareFileName.trim()}
+                  className="flex flex-col items-center justify-center p-3 bg-gray-50 hover:bg-gray-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
+                >
+                  <Image size={24} className="text-gray-600 mb-1" />
+                  <span className="font-medium text-gray-700 text-sm">이미지</span>
+                </button>
+              </div>
+            </div>
+
+            {sharing && (
+              <div className="flex items-center justify-center py-2 text-gray-600">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
+                준비 중...
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setShowShareModal2(false)
+                setShareNote(null)
+                setShareFileName('')
+              }}
+              disabled={sharing}
+              className="w-full mt-4 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium disabled:opacity-50"
+            >
+              취소
+            </button>
           </div>
         </div>
       )}
