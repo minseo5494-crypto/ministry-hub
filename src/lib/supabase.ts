@@ -53,6 +53,24 @@ export interface SongStructure {
   // 예: { "Verse1": "가사...", "Chorus": "가사..." }
 }
 
+// SongSheet 타입 정의 (악보 버전 관리)
+export interface SongSheet {
+  id: string
+  song_id: string
+  file_url: string
+  file_type: 'pdf' | 'image' | string
+  file_hash?: string
+  file_size?: number
+  label?: string  // 예: "원본", "E키 편곡", "간단 버전"
+  uploaded_by?: string
+  visibility: 'public' | 'team' | 'private'
+  team_id?: string
+  is_primary: boolean
+  likes_count: number
+  created_at?: string
+  updated_at?: string
+}
+
 // Song 타입 정의
 export interface Song {
   id: string
@@ -84,7 +102,11 @@ export interface Song {
   version_info?: string
   visibility?: 'private' | 'teams' | 'public'
   upload_status?: 'pending' | 'completed' | 'failed'
-  like_count?: number  // 🎵 좋아요 수 추가
+  like_count?: number
+  // 악보 버전 관리
+  primary_sheet_id?: string
+  sheets?: SongSheet[]  // 연결된 악보들
+  sheets_count?: number  // 악보 개수
 }
 
 // Folder 타입 정의
