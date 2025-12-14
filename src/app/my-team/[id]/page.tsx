@@ -9,12 +9,13 @@ import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
 import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
   Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
-  Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon, Pencil
+  Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon, Pencil, Lock
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import SheetMusicEditor from '@/components/SheetMusicEditor'
 import { PageAnnotation } from '@/lib/supabase'
+import { useTeamPermissions } from '@/hooks/useTeamPermissions'
 
 interface TeamInfo {
   id: string
@@ -34,6 +35,7 @@ interface Setlist {
   song_count: number
   created_by: string
   created_at: string
+  creator_name?: string  // 이름 (우선 표시)
   creator_email?: string
   canEdit?: boolean
 }
@@ -136,6 +138,28 @@ const [noteEditorSetlistTitle, setNoteEditorSetlistTitle] = useState('')
 const [showFilters, setShowFilters] = useState(true)
 
 const isMobile = useMobile()
+
+// 권한 훅 사용
+const {
+  hasPermission,
+  isLeader,
+  isAdmin,
+  role: userTeamRole,
+  loading: permissionsLoading
+} = useTeamPermissions(teamId, user?.id)
+
+// 권한 체크 (DB 마이그레이션 전에는 기존 role 기반으로 폴백)
+const canCreateSetlist = hasPermission('create_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canEditSetlistPerm = hasPermission('edit_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canDeleteSetlist = hasPermission('delete_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canCopySetlist = hasPermission('copy_setlist') || true  // 복사는 기본 허용
+const canAddFixedSong = hasPermission('add_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canEditFixedSong = hasPermission('edit_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canDeleteFixedSong = hasPermission('delete_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
+const canViewSheet = hasPermission('view_sheet') || true  // 악보 보기는 기본 허용
+const canDownloadSheet = hasPermission('download_sheet') || true  // 다운로드는 기본 허용
+const canManageMembers = hasPermission('manage_members') || team?.my_role === 'leader'
+const canEditTeamSettings = hasPermission('edit_team_settings') || team?.my_role === 'leader' || team?.my_role === 'admin'
 
 // 모바일일 때 필터 기본 숨김
 useEffect(() => {
@@ -240,7 +264,7 @@ const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉�
           service_type,
           created_by,
           created_at,
-          users:created_by (email)
+          users:created_by (name, email)
         `)
         .eq('team_id', teamId)
         .order('service_date', { ascending: false })
@@ -264,6 +288,7 @@ const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉�
             song_count: count || 0,
             created_by: setlist.created_by,
             created_at: setlist.created_at,
+            creator_name: setlist.users?.name,
             creator_email: setlist.users?.email,
             canEdit
           }
@@ -956,7 +981,7 @@ const downloadSelectedFixedSongs = async () => {
             <span className="sm:hidden">{selectedFixedSongs.length}</span>
           </button>
         )}
-        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+        {canAddFixedSong && (
           <button
             onClick={() => setShowAddFixedSongModal(true)}
             className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center gap-2 text-sm"
@@ -974,7 +999,7 @@ const downloadSelectedFixedSongs = async () => {
     {fixedSongs.length === 0 ? (
       <p className="text-center text-gray-500 py-8">
         아직 등록된 고정곡이 없습니다.
-        {(team?.my_role === 'leader' || team?.my_role === 'admin') && (
+        {canAddFixedSong && (
           <><br /><span className="text-sm">위의 "고정곡 추가" 버튼을 눌러 추가하세요.</span></>
         )}
       </p>
@@ -1116,13 +1141,20 @@ const downloadSelectedFixedSongs = async () => {
           <div className="p-4 sm:p-6 border-b">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <h2 className="text-lg sm:text-xl font-bold text-gray-900">콘티 목록</h2>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="w-full sm:w-auto px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center gap-2 text-sm"
-              >
-                <Plus size={18} className="flex-shrink-0" />
-                <span>새 콘티 만들기</span>
-              </button>
+              {canCreateSetlist ? (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="w-full sm:w-auto px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center gap-2 text-sm"
+                >
+                  <Plus size={18} className="flex-shrink-0" />
+                  <span>새 콘티 만들기</span>
+                </button>
+              ) : (
+                <div className="text-xs text-gray-400 flex items-center gap-1">
+                  <Lock size={14} />
+                  <span>콘티 생성 권한 없음</span>
+                </div>
+              )}
             </div>
 
             {/* 필터 토글 버튼 (모바일) */}
@@ -1228,9 +1260,9 @@ const downloadSelectedFixedSongs = async () => {
                           <Music className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           {setlist.song_count}곡
                         </span>
-                        {setlist.creator_email && (
+                        {(setlist.creator_name || setlist.creator_email) && (
                           <span className="hidden sm:inline text-gray-500">
-                            by {setlist.creator_email}
+                            by {setlist.creator_name || setlist.creator_email}
                           </span>
                         )}
                       </div>

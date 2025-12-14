@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { 
-  ArrowLeft, Save, Trash2, RefreshCw, Users, 
-  Crown, Shield, User, UserX, Copy, Check 
+import { useTeamPermissions } from '@/hooks/useTeamPermissions'
+import TeamRolesManager from '@/components/TeamRolesManager'
+import {
+  ArrowLeft, Save, Trash2, RefreshCw, Users,
+  Crown, Shield, User, UserX, Copy, Check, Settings
 } from 'lucide-react'
 
 interface TeamInfo {
@@ -47,6 +49,13 @@ export default function TeamSettingsPage() {
   const [editTeamName, setEditTeamName] = useState('')
   const [editChurchName, setEditChurchName] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // 탭 상태 (기본정보 / 권한관리)
+  const [activeTab, setActiveTab] = useState<'info' | 'roles'>('info')
+
+  // 권한 훅 사용
+  const { hasPermission, isAdmin, isLeader } = useTeamPermissions(teamId, user?.id)
+  const canManageRoles = hasPermission('manage_roles')
 
   useEffect(() => {
     checkUser()
@@ -449,6 +458,40 @@ export default function TeamSettingsPage() {
 
       {/* 메인 콘텐츠 */}
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+        {/* 탭 네비게이션 */}
+        <div className="flex border-b">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`px-6 py-3 font-medium border-b-2 transition-colors ${
+              activeTab === 'info'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Settings className="inline-block mr-2" size={18} />
+            기본 정보
+          </button>
+          <button
+            onClick={() => setActiveTab('roles')}
+            className={`px-6 py-3 font-medium border-b-2 transition-colors ${
+              activeTab === 'roles'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Shield className="inline-block mr-2" size={18} />
+            직책/권한 관리
+          </button>
+        </div>
+
+        {/* 탭 컨텐츠 */}
+        {activeTab === 'roles' ? (
+          <TeamRolesManager
+            teamId={teamId}
+            canManageRoles={canManageRoles}
+          />
+        ) : (
+          <>
         {/* 팀 정보 */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-bold mb-4">팀 정보</h2>
@@ -588,6 +631,8 @@ export default function TeamSettingsPage() {
               팀 삭제
             </button>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

@@ -41,10 +41,80 @@ export interface TeamMember {
   id: string;
   team_id: string;
   user_id: string;
-  role: 'admin' | 'leader' | 'member';
+  role: 'admin' | 'leader' | 'member';  // 기존 호환성 유지
+  role_id?: string;  // 새로운 직책 시스템
   parts?: string[];
   status: 'pending' | 'active' | 'inactive';
   joined_at?: string;
+  // 조인된 데이터
+  team_role?: TeamRole;
+  user?: User;
+}
+
+// ===== 권한 시스템 타입 =====
+
+// 권한 종류
+export type Permission =
+  | 'view_setlist'      // 콘티 보기
+  | 'create_setlist'    // 새 콘티 만들기
+  | 'edit_setlist'      // 콘티 편집
+  | 'delete_setlist'    // 콘티 삭제
+  | 'copy_setlist'      // 콘티 복사
+  | 'view_sheet'        // 악보 뷰어
+  | 'download_sheet'    // 악보 다운로드
+  | 'add_fixed_song'    // 고정곡 추가
+  | 'edit_fixed_song'   // 고정곡 편집
+  | 'delete_fixed_song' // 고정곡 삭제
+  | 'manage_members'    // 팀원 관리
+  | 'manage_roles'      // 직책/권한 설정
+  | 'edit_team_settings'; // 팀 설정 변경
+
+// 권한 라벨 (UI 표시용)
+export const PERMISSION_LABELS: { [key in Permission]: string } = {
+  'view_setlist': '콘티 보기',
+  'create_setlist': '새 콘티 만들기',
+  'edit_setlist': '콘티 편집',
+  'delete_setlist': '콘티 삭제',
+  'copy_setlist': '콘티 복사',
+  'view_sheet': '악보 뷰어',
+  'download_sheet': '악보 다운로드',
+  'add_fixed_song': '고정곡 추가',
+  'edit_fixed_song': '고정곡 편집',
+  'delete_fixed_song': '고정곡 삭제',
+  'manage_members': '팀원 관리',
+  'manage_roles': '직책/권한 설정',
+  'edit_team_settings': '팀 설정 변경',
+};
+
+// 권한 카테고리 (UI 그룹핑용)
+export const PERMISSION_CATEGORIES = {
+  '콘티': ['view_setlist', 'create_setlist', 'edit_setlist', 'delete_setlist', 'copy_setlist'] as Permission[],
+  '악보': ['view_sheet', 'download_sheet'] as Permission[],
+  '고정곡': ['add_fixed_song', 'edit_fixed_song', 'delete_fixed_song'] as Permission[],
+  '팀 관리': ['manage_members', 'manage_roles', 'edit_team_settings'] as Permission[],
+};
+
+// 팀 직책
+export interface TeamRole {
+  id: string;
+  team_id: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+  is_leader: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+  // 조인된 권한 목록
+  permissions?: Permission[];
+}
+
+// 직책별 권한
+export interface RolePermission {
+  id: string;
+  role_id: string;
+  permission: Permission;
+  created_at?: string;
 }
 
 // 송폼 구조 타입
