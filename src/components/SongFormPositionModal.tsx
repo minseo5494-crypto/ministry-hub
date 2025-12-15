@@ -526,28 +526,30 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   }
 
   const handlePreviewTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault() // 기본 터치 동작 방지
+    e.stopPropagation()
+
     const pos = getPositionFromEvent(e)
     if (!pos) return
 
-    // 송폼 클릭 체크
+    // 송폼 클릭 체크 - 히트 영역 대폭 확대
     if (currentForms.length > 0) {
       const formStyle = currentFormStyle
       const formX = formStyle.x
       const formY = formStyle.y
-      const hitRadius = 12 // 터치는 히트 영역 더 크게
+      const hitRadiusX = 40 // 가로 히트 영역 (송폼 텍스트가 가로로 길기 때문)
+      const hitRadiusY = 8  // 세로 히트 영역
 
-      if (Math.abs(pos.x - formX) < hitRadius && Math.abs(pos.y - formY) < hitRadius) {
-        e.preventDefault()
+      if (Math.abs(pos.x - formX) < hitRadiusX && Math.abs(pos.y - formY) < hitRadiusY) {
         setDraggingItem({ type: 'songForm' })
         return
       }
     }
 
-    // 파트 태그 클릭 체크
+    // 파트 태그 클릭 체크 - 히트 영역 확대
     for (const tag of currentPartTags) {
-      const hitRadius = 8 // 터치는 히트 영역 더 크게
+      const hitRadius = 12 // 터치 히트 영역 확대
       if (Math.abs(pos.x - tag.x) < hitRadius && Math.abs(pos.y - tag.y) < hitRadius) {
-        e.preventDefault()
         setDraggingItem({ type: 'partTag', id: tag.id })
         return
       }
@@ -916,6 +918,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 className="grid grid-cols-3 gap-2"
                 onTouchMove={handlePartTagTouchMove}
                 onTouchEnd={handlePartTagTouchEnd}
+                style={{
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none'
+                }}
               >
                 {AVAILABLE_PARTS.map(part => (
                   <div
@@ -924,8 +931,14 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                     onDragStart={() => setDraggingNewTag(part.key)}
                     onDragEnd={() => setDraggingNewTag(null)}
                     onTouchStart={(e) => handlePartTagTouchStart(part.key, e)}
-                    className="flex items-center justify-center p-2 text-white rounded cursor-move hover:opacity-80 transition-opacity text-sm font-bold select-none"
-                    style={{ backgroundColor: PART_COLORS[part.key] }}
+                    className="flex items-center justify-center p-3 text-white rounded cursor-move hover:opacity-80 active:opacity-60 transition-opacity text-sm font-bold"
+                    style={{
+                      backgroundColor: PART_COLORS[part.key],
+                      WebkitTouchCallout: 'none',
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
+                      touchAction: 'none'
+                    }}
                   >
                     {part.key}
                   </div>
@@ -1016,7 +1029,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   width: '480px',
                   aspectRatio: '210 / 297',
                   maxWidth: '100%',
-                  maxHeight: 'calc(100vh - 350px)'
+                  maxHeight: 'calc(100vh - 350px)',
+                  touchAction: 'none',
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none'
                 }}
                 onMouseDown={handlePreviewMouseDown}
                 onMouseMove={handlePreviewMouseMove}
@@ -1038,10 +1055,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   </div>
                 )}
 
-                {/* 미리보기 캔버스 */}
+                {/* 미리보기 캔버스 - 터치 이벤트가 컨테이너로 전달되도록 */}
                 <canvas
                   ref={previewCanvasRef}
                   className="w-full h-full"
+                  style={{ pointerEvents: 'none' }}
                 />
 
                 {/* 메인 캔버스 (숨김 - 고해상도 렌더링용) */}
