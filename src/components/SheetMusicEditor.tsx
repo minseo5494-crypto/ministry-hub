@@ -213,6 +213,9 @@ export default function SheetMusicEditor({
   const isViewMode = editorMode === 'view'
   const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
+  // ===== 보기 모드 전용: 툴바 숨기기 =====
+  const [hideToolbar, setHideToolbar] = useState(false)
+
   // ===== 다중 곡 모드 지원 =====
   const isMultiSongMode = songs.length > 0
   const [currentSongIndex, setCurrentSongIndex] = useState(0)
@@ -1152,6 +1155,44 @@ export default function SheetMusicEditor({
     }
   }, [canvasSize, fitToScreen])
 
+  // 보기 모드에서 화면 클릭 핸들러 (페이지 넘기기 + 상단바 토글)
+  const handleViewModeClick = useCallback((e: React.MouseEvent) => {
+    if (!isViewMode) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const containerWidth = rect.width
+
+    // 화면을 3등분: 왼쪽 30% / 중앙 40% / 오른쪽 30%
+    const leftZone = containerWidth * 0.3
+    const rightZone = containerWidth * 0.7
+
+    if (clickX < leftZone) {
+      // 왼쪽 클릭: 이전 페이지/이전 곡
+      if (totalPages > 1 && currentPage > 1) {
+        setCurrentPage(p => p - 1)
+      } else if (isMultiSongMode && currentSongIndex > 0) {
+        setCurrentSongIndex(i => i - 1)
+        // 이전 곡의 마지막 페이지로 이동
+        setCurrentPage(1) // 실제로는 이전 곡의 totalPages를 알아야 하지만 일단 1페이지로
+      }
+    } else if (clickX > rightZone) {
+      // 오른쪽 클릭: 다음 페이지/다음 곡
+      if (totalPages > 1 && currentPage < totalPages) {
+        setCurrentPage(p => p + 1)
+      } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
+        setCurrentSongIndex(i => i + 1)
+        setCurrentPage(1)
+      }
+    } else {
+      // 중앙 클릭: 상단바 토글
+      setHideToolbar(prev => !prev)
+    }
+  }, [isViewMode, totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length])
+
   // 마우스 휠로 줌 (데스크톱)
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -1199,7 +1240,7 @@ export default function SheetMusicEditor({
     // 핀치 줌 종료
     lastTouchDistance.current = null
 
-    // 스와이프 감지 (보기 모드에서만)
+    // 스와이프/탭 감지 (보기 모드에서만)
     if (isSwiping.current && swipeStartX.current !== null && swipeStartY.current !== null && e.changedTouches.length > 0) {
       const endX = e.changedTouches[0].clientX
       const endY = e.changedTouches[0].clientY
@@ -1223,6 +1264,37 @@ export default function SheetMusicEditor({
             setCurrentSongIndex(i => i + 1)
           }
         }
+      } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+        // 탭 감지 (거의 움직이지 않음) - 영역별 동작
+        const container = containerRef.current
+        if (container) {
+          const rect = container.getBoundingClientRect()
+          const tapX = endX - rect.left
+          const containerWidth = rect.width
+
+          // 화면을 3등분: 왼쪽 30% / 중앙 40% / 오른쪽 30%
+          const leftZone = containerWidth * 0.3
+          const rightZone = containerWidth * 0.7
+
+          if (tapX < leftZone) {
+            // 왼쪽 탭: 이전 페이지/이전 곡
+            if (totalPages > 1 && currentPage > 1) {
+              setCurrentPage(p => p - 1)
+            } else if (isMultiSongMode && currentSongIndex > 0) {
+              setCurrentSongIndex(i => i - 1)
+            }
+          } else if (tapX > rightZone) {
+            // 오른쪽 탭: 다음 페이지/다음 곡
+            if (totalPages > 1 && currentPage < totalPages) {
+              setCurrentPage(p => p + 1)
+            } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
+              setCurrentSongIndex(i => i + 1)
+            }
+          } else {
+            // 중앙 탭: 상단바 토글
+            setHideToolbar(prev => !prev)
+          }
+        }
       }
     }
 
@@ -1233,11 +1305,16 @@ export default function SheetMusicEditor({
   }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
+  // hideToolbar 변경 시에도 화면에 맞추기 (상단바 숨김/표시 시 레이아웃 변경)
   useEffect(() => {
     if (isViewMode && canvasReady && canvasSize.width > 0 && canvasSize.height > 0) {
-      fitToScreen(canvasSize.width, canvasSize.height)
+      // 레이아웃 변경 후 DOM 업데이트를 기다린 후 fitToScreen 호출
+      const timer = setTimeout(() => {
+        fitToScreen(canvasSize.width, canvasSize.height)
+      }, 50)
+      return () => clearTimeout(timer)
     }
-  }, [isViewMode, canvasReady, canvasSize.width, canvasSize.height, fitToScreen])
+  }, [isViewMode, canvasReady, canvasSize.width, canvasSize.height, fitToScreen, hideToolbar])
 
   // ===== 송폼/파트 태그 드래그 핸들러 =====
   const handleFormDragMove = useCallback((e: React.MouseEvent) => {
@@ -1687,7 +1764,8 @@ export default function SheetMusicEditor({
   return (
     <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
-      <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'}`}>
+      {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
+      <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
         {/* 1줄 레이아웃: 왼쪽(닫기+곡정보) | 중앙(네비게이션) | 오른쪽(모드+버튼) */}
         <div className={`flex items-center ${isMobile ? 'flex-wrap gap-2' : 'justify-between gap-4'}`}>
           {/* 왼쪽: 닫기 + 곡 정보 */}
@@ -2129,7 +2207,7 @@ export default function SheetMusicEditor({
       {/* 캔버스 영역 */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-gray-400 flex items-center justify-center"
+        className="flex-1 overflow-auto flex items-center justify-center bg-gray-400"
         onMouseMove={handleFormDragMove}
         onMouseUp={handleFormDragEnd}
         onMouseLeave={handleFormDragEnd}
@@ -2139,6 +2217,7 @@ export default function SheetMusicEditor({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onClick={handleViewModeClick}
       >
         <div
           style={{
