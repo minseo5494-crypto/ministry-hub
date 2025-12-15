@@ -273,6 +273,8 @@ export default function SheetMusicEditor({
   const currentStrokeRef = useRef<StrokePoint[]>([]) // 동기적 스트로크 추적
   const [isDrawing, setIsDrawing] = useState(false)
   const isDrawingRef = useRef(false) // 동기적 드로잉 상태 추적
+  const rafIdRef = useRef<number | null>(null) // requestAnimationFrame ID
+  const needsRenderRef = useRef(false) // 렌더링 필요 여부
 
   // annotations가 변경될 때마다 ref 업데이트
   useEffect(() => {
@@ -315,6 +317,24 @@ export default function SheetMusicEditor({
   const [isAddingText, setIsAddingText] = useState(false)
   const [textPosition, setTextPosition] = useState({ x: 0, y: 0 })
   const [textInput, setTextInput] = useState('')
+  const textInputRef = useRef<HTMLInputElement>(null)
+
+  // 텍스트 선택 및 드래그 (텍스트 모드에서)
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
+  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const [isDraggingText, setIsDraggingText] = useState(false)
+  const textDragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const lastTapTimeRef = useRef<number>(0) // 더블 탭 감지용
+
+  // 텍스트 입력창 자동 포커스 (키보드 표시)
+  useEffect(() => {
+    if ((isAddingText || editingTextId) && textInputRef.current) {
+      // 약간의 지연 후 포커스 (iOS 호환성)
+      setTimeout(() => {
+        textInputRef.current?.focus()
+      }, 100)
+    }
+  }, [isAddingText, editingTextId])
 
   // ===== 송폼 & 파트 태그 상태 =====
   const [showSongFormPanel, setShowSongFormPanel] = useState(false) // 설정 패널 표시
@@ -1014,9 +1034,19 @@ export default function SheetMusicEditor({
 
       if (!isDrawingRef.current) return
 
-      // ref와 state 모두 업데이트
-      currentStrokeRef.current = [...currentStrokeRef.current, pos]
-      setCurrentStroke(currentStrokeRef.current)
+      // ref에만 즉시 추가 (동기적)
+      currentStrokeRef.current.push(pos)
+
+      // requestAnimationFrame으로 렌더링 최적화 (프레임당 한번만)
+      if (!needsRenderRef.current) {
+        needsRenderRef.current = true
+        rafIdRef.current = requestAnimationFrame(() => {
+          if (isDrawingRef.current) {
+            setCurrentStroke([...currentStrokeRef.current])
+          }
+          needsRenderRef.current = false
+        })
+      }
     },
     [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection]
   )
@@ -1104,6 +1134,13 @@ export default function SheetMusicEditor({
       }
     })
 
+    // 대기 중인 렌더링 취소
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+    needsRenderRef.current = false
+
     // refs 먼저 리셋 (동기적)
     isDrawingRef.current = false
     currentStrokeRef.current = []
@@ -1157,6 +1194,98 @@ export default function SheetMusicEditor({
     setIsAddingText(false)
     saveToHistory()
   }, [textInput, textPosition, color, currentPage])
+
+  // ===== 텍스트 요소 선택/드래그/편집 (텍스트 모드) =====
+  const handleTextClick = useCallback((textId: string, e: React.MouseEvent | React.TouchEvent) => {
+    if (tool !== 'text') return
+
+    const now = Date.now()
+    const timeSinceLastTap = now - lastTapTimeRef.current
+    lastTapTimeRef.current = now
+
+    // 더블 클릭/탭 감지 (300ms 이내)
+    if (timeSinceLastTap < 300 && selectedTextId === textId) {
+      // 편집 모드 진입
+      setEditingTextId(textId)
+      const textEl = getCurrentPageAnnotation()?.textElements.find(t => t.id === textId)
+      if (textEl) {
+        setTextInput(textEl.text)
+        setTextPosition({ x: textEl.x, y: textEl.y })
+      }
+      return
+    }
+
+    // 단일 클릭: 선택
+    setSelectedTextId(textId)
+    setEditingTextId(null)
+  }, [tool, selectedTextId, getCurrentPageAnnotation])
+
+  const handleTextDragStart = useCallback((textId: string, e: React.MouseEvent | React.TouchEvent) => {
+    if (tool !== 'text' || selectedTextId !== textId) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    setIsDraggingText(true)
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    textDragStartRef.current = { x: clientX, y: clientY }
+  }, [tool, selectedTextId])
+
+  const handleTextDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDraggingText || !selectedTextId || !textDragStartRef.current) return
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
+    const dx = (clientX - textDragStartRef.current.x) / scale
+    const dy = (clientY - textDragStartRef.current.y) / scale
+
+    textDragStartRef.current = { x: clientX, y: clientY }
+
+    setAnnotations(prev => prev.map(a => {
+      if (a.pageNumber !== currentPage) return a
+      return {
+        ...a,
+        textElements: a.textElements.map(t => {
+          if (t.id !== selectedTextId) return t
+          return { ...t, x: t.x + dx, y: t.y + dy }
+        })
+      }
+    }))
+  }, [isDraggingText, selectedTextId, scale, currentPage])
+
+  const handleTextDragEnd = useCallback(() => {
+    if (isDraggingText) {
+      setIsDraggingText(false)
+      textDragStartRef.current = null
+      saveToHistory()
+    }
+  }, [isDraggingText])
+
+  // 편집 완료 시 텍스트 업데이트
+  const updateTextElement = useCallback(() => {
+    if (!editingTextId || !textInput.trim()) {
+      setEditingTextId(null)
+      setTextInput('')
+      return
+    }
+
+    setAnnotations(prev => prev.map(a => {
+      if (a.pageNumber !== currentPage) return a
+      return {
+        ...a,
+        textElements: a.textElements.map(t => {
+          if (t.id !== editingTextId) return t
+          return { ...t, text: textInput }
+        })
+      }
+    }))
+
+    setEditingTextId(null)
+    setTextInput('')
+    saveToHistory()
+  }, [editingTextId, textInput, currentPage])
 
   // ===== 히스토리 관리 =====
   const saveToHistory = useCallback(() => {
@@ -2300,6 +2429,7 @@ export default function SheetMusicEditor({
               style={{ left: textPosition.x, top: textPosition.y }}
             >
               <input
+                ref={textInputRef}
                 type="text"
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
@@ -2319,6 +2449,72 @@ export default function SheetMusicEditor({
               </button>
             </div>
           )}
+
+          {/* 텍스트 편집 모달 (더블 클릭으로 진입) */}
+          {editingTextId && (
+            <div
+              className="absolute bg-white border-2 border-green-500 rounded shadow-lg p-2"
+              style={{ left: textPosition.x, top: textPosition.y }}
+            >
+              <input
+                ref={textInputRef}
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') updateTextElement()
+                  if (e.key === 'Escape') {
+                    setEditingTextId(null)
+                    setTextInput('')
+                  }
+                }}
+                placeholder="텍스트 수정..."
+                className="border-none outline-none text-black"
+                autoFocus
+              />
+              <button
+                onClick={updateTextElement}
+                className="ml-2 px-2 py-1 bg-green-500 text-white rounded text-sm"
+              >
+                완료
+              </button>
+            </div>
+          )}
+
+          {/* 텍스트 요소 인터랙션 오버레이 (텍스트 모드에서만) */}
+          {tool === 'text' && !isAddingText && !editingTextId && getCurrentPageAnnotation()?.textElements.map(textEl => (
+            <div
+              key={textEl.id}
+              className={`absolute cursor-move select-none ${
+                selectedTextId === textEl.id
+                  ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/30'
+                  : 'hover:ring-2 hover:ring-blue-300'
+              }`}
+              style={{
+                left: textEl.x,
+                top: textEl.y - textEl.fontSize,
+                fontSize: textEl.fontSize,
+                color: textEl.color,
+                padding: '2px 4px',
+                borderRadius: '2px',
+                whiteSpace: 'nowrap',
+              }}
+              onClick={(e) => handleTextClick(textEl.id, e)}
+              onMouseDown={(e) => {
+                if (selectedTextId === textEl.id) {
+                  handleTextDragStart(textEl.id, e)
+                }
+              }}
+              onTouchStart={(e) => {
+                handleTextClick(textEl.id, e)
+                if (selectedTextId === textEl.id) {
+                  handleTextDragStart(textEl.id, e)
+                }
+              }}
+            >
+              {textEl.text}
+            </div>
+          ))}
 
           {/* 송폼 & 파트 태그 오버레이 - songFormEnabled일 때 항상 표시, 캔버스가 렌더링된 후에만 */}
           {effectiveSongForms.length > 0 && songFormEnabled && canvasReady && canvasSize.height > 0 && (
