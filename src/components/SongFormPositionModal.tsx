@@ -614,8 +614,15 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   const [touchDraggingTag, setTouchDraggingTag] = useState<string | null>(null)
   const [touchPosition, setTouchPosition] = useState<{ x: number; y: number } | null>(null)
 
+  // 📱 파트 태그 탭하면 바로 캔버스 중앙에 추가 (아이패드 터치 지원)
+  const handlePartTagTap = (key: string) => {
+    // 캔버스 중앙에 파트 태그 추가
+    addPartTag(key, 50, 50)
+  }
+
   const handlePartTagTouchStart = (key: string, e: React.TouchEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     setTouchDraggingTag(key)
     const touch = e.touches[0]
     setTouchPosition({ x: touch.clientX, y: touch.clientY })
@@ -630,6 +637,10 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
   const handlePartTagTouchEnd = (e: React.TouchEvent) => {
     if (!touchDraggingTag || !containerRef.current) {
+      // 드래그 없이 탭만 한 경우 - 바로 추가
+      if (touchDraggingTag && !touchPosition) {
+        handlePartTagTap(touchDraggingTag)
+      }
       setTouchDraggingTag(null)
       setTouchPosition(null)
       return
@@ -644,6 +655,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
       const x = Math.max(5, Math.min(95, ((touch.clientX - rect.left) / rect.width) * 100))
       const y = Math.max(5, Math.min(95, ((touch.clientY - rect.top) / rect.height) * 100))
       addPartTag(touchDraggingTag, x, y)
+    } else {
+      // 캔버스 밖에 드롭하면 중앙에 추가
+      addPartTag(touchDraggingTag, 50, 50)
     }
 
     setTouchDraggingTag(null)
@@ -925,25 +939,30 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 }}
               >
                 {AVAILABLE_PARTS.map(part => (
-                  <div
+                  <button
                     key={part.key}
+                    type="button"
                     draggable
                     onDragStart={() => setDraggingNewTag(part.key)}
                     onDragEnd={() => setDraggingNewTag(null)}
+                    onClick={() => handlePartTagTap(part.key)}
                     onTouchStart={(e) => handlePartTagTouchStart(part.key, e)}
-                    className="flex items-center justify-center p-3 text-white rounded cursor-move hover:opacity-80 active:opacity-60 transition-opacity text-sm font-bold"
+                    className="flex items-center justify-center p-3 text-white rounded cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity text-sm font-bold min-h-[44px]"
                     style={{
                       backgroundColor: PART_COLORS[part.key],
                       WebkitTouchCallout: 'none',
                       WebkitUserSelect: 'none',
                       userSelect: 'none',
-                      touchAction: 'none'
+                      touchAction: 'manipulation'
                     }}
                   >
                     {part.key}
-                  </div>
+                  </button>
                 ))}
               </div>
+              <p className="text-xs text-blue-600 mt-2 font-medium">
+                📱 탭하면 캔버스 중앙에 추가됩니다
+              </p>
             </div>
 
             {/* 배치된 파트 태그 목록 (현재 페이지) */}
@@ -991,8 +1010,8 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* 안내 메시지 */}
             <div className="p-3 bg-blue-50 border-b text-sm text-blue-700">
-              💡 <strong>송폼과 파트 태그를 드래그</strong>해서 원하는 위치로 이동하세요.
-              보이는 그대로 PDF로 저장됩니다!
+              💡 <strong>송폼이나 파트 태그를 터치한 후 드래그</strong>해서 위치를 이동하세요.
+              <br/>📱 아이패드: 왼쪽 파트 태그를 탭하면 중앙에 추가됩니다!
             </div>
 
             {/* 페이지 네비게이션 */}
