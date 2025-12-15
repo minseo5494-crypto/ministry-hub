@@ -3,8 +3,9 @@
 
 'use client'
 
-import { Calendar, Tag, Music, Clock, Activity, X } from 'lucide-react'
-import { SEASONS, THEMES } from '@/lib/constants'
+import { useState } from 'react'
+import { Calendar, Tag, Music, Clock, Activity, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { ThemeCount, SeasonCount } from '@/lib/supabase'
 
 interface FilterPanelProps {
   filters: {
@@ -23,6 +24,12 @@ interface FilterPanelProps {
   onClose?: () => void
   isMobile?: boolean
   isVisible?: boolean  // ← 추가
+  // 동적 테마 목록
+  themeCounts?: ThemeCount[]
+  themesLoading?: boolean
+  // 동적 절기 목록
+  seasonsList?: SeasonCount[]
+  seasonsLoading?: boolean
 }
 
 const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
@@ -36,9 +43,24 @@ export default function FilterPanel({
   onReset,
   onClose,
   isMobile = false,
-  isVisible = true  // ← 추가
+  isVisible = true,  // ← 추가
+  themeCounts = [],
+  themesLoading = false,
+  seasonsList = [],
+  seasonsLoading = false
 }: FilterPanelProps) {
-  
+
+  // 테마 더 보기 상태
+  const [showAllThemes, setShowAllThemes] = useState(false)
+  const INITIAL_THEME_COUNT = 10
+
+  // 표시할 테마 목록 (처음 10개 또는 전체)
+  const displayedThemes = showAllThemes
+    ? themeCounts
+    : themeCounts.slice(0, INITIAL_THEME_COUNT)
+
+  const hasMoreThemes = themeCounts.length > INITIAL_THEME_COUNT
+
   if (!isVisible) return null  // ← 추가
     return (
     <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] overflow-y-auto">
@@ -71,15 +93,38 @@ export default function FilterPanel({
           <Calendar className="inline w-4 h-4 mr-1" />
           절기
         </label>
-        <select
-          value={filters.season}
-          onChange={(e) => onFilterChange('season', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          {SEASONS.map(season => (
-            <option key={season} value={season}>{season}</option>
-          ))}
-        </select>
+        {seasonsLoading ? (
+          <div className="text-sm text-gray-500 py-2">절기 로딩 중...</div>
+        ) : seasonsList.length === 0 ? (
+          <div className="text-sm text-gray-500 py-2">등록된 절기가 없습니다</div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onFilterChange('season', '전체')}
+              className={`px-3 py-1 rounded-full text-sm transition ${
+                filters.season === '전체'
+                  ? 'bg-[#C5D7F2] text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              전체
+            </button>
+            {seasonsList.map(season => (
+              <button
+                key={season.name}
+                onClick={() => onFilterChange('season', season.name)}
+                className={`px-3 py-1 rounded-full text-sm transition ${
+                  filters.season === season.name
+                    ? 'bg-[#C5D7F2] text-white'
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                {season.name}
+                <span className="ml-1 text-xs opacity-70">({season.count})</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 테마 필터 */}
@@ -88,21 +133,49 @@ export default function FilterPanel({
           <Tag className="inline w-4 h-4 mr-1" />
           테마 (다중 선택)
         </label>
-        <div className="flex flex-wrap gap-2">
-          {THEMES.map(theme => (
-            <button
-              key={theme}
-              onClick={() => onThemeToggle(theme)}
-              className={`px-3 py-1 rounded-full text-sm transition ${
-                filters.themes.includes(theme)
-                  ? 'bg-[#C5D7F2] text-white'
-                  : 'bg-gray-100 hover:bg-gray-200'
-              }`}
-            >
-              {theme}
-            </button>
-          ))}
-        </div>
+        {themesLoading ? (
+          <div className="text-sm text-gray-500 py-2">테마 로딩 중...</div>
+        ) : themeCounts.length === 0 ? (
+          <div className="text-sm text-gray-500 py-2">등록된 테마가 없습니다</div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {displayedThemes.map(({ theme, count }) => (
+                <button
+                  key={theme}
+                  onClick={() => onThemeToggle(theme)}
+                  className={`px-3 py-1 rounded-full text-sm transition ${
+                    filters.themes.includes(theme)
+                      ? 'bg-[#C5D7F2] text-white'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                >
+                  {theme}
+                  <span className="ml-1 text-xs opacity-70">({count})</span>
+                </button>
+              ))}
+            </div>
+            {/* 더 보기/접기 버튼 */}
+            {hasMoreThemes && (
+              <button
+                onClick={() => setShowAllThemes(!showAllThemes)}
+                className="flex items-center gap-1 mt-3 text-sm text-blue-600 hover:text-blue-800 transition"
+              >
+                {showAllThemes ? (
+                  <>
+                    <ChevronUp size={16} />
+                    접기
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={16} />
+                    더 보기 (+{themeCounts.length - INITIAL_THEME_COUNT}개)
+                  </>
+                )}
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Key 필터 */}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase, Song, SECTION_ABBREVIATIONS, PageAnnotation } from '@/lib/supabase'
+import { supabase, Song, SECTION_ABBREVIATIONS, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
 import { getCurrentUser, signOut } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { parseLyrics } from '@/lib/lyricParser'
@@ -28,7 +28,7 @@ import SheetMusicEditor from '@/components/SheetMusicEditor'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
-import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
+import { SEASONS, TEMPO_RANGES } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
 // 🆕 TypeScript를 위한 전역 선언 (import 아래에 추가)
@@ -175,6 +175,14 @@ const {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [userTeams, setUserTeams] = useState<any[]>([])
 
+  // 🎨 동적 테마 목록 상태
+  const [themeCounts, setThemeCounts] = useState<ThemeCount[]>([])
+  const [themesLoading, setThemesLoading] = useState(true)
+
+  // 📅 동적 절기 목록 상태
+  const [seasonsList, setSeasonsList] = useState<SeasonCount[]>([])
+  const [seasonsLoading, setSeasonsLoading] = useState(true)
+
   // ✅ 팀명 자동완성 훅
 const {
   suggestions: teamNameSuggestions,
@@ -215,13 +223,34 @@ const {
   const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
   const timeSignatures = ['4/4', '3/4', '6/8', '12/8', '6/4', '2/4']
   const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
-  const themes = THEMES  // 새로운 테마 배열 사용
 
   
 
   // 사용자 정보 확인
   useEffect(() => {
     checkUser()
+  }, [])
+
+  // 🎨 테마 목록 로드
+  useEffect(() => {
+    const loadThemes = async () => {
+      setThemesLoading(true)
+      const counts = await fetchThemeCounts()
+      setThemeCounts(counts)
+      setThemesLoading(false)
+    }
+    loadThemes()
+  }, [])
+
+  // 📅 절기 목록 로드
+  useEffect(() => {
+    const loadSeasons = async () => {
+      setSeasonsLoading(true)
+      const seasons = await fetchSeasons()
+      setSeasonsList(seasons)
+      setSeasonsLoading(false)
+    }
+    loadSeasons()
   }, [])
 
   // 🎵 좋아요 데이터 로드
@@ -938,11 +967,13 @@ if (newSong.visibility === 'public') {
     // 테마 필터 (다중 선택)
     if (filters.themes.length > 0) {
       result = result.filter(song => {
-        // themes 배열이 있으면 사용, 없으면 theme1, theme2 체크
-        if (song.themes && Array.isArray(song.themes)) {
-          return filters.themes.some(theme => song.themes?.includes(theme))
+        // parseThemes로 배열/텍스트 모두 지원
+        const songThemes = parseThemes(song.themes)
+        if (songThemes.length > 0) {
+          return filters.themes.some(theme => songThemes.includes(theme))
         } else {
-          return filters.themes.some(theme => 
+          // themes가 없으면 theme1, theme2 체크 (이전 호환)
+          return filters.themes.some(theme =>
             song.theme1 === theme || song.theme2 === theme
           )
         }
@@ -1769,6 +1800,10 @@ const hasMore = displayCount < filteredSongs.length
               onClose={() => setShowFilterPanel(false)}
               isMobile={isMobile}
               isVisible={showFilterPanel}
+              themeCounts={themeCounts}
+              themesLoading={themesLoading}
+              seasonsList={seasonsList}
+              seasonsLoading={seasonsLoading}
             />
           </div>
 
@@ -2541,7 +2576,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   테마 (다중 선택 가능)
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {THEMES.map(theme => (
+                  {themeCounts.map(({ theme }) => (
                     <button
                       key={theme}
                       type="button"
@@ -2567,6 +2602,28 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       {theme}
                     </button>
                   ))}
+                </div>
+                {/* 새 테마 직접 입력 */}
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="새 테마 입력..."
+                    className="flex-1 px-3 py-1 border border-gray-300 rounded-lg text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const input = e.currentTarget
+                        const newTheme = input.value.trim()
+                        if (newTheme && !newSong.themes.includes(newTheme)) {
+                          setNewSong({
+                            ...newSong,
+                            themes: [...newSong.themes, newTheme]
+                          })
+                          input.value = ''
+                        }
+                      }
+                    }}
+                  />
                 </div>
               </div>
 

@@ -306,3 +306,91 @@ export interface SheetMusicNote {
   updated_at?: string
 }
 
+// ===== 테마 집계 타입 =====
+export interface ThemeCount {
+  theme: string
+  count: number
+}
+
+// ===== 절기 타입 =====
+export interface SeasonCount {
+  name: string
+  count: number
+}
+
+// songs 테이블에서 사용된 절기 목록과 곡 개수 가져오기
+export async function fetchSeasons(): Promise<SeasonCount[]> {
+  try {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('season')
+      .not('season', 'is', null)
+
+    if (error) {
+      return []
+    }
+
+    // 절기별 카운트 집계
+    const seasonCounts: { [key: string]: number } = {}
+    data?.forEach(song => {
+      if (song.season && song.season.trim()) {
+        const season = song.season.trim()
+        seasonCounts[season] = (seasonCounts[season] || 0) + 1
+      }
+    })
+
+    // 배열로 변환하고 카운트 내림차순 정렬
+    return Object.entries(seasonCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+  } catch {
+    return []
+  }
+}
+
+// themes 값을 배열로 파싱하는 헬퍼 함수
+// 배열, 쉼표 구분 텍스트, 단일 텍스트 모두 지원
+export function parseThemes(themes: unknown): string[] {
+  if (!themes) return []
+
+  // 이미 배열인 경우
+  if (Array.isArray(themes)) {
+    return themes.map(t => String(t).trim()).filter(t => t)
+  }
+
+  // 문자열인 경우 (쉼표로 구분)
+  if (typeof themes === 'string') {
+    return themes.split(',').map(t => t.trim()).filter(t => t)
+  }
+
+  return []
+}
+
+// 곡들의 테마를 집계하는 함수
+export async function fetchThemeCounts(): Promise<ThemeCount[]> {
+  const { data, error } = await supabase
+    .from('songs')
+    .select('themes')
+    .not('themes', 'is', null)
+
+  if (error) {
+    console.error('Error fetching themes:', error)
+    return []
+  }
+
+  // 테마별 카운트 집계
+  const themeCounts: { [key: string]: number } = {}
+
+  data?.forEach(song => {
+    const themeList = parseThemes(song.themes)
+    themeList.forEach((theme: string) => {
+      themeCounts[theme] = (themeCounts[theme] || 0) + 1
+    })
+  })
+
+  // 배열로 변환하고 카운트 내림차순 정렬
+  return Object.entries(themeCounts)
+    .map(([theme, count]) => ({ theme, count }))
+    .sort((a, b) => b.count - a.count)
+}
+
