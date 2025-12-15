@@ -1519,6 +1519,32 @@ export default function SheetMusicEditor({
     setDraggingFormItem(null)
   }, [])
 
+  // 📱 터치용 송폼/파트 태그 드래그 핸들러 (아이패드 지원)
+  const handleFormTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!draggingFormItem || !pdfCanvasRef.current) return
+    e.preventDefault()
+
+    const touch = e.touches[0]
+    const canvas = pdfCanvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const x = Math.max(5, Math.min(95, ((touch.clientX - rect.left) / rect.width) * 100))
+    const y = Math.max(3, Math.min(97, ((touch.clientY - rect.top) / rect.height) * 100))
+
+    if (draggingFormItem.type === 'songForm') {
+      setSongFormStyle(prev => ({ ...prev, x, y }))
+    } else if (draggingFormItem.type === 'partTag' && draggingFormItem.id) {
+      setPartTags(prev =>
+        prev.map(tag =>
+          tag.id === draggingFormItem.id ? { ...tag, x, y } : tag
+        )
+      )
+    }
+  }, [draggingFormItem])
+
+  const handleFormTouchEnd = useCallback(() => {
+    setDraggingFormItem(null)
+  }, [])
+
   const handlePartTagDrop = useCallback((e: React.DragEvent) => {
     if (!draggingNewPartTag || !pdfCanvasRef.current) return
     e.preventDefault()
@@ -2569,6 +2595,9 @@ export default function SheetMusicEditor({
                   textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)',
                   pointerEvents: 'auto',
                   whiteSpace: 'nowrap',  // 한 줄로 표시
+                  touchAction: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
                 }}
                 onMouseDown={(e) => {
                   e.stopPropagation()
@@ -2582,6 +2611,18 @@ export default function SheetMusicEditor({
                     setShowSongFormPanel(true)
                   }
                 }}
+                onTouchStart={(e) => {
+                  e.stopPropagation()
+                  if (showSongFormPanel) {
+                    e.preventDefault()
+                    setDraggingFormItem({ type: 'songForm' })
+                  } else {
+                    // 패널이 닫혀있으면 열기
+                    setShowSongFormPanel(true)
+                  }
+                }}
+                onTouchMove={handleFormTouchMove}
+                onTouchEnd={handleFormTouchEnd}
                 title="클릭하여 설정 열기"
               >
                 {effectiveSongForms.join(' - ')}
@@ -2604,6 +2645,9 @@ export default function SheetMusicEditor({
                       fontWeight: 'bold',
                       textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)',
                       pointerEvents: 'auto',
+                      touchAction: 'none',
+                      WebkitUserSelect: 'none',
+                      userSelect: 'none',
                     }}
                     onMouseDown={(e) => {
                       e.stopPropagation()
@@ -2617,6 +2661,17 @@ export default function SheetMusicEditor({
                         setShowSongFormPanel(true)
                       }
                     }}
+                    onTouchStart={(e) => {
+                      e.stopPropagation()
+                      if (showSongFormPanel) {
+                        e.preventDefault()
+                        setDraggingFormItem({ type: 'partTag', id: tag.id })
+                      } else {
+                        setShowSongFormPanel(true)
+                      }
+                    }}
+                    onTouchMove={handleFormTouchMove}
+                    onTouchEnd={handleFormTouchEnd}
                     title="클릭하여 설정 열기"
                   >
                     {tag.label}
@@ -2750,22 +2805,45 @@ export default function SheetMusicEditor({
           {/* 파트 태그 팔레트 */}
           <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
             <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>파트 태그 추가</h4>
-            <p className={`text-gray-500 mb-2 ${isMobile ? 'text-sm' : 'text-xs'}`}>드래그해서 악보 위에 배치</p>
+            <p className={`text-gray-500 mb-2 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+              {isMobile ? '📱 탭하면 중앙에 추가됩니다' : '드래그해서 악보 위에 배치'}
+            </p>
             <div className={`grid grid-cols-4 ${isMobile ? 'gap-2' : 'gap-1'}`}>
               {AVAILABLE_PARTS.map(part => (
-                <div
+                <button
                   key={part.key}
-                  draggable
+                  type="button"
+                  draggable={!isMobile}
                   onDragStart={() => setDraggingNewPartTag(part.key)}
                   onDragEnd={() => setDraggingNewPartTag(null)}
-                  className={`flex items-center justify-center text-white rounded cursor-move hover:opacity-80 transition-opacity font-bold ${
-                    isMobile ? 'p-2.5 text-sm' : 'p-1.5 text-xs'
+                  onClick={() => {
+                    // 탭하면 캔버스 중앙에 추가
+                    const newTag: PartTagStyle = {
+                      id: `${part.key}-${Date.now()}`,
+                      label: part.key,
+                      x: 50,
+                      y: 50,
+                      fontSize: 28,
+                      color: PART_COLORS[part.key] || '#6B7280',
+                      opacity: 1,
+                      pageIndex: currentPage - 1
+                    }
+                    setPartTags(prev => [...prev, newTag])
+                  }}
+                  className={`flex items-center justify-center text-white rounded cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity font-bold ${
+                    isMobile ? 'p-2.5 text-sm min-h-[44px]' : 'p-1.5 text-xs'
                   }`}
-                  style={{ backgroundColor: PART_COLORS[part.key] }}
+                  style={{
+                    backgroundColor: PART_COLORS[part.key],
+                    touchAction: 'manipulation',
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none',
+                  }}
                   title={part.label}
                 >
                   {part.key}
-                </div>
+                </button>
               ))}
             </div>
           </div>
