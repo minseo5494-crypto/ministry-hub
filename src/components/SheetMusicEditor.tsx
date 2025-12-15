@@ -270,7 +270,9 @@ export default function SheetMusicEditor({
   const [annotations, setAnnotations] = useState<PageAnnotation[]>(initialAnnotations)
   const annotationsRef = useRef<PageAnnotation[]>(annotations) // 최신 annotations를 추적하기 위한 ref
   const [currentStroke, setCurrentStroke] = useState<StrokePoint[]>([])
+  const currentStrokeRef = useRef<StrokePoint[]>([]) // 동기적 스트로크 추적
   const [isDrawing, setIsDrawing] = useState(false)
+  const isDrawingRef = useRef(false) // 동기적 드로잉 상태 추적
 
   // annotations가 변경될 때마다 ref 업데이트
   useEffect(() => {
@@ -929,6 +931,7 @@ export default function SheetMusicEditor({
       }
 
       if (tool === 'eraser') {
+        isDrawingRef.current = true
         setIsDrawing(true)
         eraseAtPosition(pos.x, pos.y)
         return
@@ -952,6 +955,7 @@ export default function SheetMusicEditor({
           selectedStrokeIds: [],
           selectedTextIds: [],
         })
+        isDrawingRef.current = true
         setIsDrawing(true)
         drawingToolRef.current = 'lasso'
         return
@@ -959,6 +963,8 @@ export default function SheetMusicEditor({
 
       // 펜/형광펜 드로잉 시작 - 시작 시점의 도구를 저장
       drawingToolRef.current = tool
+      isDrawingRef.current = true
+      currentStrokeRef.current = [pos]
       setIsDrawing(true)
       setCurrentStroke([pos])
     },
@@ -981,7 +987,7 @@ export default function SheetMusicEditor({
       // 지우개 커서 위치 업데이트
       if (tool === 'eraser') {
         setEraserPosition({ x: e.clientX, y: e.clientY })
-        if (isDrawing) {
+        if (isDrawingRef.current) {
           eraseAtPosition(pos.x, pos.y)
         }
         return
@@ -997,7 +1003,7 @@ export default function SheetMusicEditor({
           setMoveStartPos({ x: pos.x, y: pos.y })
           return
         }
-        if (isDrawing) {
+        if (isDrawingRef.current) {
           setLassoSelection(prev => ({
             ...prev,
             points: [...prev.points, pos],
@@ -1006,11 +1012,13 @@ export default function SheetMusicEditor({
         }
       }
 
-      if (!isDrawing) return
+      if (!isDrawingRef.current) return
 
-      setCurrentStroke((prev) => [...prev, pos])
+      // ref와 state 모두 업데이트
+      currentStrokeRef.current = [...currentStrokeRef.current, pos]
+      setCurrentStroke(currentStrokeRef.current)
     },
-    [isDrawing, tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection]
   )
 
   const handlePointerUp = useCallback(() => {
@@ -1030,6 +1038,7 @@ export default function SheetMusicEditor({
     }
 
     if (usedTool === 'eraser' || tool === 'eraser') {
+      isDrawingRef.current = false
       setIsDrawing(false)
       drawingToolRef.current = null
       saveToHistory()
@@ -1044,7 +1053,8 @@ export default function SheetMusicEditor({
         drawingToolRef.current = null
         return
       }
-      if (isDrawing) {
+      if (isDrawingRef.current) {
+        isDrawingRef.current = false
         setIsDrawing(false)
         finishLassoSelection()
         drawingToolRef.current = null
@@ -1054,8 +1064,12 @@ export default function SheetMusicEditor({
       return
     }
 
-    if (!isDrawing || currentStroke.length === 0) {
+    // ref를 사용해서 동기적으로 체크
+    if (!isDrawingRef.current || currentStrokeRef.current.length === 0) {
+      isDrawingRef.current = false
+      currentStrokeRef.current = []
       setIsDrawing(false)
+      setCurrentStroke([])
       drawingToolRef.current = null
       return
     }
@@ -1067,7 +1081,7 @@ export default function SheetMusicEditor({
       color,
       size: strokeSize,
       opacity: usedTool === 'highlighter' ? 0.4 : 1,
-      points: currentStroke,
+      points: currentStrokeRef.current, // ref 사용
     }
 
     setAnnotations((prev) => {
@@ -1090,13 +1104,18 @@ export default function SheetMusicEditor({
       }
     })
 
+    // refs 먼저 리셋 (동기적)
+    isDrawingRef.current = false
+    currentStrokeRef.current = []
+    drawingToolRef.current = null
+
+    // state도 업데이트 (비동기)
     setCurrentStroke([])
     setIsDrawing(false)
-    drawingToolRef.current = null
 
     // 히스토리에 추가
     saveToHistory()
-  }, [isDrawing, currentStroke, tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection])
+  }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection])
 
   // ===== 텍스트 추가 =====
   const addTextElement = useCallback(() => {
@@ -1716,8 +1735,8 @@ export default function SheetMusicEditor({
 
   // 도구 전환 시 진행 중인 스트로크 저장 후 도구 변경
   const switchTool = useCallback((newTool: Tool) => {
-    // 현재 그리는 중인 스트로크가 있으면 먼저 저장
-    if (isDrawing && currentStroke.length > 0 && drawingToolRef.current) {
+    // 현재 그리는 중인 스트로크가 있으면 먼저 저장 (ref 사용)
+    if (isDrawingRef.current && currentStrokeRef.current.length > 0 && drawingToolRef.current) {
       const usedTool = drawingToolRef.current
       const newStroke: Stroke = {
         id: `stroke-${Date.now()}`,
@@ -1725,7 +1744,7 @@ export default function SheetMusicEditor({
         color,
         size: strokeSize,
         opacity: usedTool === 'highlighter' ? 0.4 : 1,
-        points: currentStroke,
+        points: currentStrokeRef.current,
       }
 
       setAnnotations((prev) => {
@@ -1748,9 +1767,13 @@ export default function SheetMusicEditor({
         }
       })
 
+      // refs 먼저 리셋
+      isDrawingRef.current = false
+      currentStrokeRef.current = []
+      drawingToolRef.current = null
+
       setCurrentStroke([])
       setIsDrawing(false)
-      drawingToolRef.current = null
     }
 
     // 도구 변경
@@ -2222,7 +2245,11 @@ export default function SheetMusicEditor({
       {/* 캔버스 영역 */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto flex items-center justify-center bg-gray-400"
+        className="flex-1 overflow-auto flex items-center justify-center bg-gray-400 select-none"
+        style={{
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+        }}
         onMouseMove={handleFormDragMove}
         onMouseUp={handleFormDragEnd}
         onMouseLeave={handleFormDragEnd}
@@ -2253,7 +2280,13 @@ export default function SheetMusicEditor({
           <canvas
             ref={canvasRef}
             className="absolute top-0 left-0"
-            style={{ cursor: getCursorStyle(), touchAction: 'none' }}
+            style={{
+              cursor: getCursorStyle(),
+              touchAction: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              WebkitTouchCallout: 'none',
+            }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
