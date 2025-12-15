@@ -476,13 +476,31 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }))
   }
 
-  // 드래그 핸들러
-  const handlePreviewMouseDown = (e: React.MouseEvent) => {
-    if (!containerRef.current) return
+  // 드래그 핸들러 - 마우스와 터치 모두 지원
+  const getPositionFromEvent = (e: React.MouseEvent | React.TouchEvent | TouchEvent) => {
+    if (!containerRef.current) return null
 
     const rect = containerRef.current.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 100
-    const y = ((e.clientY - rect.top) / rect.height) * 100
+    let clientX: number, clientY: number
+
+    if ('touches' in e) {
+      if (e.touches.length === 0) return null
+      clientX = e.touches[0].clientX
+      clientY = e.touches[0].clientY
+    } else {
+      clientX = e.clientX
+      clientY = e.clientY
+    }
+
+    const x = ((clientX - rect.left) / rect.width) * 100
+    const y = ((clientY - rect.top) / rect.height) * 100
+
+    return { x, y }
+  }
+
+  const handlePreviewMouseDown = (e: React.MouseEvent) => {
+    const pos = getPositionFromEvent(e)
+    if (!pos) return
 
     // 송폼 클릭 체크 - 모든 페이지에서
     if (currentForms.length > 0) {
@@ -491,7 +509,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
       const formY = formStyle.y
       const hitRadius = 10
 
-      if (Math.abs(x - formX) < hitRadius && Math.abs(y - formY) < hitRadius) {
+      if (Math.abs(pos.x - formX) < hitRadius && Math.abs(pos.y - formY) < hitRadius) {
         setDraggingItem({ type: 'songForm' })
         return
       }
@@ -500,7 +518,36 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     // 파트 태그 클릭 체크
     for (const tag of currentPartTags) {
       const hitRadius = 5
-      if (Math.abs(x - tag.x) < hitRadius && Math.abs(y - tag.y) < hitRadius) {
+      if (Math.abs(pos.x - tag.x) < hitRadius && Math.abs(pos.y - tag.y) < hitRadius) {
+        setDraggingItem({ type: 'partTag', id: tag.id })
+        return
+      }
+    }
+  }
+
+  const handlePreviewTouchStart = (e: React.TouchEvent) => {
+    const pos = getPositionFromEvent(e)
+    if (!pos) return
+
+    // 송폼 클릭 체크
+    if (currentForms.length > 0) {
+      const formStyle = currentFormStyle
+      const formX = formStyle.x
+      const formY = formStyle.y
+      const hitRadius = 12 // 터치는 히트 영역 더 크게
+
+      if (Math.abs(pos.x - formX) < hitRadius && Math.abs(pos.y - formY) < hitRadius) {
+        e.preventDefault()
+        setDraggingItem({ type: 'songForm' })
+        return
+      }
+    }
+
+    // 파트 태그 클릭 체크
+    for (const tag of currentPartTags) {
+      const hitRadius = 8 // 터치는 히트 영역 더 크게
+      if (Math.abs(pos.x - tag.x) < hitRadius && Math.abs(pos.y - tag.y) < hitRadius) {
+        e.preventDefault()
         setDraggingItem({ type: 'partTag', id: tag.id })
         return
       }
@@ -508,11 +555,30 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   }
 
   const handlePreviewMouseMove = (e: React.MouseEvent) => {
-    if (!draggingItem || !containerRef.current) return
+    if (!draggingItem) return
 
-    const rect = containerRef.current.getBoundingClientRect()
-    const x = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100))
-    const y = Math.max(3, Math.min(97, ((e.clientY - rect.top) / rect.height) * 100))
+    const pos = getPositionFromEvent(e)
+    if (!pos) return
+
+    const x = Math.max(5, Math.min(95, pos.x))
+    const y = Math.max(3, Math.min(97, pos.y))
+
+    if (draggingItem.type === 'songForm') {
+      updateFormStyle({ x, y })
+    } else if (draggingItem.type === 'partTag' && draggingItem.id) {
+      updatePartTag(draggingItem.id, { x, y })
+    }
+  }
+
+  const handlePreviewTouchMove = (e: React.TouchEvent) => {
+    if (!draggingItem) return
+
+    e.preventDefault()
+    const pos = getPositionFromEvent(e)
+    if (!pos) return
+
+    const x = Math.max(5, Math.min(95, pos.x))
+    const y = Math.max(3, Math.min(97, pos.y))
 
     if (draggingItem.type === 'songForm') {
       updateFormStyle({ x, y })
@@ -525,7 +591,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     setDraggingItem(null)
   }
 
-  // 파트 태그 드롭
+  const handlePreviewTouchEnd = () => {
+    setDraggingItem(null)
+  }
+
+  // 파트 태그 드롭 (마우스)
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     if (!draggingNewTag || !containerRef.current) return
@@ -536,6 +606,46 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
     addPartTag(draggingNewTag, x, y)
     setDraggingNewTag(null)
+  }
+
+  // 파트 태그 터치 드래그용 상태
+  const [touchDraggingTag, setTouchDraggingTag] = useState<string | null>(null)
+  const [touchPosition, setTouchPosition] = useState<{ x: number; y: number } | null>(null)
+
+  const handlePartTagTouchStart = (key: string, e: React.TouchEvent) => {
+    e.preventDefault()
+    setTouchDraggingTag(key)
+    const touch = e.touches[0]
+    setTouchPosition({ x: touch.clientX, y: touch.clientY })
+  }
+
+  const handlePartTagTouchMove = (e: React.TouchEvent) => {
+    if (!touchDraggingTag) return
+    e.preventDefault()
+    const touch = e.touches[0]
+    setTouchPosition({ x: touch.clientX, y: touch.clientY })
+  }
+
+  const handlePartTagTouchEnd = (e: React.TouchEvent) => {
+    if (!touchDraggingTag || !containerRef.current) {
+      setTouchDraggingTag(null)
+      setTouchPosition(null)
+      return
+    }
+
+    // 드롭 위치 확인
+    const rect = containerRef.current.getBoundingClientRect()
+    const touch = e.changedTouches[0]
+
+    if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+        touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+      const x = Math.max(5, Math.min(95, ((touch.clientX - rect.left) / rect.width) * 100))
+      const y = Math.max(5, Math.min(95, ((touch.clientY - rect.top) / rect.height) * 100))
+      addPartTag(touchDraggingTag, x, y)
+    }
+
+    setTouchDraggingTag(null)
+    setTouchPosition(null)
   }
 
   // 모든 곡에 적용
@@ -802,14 +912,19 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 드래그해서 악보 위에 배치하세요
                 {totalPages > 1 && <><br/>현재 <b>페이지 {currentPageIndex + 1}</b>에 배치됩니다</>}
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div
+                className="grid grid-cols-3 gap-2"
+                onTouchMove={handlePartTagTouchMove}
+                onTouchEnd={handlePartTagTouchEnd}
+              >
                 {AVAILABLE_PARTS.map(part => (
                   <div
                     key={part.key}
                     draggable
                     onDragStart={() => setDraggingNewTag(part.key)}
                     onDragEnd={() => setDraggingNewTag(null)}
-                    className="flex items-center justify-center p-2 text-white rounded cursor-move hover:opacity-80 transition-opacity text-sm font-bold"
+                    onTouchStart={(e) => handlePartTagTouchStart(part.key, e)}
+                    className="flex items-center justify-center p-2 text-white rounded cursor-move hover:opacity-80 transition-opacity text-sm font-bold select-none"
                     style={{ backgroundColor: PART_COLORS[part.key] }}
                   >
                     {part.key}
@@ -907,6 +1022,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 onMouseMove={handlePreviewMouseMove}
                 onMouseUp={handlePreviewMouseUp}
                 onMouseLeave={handlePreviewMouseUp}
+                onTouchStart={handlePreviewTouchStart}
+                onTouchMove={handlePreviewTouchMove}
+                onTouchEnd={handlePreviewTouchEnd}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
               >
@@ -943,7 +1061,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 )}
 
                 {/* 드래그 안내 오버레이 */}
-                {draggingNewTag && (
+                {(draggingNewTag || touchDraggingTag) && (
                   <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
                     <p className="bg-purple-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-lg">
                       여기에 드롭하세요
@@ -951,6 +1069,21 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   </div>
                 )}
               </div>
+
+              {/* 터치 드래그 플로팅 인디케이터 */}
+              {touchDraggingTag && touchPosition && (
+                <div
+                  className="fixed pointer-events-none z-[100] px-3 py-2 rounded font-bold text-white shadow-lg text-lg"
+                  style={{
+                    left: touchPosition.x - 20,
+                    top: touchPosition.y - 40,
+                    backgroundColor: PART_COLORS[touchDraggingTag] || '#6B7280',
+                    transform: 'scale(1.2)'
+                  }}
+                >
+                  {touchDraggingTag}
+                </div>
+              )}
             </div>
           </div>
         </div>
