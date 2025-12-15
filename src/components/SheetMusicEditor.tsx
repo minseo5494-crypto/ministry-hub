@@ -1221,16 +1221,16 @@ export default function SheetMusicEditor({
   }, [tool, selectedTextId, getCurrentPageAnnotation])
 
   const handleTextDragStart = useCallback((textId: string, e: React.MouseEvent | React.TouchEvent) => {
-    if (tool !== 'text' || selectedTextId !== textId) return
+    if (tool !== 'text') return
 
     e.preventDefault()
-    e.stopPropagation()
 
+    setSelectedTextId(textId)
     setIsDraggingText(true)
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     textDragStartRef.current = { x: clientX, y: clientY }
-  }, [tool, selectedTextId])
+  }, [tool])
 
   const handleTextDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!isDraggingText || !selectedTextId || !textDragStartRef.current) return
@@ -2379,15 +2379,41 @@ export default function SheetMusicEditor({
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
         }}
-        onMouseMove={handleFormDragMove}
-        onMouseUp={handleFormDragEnd}
-        onMouseLeave={handleFormDragEnd}
+        onMouseMove={(e) => {
+          if (isDraggingText) {
+            handleTextDragMove(e)
+          } else {
+            handleFormDragMove(e)
+          }
+        }}
+        onMouseUp={() => {
+          if (isDraggingText) {
+            handleTextDragEnd()
+          }
+          handleFormDragEnd()
+        }}
+        onMouseLeave={() => {
+          if (isDraggingText) {
+            handleTextDragEnd()
+          }
+          handleFormDragEnd()
+        }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handlePartTagDrop}
         onWheel={handleWheel}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onTouchMove={(e) => {
+          if (isDraggingText) {
+            handleTextDragMove(e)
+          }
+          handleTouchMove(e)
+        }}
+        onTouchEnd={(e) => {
+          if (isDraggingText) {
+            handleTextDragEnd()
+          }
+          handleTouchEnd(e)
+        }}
         onClick={handleViewModeClick}
       >
         <div
@@ -2481,35 +2507,44 @@ export default function SheetMusicEditor({
             </div>
           )}
 
-          {/* 텍스트 요소 인터랙션 오버레이 (텍스트 모드에서만) */}
+          {/* 텍스트 요소 인터랙션 오버레이 (텍스트 모드에서만) - 투명 오버레이로 상호작용만 */}
           {tool === 'text' && !isAddingText && !editingTextId && getCurrentPageAnnotation()?.textElements.map(textEl => (
             <div
               key={textEl.id}
               className={`absolute cursor-move select-none ${
                 selectedTextId === textEl.id
-                  ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/30'
-                  : 'hover:ring-2 hover:ring-blue-300'
+                  ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-100/50'
+                  : 'hover:bg-blue-100/30'
               }`}
               style={{
                 left: textEl.x,
                 top: textEl.y - textEl.fontSize,
                 fontSize: textEl.fontSize,
-                color: textEl.color,
+                color: 'transparent', // 투명하게 - 캔버스가 실제 텍스트 표시
                 padding: '2px 4px',
                 borderRadius: '2px',
                 whiteSpace: 'nowrap',
               }}
-              onClick={(e) => handleTextClick(textEl.id, e)}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleTextClick(textEl.id, e)
+              }}
               onMouseDown={(e) => {
-                if (selectedTextId === textEl.id) {
-                  handleTextDragStart(textEl.id, e)
-                }
+                e.stopPropagation()
+                handleTextClick(textEl.id, e)
+                // 선택 후 바로 드래그 시작 가능
+                setTimeout(() => {
+                  if (selectedTextId === textEl.id || !selectedTextId) {
+                    setSelectedTextId(textEl.id)
+                    handleTextDragStart(textEl.id, e)
+                  }
+                }, 0)
               }}
               onTouchStart={(e) => {
+                e.stopPropagation()
                 handleTextClick(textEl.id, e)
-                if (selectedTextId === textEl.id) {
-                  handleTextDragStart(textEl.id, e)
-                }
+                setSelectedTextId(textEl.id)
+                handleTextDragStart(textEl.id, e)
               }}
             >
               {textEl.text}
