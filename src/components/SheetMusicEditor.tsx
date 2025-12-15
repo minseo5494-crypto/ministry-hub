@@ -885,11 +885,30 @@ export default function SheetMusicEditor({
     }
   }, [currentPage, lassoSelection.selectedStrokeIds, lassoSelection.selectedTextIds, lassoSelection.boundingBox])
 
+  // 현재 포인터 타입 추적 (pen, touch, mouse)
+  const currentPointerTypeRef = useRef<string | null>(null)
+
   // ===== 포인터 이벤트 핸들러 =====
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
       const pos = getPointerPosition(e)
+      const pointerType = e.pointerType // 'pen', 'touch', 'mouse'
+
+      // 포인터 타입 저장
+      currentPointerTypeRef.current = pointerType
+
+      // 손가락 터치(touch)의 경우: 필기 도구에서는 팬 모드로 동작
+      // 펜(Apple Pencil) 또는 마우스는 정상 동작
+      const isFingerTouch = pointerType === 'touch'
+      const isDrawingTool = tool === 'pen' || tool === 'highlighter' || tool === 'eraser' || tool === 'lasso'
+
+      // 손가락으로 필기 도구 선택 상태에서 터치하면 팬 모드로 전환
+      if (isFingerTouch && isDrawingTool) {
+        isPanningRef.current = true
+        lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+        return
+      }
 
       if (tool === 'pan') {
         isPanningRef.current = true
@@ -898,6 +917,12 @@ export default function SheetMusicEditor({
       }
 
       if (tool === 'text') {
+        // 텍스트 도구는 펜/마우스만 허용
+        if (isFingerTouch) {
+          isPanningRef.current = true
+          lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+          return
+        }
         setTextPosition({ x: pos.x, y: pos.y })
         setIsAddingText(true)
         return
@@ -944,6 +969,15 @@ export default function SheetMusicEditor({
     (e: React.PointerEvent) => {
       const pos = getPointerPosition(e)
 
+      // 손가락 터치로 팬 모드가 활성화된 경우 (도구에 관계없이)
+      if (isPanningRef.current) {
+        const dx = e.clientX - lastPanPositionRef.current.x
+        const dy = e.clientY - lastPanPositionRef.current.y
+        setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+        lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+        return
+      }
+
       // 지우개 커서 위치 업데이트
       if (tool === 'eraser') {
         setEraserPosition({ x: e.clientX, y: e.clientY })
@@ -953,14 +987,6 @@ export default function SheetMusicEditor({
         return
       } else {
         setEraserPosition(null)
-      }
-
-      if (tool === 'pan' && isPanningRef.current) {
-        const dx = e.clientX - lastPanPositionRef.current.x
-        const dy = e.clientY - lastPanPositionRef.current.y
-        setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
-        lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
-        return
       }
 
       if (tool === 'lasso') {
@@ -988,6 +1014,13 @@ export default function SheetMusicEditor({
   )
 
   const handlePointerUp = useCallback(() => {
+    // 손가락 터치 팬 모드 종료 (도구에 관계없이)
+    if (isPanningRef.current) {
+      isPanningRef.current = false
+      currentPointerTypeRef.current = null
+      return
+    }
+
     // 드로잉 시작 시 저장했던 도구 사용 (도구 전환 시에도 올바르게 저장)
     const usedTool = drawingToolRef.current || tool
 
@@ -1037,24 +1070,16 @@ export default function SheetMusicEditor({
       points: currentStroke,
     }
 
-    console.log('🖊️ 새 스트로크 저장:', {
-      id: newStroke.id,
-      pointsCount: newStroke.points.length,
-      color: newStroke.color,
-      currentPage
-    })
-
     setAnnotations((prev) => {
       const existing = prev.find((a) => a.pageNumber === currentPage)
-      let newAnnotations
       if (existing) {
-        newAnnotations = prev.map((a) =>
+        return prev.map((a) =>
           a.pageNumber === currentPage
             ? { ...a, strokes: [...a.strokes, newStroke] }
             : a
         )
       } else {
-        newAnnotations = [
+        return [
           ...prev,
           {
             pageNumber: currentPage,
@@ -1063,11 +1088,6 @@ export default function SheetMusicEditor({
           },
         ]
       }
-      console.log('🖊️ 업데이트된 annotations:', newAnnotations.map(a => ({
-        page: a.pageNumber,
-        strokesCount: a.strokes.length
-      })))
-      return newAnnotations
     })
 
     setCurrentStroke([])
@@ -1156,8 +1176,15 @@ export default function SheetMusicEditor({
   }, [canvasSize, fitToScreen])
 
   // 보기 모드에서 화면 클릭 핸들러 (페이지 넘기기 + 상단바 토글)
+  // 터치 디바이스에서는 handleTouchEnd에서 처리하므로 여기서는 마우스만 처리
   const handleViewModeClick = useCallback((e: React.MouseEvent) => {
     if (!isViewMode) return
+
+    // 터치 탭이 이미 처리되었으면 클릭 이벤트 무시 (중복 방지)
+    if (touchTapHandled.current) {
+      touchTapHandled.current = false
+      return
+    }
 
     const container = containerRef.current
     if (!container) return
@@ -1207,6 +1234,7 @@ export default function SheetMusicEditor({
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
   const isSwiping = useRef<boolean>(false)
+  const touchTapHandled = useRef<boolean>(false) // 터치 탭 처리 후 클릭 이벤트 방지용
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
@@ -1275,6 +1303,9 @@ export default function SheetMusicEditor({
           // 화면을 3등분: 왼쪽 30% / 중앙 40% / 오른쪽 30%
           const leftZone = containerWidth * 0.3
           const rightZone = containerWidth * 0.7
+
+          // 터치 탭 처리 플래그 설정 (onClick 중복 방지)
+          touchTapHandled.current = true
 
           if (tapX < leftZone) {
             // 왼쪽 탭: 이전 페이지/이전 곡
@@ -1368,9 +1399,6 @@ export default function SheetMusicEditor({
   const handleSave = useCallback(() => {
     // annotationsRef.current를 사용하여 항상 최신 상태를 가져옴
     const currentAnnotations = annotationsRef.current
-    console.log('🔵 handleSave 호출됨, isMultiSongMode:', isMultiSongMode)
-    console.log('🔵 현재 annotations (ref에서):', currentAnnotations)
-    console.log('🔵 strokes 수:', currentAnnotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0))
 
     if (isMultiSongMode) {
       // 다중 곡 모드: 모든 곡의 annotations 및 songForm 상태 저장
@@ -1408,21 +1436,8 @@ export default function SheetMusicEditor({
         }
       })
 
-      console.log('📝 저장 데이터:', dataToSave.map(d => ({
-        song: d.song.song_name,
-        annotationCount: d.annotations.length,
-        strokeCount: d.annotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0),
-        songFormEnabled: d.extra?.songFormEnabled
-      })))
-
       onSaveAll?.(dataToSave)
     } else {
-      console.log('📝 단일 곡 모드 저장:', {
-        annotationCount: currentAnnotations.length,
-        strokeCount: currentAnnotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0),
-        songFormEnabled,
-        partTagsCount: partTags.length
-      })
       // 송폼 정보도 함께 전달
       onSave?.(currentAnnotations, { songFormEnabled, songFormStyle, partTags })
     }
