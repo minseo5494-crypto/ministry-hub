@@ -218,12 +218,12 @@ function SortableSongItem({
               {isPreviewOpen ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
-          {/* 악보보기 전체화면 버튼 */}
+          {/* 악보보기 버튼 */}
           {song.songs.file_url && (
             <button
               onClick={() => onOpenSheetViewer(song)}
-              className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
-              title="악보 전체화면"
+              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+              title="악보 보기/필기 모드"
             >
               <Presentation size={18} />
             </button>
@@ -1348,6 +1348,23 @@ const saveNote = async () => {
                   <Youtube size={16} />
                   <span className="ml-1.5 hidden sm:inline">플레이리스트</span>
                 </button>
+
+                {/* 악보 뷰어 */}
+                {songs.some(s => s.songs.file_url) && (
+                  <button
+                    onClick={() => {
+                      const firstSongWithSheet = songs.find(s => s.songs.file_url)
+                      if (firstSongWithSheet) {
+                        openSheetViewerForSong(firstSongWithSheet)
+                      }
+                    }}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center text-sm whitespace-nowrap"
+                    title="악보 뷰어"
+                  >
+                    <Presentation size={16} />
+                    <span className="ml-1.5 hidden sm:inline">악보 뷰어</span>
+                  </button>
+                )}
 
                 {/* 악보 다운로드 */}
                 <button

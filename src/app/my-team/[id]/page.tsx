@@ -473,6 +473,36 @@ const downloadSelectedFixedSongs = async () => {
   }
 }
 
+// ✅ 선택된 고정곡들 악보 뷰어로 열기
+const openSelectedFixedSongsViewer = () => {
+  if (selectedFixedSongs.length === 0) {
+    alert('악보를 볼 곡을 선택하세요.')
+    return
+  }
+
+  // 악보가 있는 곡만 필터링
+  const songsWithSheet = selectedFixedSongs.filter(fs => fs.song.file_url)
+
+  if (songsWithSheet.length === 0) {
+    alert('선택된 곡 중 악보가 있는 곡이 없습니다.')
+    return
+  }
+
+  // SheetMusicEditor용 형식으로 변환
+  const editorSongs = songsWithSheet.map(fs => ({
+    song_id: fs.song.id,
+    song_name: fs.song.song_name,
+    team_name: fs.song.team_name,
+    file_url: fs.song.file_url,
+    file_type: (fs.song.file_type === 'pdf' ? 'pdf' : 'image') as 'pdf' | 'image',
+    songForms: []
+  }))
+
+  setNoteEditorSongs(editorSongs)
+  setNoteEditorSetlistTitle('고정곡 악보')
+  setShowNoteEditor(true)
+}
+
   const handleCreateSetlist = async () => {
     if (!newSetlist.title.trim()) {
       alert('콘티 제목을 입력하세요.')
@@ -971,15 +1001,24 @@ const downloadSelectedFixedSongs = async () => {
       </div>
       <div className="flex items-center gap-2">
         {selectedFixedSongs.length > 0 && (
-          <button
-            onClick={downloadSelectedFixedSongs}
-            disabled={downloadingFixed}
-            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:bg-gray-400 text-sm"
-          >
-            <Download size={16} className="flex-shrink-0" />
-            <span className="hidden sm:inline">{downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}</span>
-            <span className="sm:hidden">{selectedFixedSongs.length}</span>
-          </button>
+          <>
+            <button
+              onClick={openSelectedFixedSongsViewer}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
+            >
+              <Presentation size={16} className="flex-shrink-0" />
+              <span className="hidden sm:inline">악보 뷰어</span>
+            </button>
+            <button
+              onClick={downloadSelectedFixedSongs}
+              disabled={downloadingFixed}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:bg-gray-400 text-sm"
+            >
+              <Download size={16} className="flex-shrink-0" />
+              <span className="hidden sm:inline">{downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}</span>
+              <span className="sm:hidden">{selectedFixedSongs.length}</span>
+            </button>
+          </>
         )}
         {canAddFixedSong && (
           <button
@@ -1064,11 +1103,20 @@ const downloadSelectedFixedSongs = async () => {
                             </button>
                             <button
                               onClick={() => {
-                                setCurrentSheetSong(fixedSong.song)
-                                setShowFixedSongSheet(true)
+                                // 단일 곡도 SheetMusicEditor로 열기
+                                setNoteEditorSongs([{
+                                  song_id: fixedSong.song.id,
+                                  song_name: fixedSong.song.song_name,
+                                  team_name: fixedSong.song.team_name,
+                                  file_url: fixedSong.song.file_url,
+                                  file_type: (fixedSong.song.file_type === 'pdf' ? 'pdf' : 'image') as 'pdf' | 'image',
+                                  songForms: []
+                                }])
+                                setNoteEditorSetlistTitle(fixedSong.song.song_name)
+                                setShowNoteEditor(true)
                               }}
                               className="p-2 hover:bg-gray-100 rounded-lg"
-                              title="악보보기 전용모드"
+                              title="악보 보기/필기 모드"
                             >
                               <Presentation size={20} className="text-gray-600" />
                             </button>
@@ -1097,13 +1145,33 @@ const downloadSelectedFixedSongs = async () => {
                       {/* 모바일 버튼 (아이콘만) */}
                       <div className="flex sm:hidden items-center gap-1">
                         {fixedSong.song.file_url && (
-                          <button
-                            onClick={() => setPreviewFixedSong(fixedSong)}
-                            className="p-2 hover:bg-gray-100 rounded-lg"
-                            title="미리보기"
-                          >
-                            <Eye size={18} className="text-gray-600" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setPreviewFixedSong(fixedSong)}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                              title="미리보기"
+                            >
+                              <Eye size={18} className="text-gray-600" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setNoteEditorSongs([{
+                                  song_id: fixedSong.song.id,
+                                  song_name: fixedSong.song.song_name,
+                                  team_name: fixedSong.song.team_name,
+                                  file_url: fixedSong.song.file_url,
+                                  file_type: (fixedSong.song.file_type === 'pdf' ? 'pdf' : 'image') as 'pdf' | 'image',
+                                  songForms: []
+                                }])
+                                setNoteEditorSetlistTitle(fixedSong.song.song_name)
+                                setShowNoteEditor(true)
+                              }}
+                              className="p-2 hover:bg-gray-100 rounded-lg"
+                              title="악보 보기/필기"
+                            >
+                              <Presentation size={18} className="text-gray-600" />
+                            </button>
+                          </>
                         )}
                         {fixedSong.song.youtube_url && (
                           <button

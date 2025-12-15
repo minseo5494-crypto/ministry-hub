@@ -1715,6 +1715,16 @@ const hasMore = displayCount < filteredSongs.length
               </div>
 
               <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
+  {/* 악보 뷰어 버튼 */}
+  {selectedSongs.some(s => s.file_url) && (
+    <button
+      onClick={() => openSheetViewer(selectedSongs[0])}
+      className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs sm:text-sm flex items-center justify-center whitespace-nowrap"
+    >
+      <Presentation className="mr-1 sm:mr-2" size={14} />
+      악보 뷰어
+    </button>
+  )}
   <button
   onClick={() => {
     if (!user) {
@@ -2089,10 +2099,10 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openSheetViewer(song)
               }}
-              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-              title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 뷰어` : '악보 뷰어'}
+              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+              title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 뷰어` : '악보 보기/필기 모드'}
             >
-              <Pencil size={18} />
+              <Presentation size={18} />
             </button>
           )}
 
