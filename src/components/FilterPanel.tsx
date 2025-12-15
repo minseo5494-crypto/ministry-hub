@@ -63,7 +63,7 @@ export default function FilterPanel({
 
   if (!isVisible) return null  // ← 추가
     return (
-    <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] overflow-y-auto">
+    <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] md:max-h-none md:overflow-visible overflow-y-auto">
       {/* 모바일 닫기 버튼 */}
       {isMobile && onClose && (
         <div className="flex items-center justify-between mb-4 pb-2 border-b md:hidden">
@@ -278,37 +278,6 @@ export default function FilterPanel({
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             min="0"
           />
-        </div>
-
-        {/* 빠른 선택 버튼 */}
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => {
-              onFilterChange('bpmMin', '')
-              onFilterChange('bpmMax', '80')
-            }}
-            className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-          >
-            느림 (~80)
-          </button>
-          <button
-            onClick={() => {
-              onFilterChange('bpmMin', '80')
-              onFilterChange('bpmMax', '120')
-            }}
-            className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-          >
-            보통 (80-120)
-          </button>
-          <button
-            onClick={() => {
-              onFilterChange('bpmMin', '120')
-              onFilterChange('bpmMax', '')
-            }}
-            className="w-full px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-          >
-            빠름 (120~)
-          </button>
         </div>
 
         {/* 초기화 버튼 */}
