@@ -1,11 +1,44 @@
 // src/components/SongFormModal.tsx
 // 🎵 송폼 설정 모달 컴포넌트 (즐겨찾기 기능 포함)
+// 📱 아이패드 터치 지원 추가
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { SECTION_ABBREVIATIONS, supabase } from '@/lib/supabase'
 import { Star, Trash2, X } from 'lucide-react'
+
+// 🎯 터치 친화적 버튼 컴포넌트 - iOS Safari 호환
+interface TouchButtonProps {
+  onClick: () => void
+  className?: string
+  disabled?: boolean
+  title?: string
+  children: React.ReactNode
+}
+
+function TouchButton({ onClick, className = '', disabled = false, title, children }: TouchButtonProps) {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!disabled) {
+      onClick()
+    }
+  }, [onClick, disabled])
+
+  return (
+    <button
+      onClick={onClick}
+      onTouchEnd={handleTouchEnd}
+      className={className}
+      disabled={disabled}
+      title={title}
+      style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+    >
+      {children}
+    </button>
+  )
+}
 
 interface Song {
   id: string
@@ -186,16 +219,16 @@ export default function SongFormModal({
               {availableSections.map(section => {
                 const abbr = SECTION_ABBREVIATIONS[section]
                 return (
-                  <button
+                  <TouchButton
                     key={section}
                     onClick={() => addSection(section)}
-                    className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
+                    className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-900 font-medium flex justify-between items-center"
                   >
                     <span>{section}</span>
                     <span className="text-sm bg-blue-200 px-2 py-1 rounded text-blue-900">
                       {abbr}
                     </span>
-                  </button>
+                  </TouchButton>
                 )
               })}
             </div>
@@ -210,14 +243,15 @@ export default function SongFormModal({
                   onChange={(e) => setCustomSection(e.target.value)}
                   placeholder="예: 기도회, 멘트"
                   className="flex-1 px-3 py-2 border rounded"
+                  style={{ touchAction: 'manipulation', fontSize: '16px' }}
                   onKeyPress={(e) => e.key === 'Enter' && addCustomSection()}
                 />
-                <button
+                <TouchButton
                   onClick={addCustomSection}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 active:bg-gray-800"
                 >
                   추가
-                </button>
+                </TouchButton>
               </div>
             </div>
           </div>
@@ -228,14 +262,14 @@ export default function SongFormModal({
               <h4 className="font-bold text-lg">선택된 순서</h4>
               {/* 🎵 즐겨찾기 추가 버튼 */}
               {userId && tempSelectedForm.length > 0 && (
-                <button
+                <TouchButton
                   onClick={() => setShowAddFavoriteModal(true)}
-                  className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 text-sm"
+                  className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 active:bg-yellow-300 text-sm"
                   title="현재 송폼을 즐겨찾기에 추가"
                 >
                   <Star size={14} />
                   즐겨찾기 추가
-                </button>
+                </TouchButton>
               )}
             </div>
 
@@ -256,26 +290,26 @@ export default function SongFormModal({
                         {index + 1}. {abbr}
                       </span>
                       <div className="flex gap-1">
-                        <button
+                        <TouchButton
                           onClick={() => moveSectionUp(index)}
                           disabled={index === 0}
-                          className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          className="px-3 py-2 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] active:bg-[#5A9AA1] disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[40px]"
                         >
                           ↑
-                        </button>
-                        <button
+                        </TouchButton>
+                        <TouchButton
                           onClick={() => moveSectionDown(index)}
                           disabled={index === tempSelectedForm.length - 1}
-                          className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          className="px-3 py-2 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] active:bg-[#5A9AA1] disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[40px]"
                         >
                           ↓
-                        </button>
-                        <button
+                        </TouchButton>
+                        <TouchButton
                           onClick={() => removeSection(index)}
-                          className="px-2 py-1 bg-[#E26559] text-white rounded hover:bg-[#D14E42]"
+                          className="px-3 py-2 bg-[#E26559] text-white rounded hover:bg-[#D14E42] active:bg-[#C03E32] min-w-[40px]"
                         >
                           ✕
-                        </button>
+                        </TouchButton>
                       </div>
                     </div>
                   ))}
@@ -318,8 +352,15 @@ export default function SongFormModal({
                     {favorites.map((fav) => (
                       <div
                         key={fav.id}
-                        className="bg-white border border-yellow-300 rounded-lg p-3 hover:border-yellow-500 transition cursor-pointer group"
+                        className="bg-white border border-yellow-300 rounded-lg p-3 hover:border-yellow-500 active:bg-yellow-50 transition cursor-pointer group"
                         onClick={() => applyFavorite(fav.songform_pattern)}
+                        onTouchEnd={(e) => {
+                          // 삭제 버튼 터치가 아닐 때만 적용
+                          if ((e.target as HTMLElement).closest('[data-delete-btn]')) return
+                          e.preventDefault()
+                          applyFavorite(fav.songform_pattern)
+                        }}
+                        style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
@@ -333,14 +374,21 @@ export default function SongFormModal({
                             </p>
                           </div>
                           <button
+                            data-delete-btn
                             onClick={(e) => {
                               e.stopPropagation()
                               removeFavorite(fav.id)
                             }}
-                            className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                            onTouchEnd={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              removeFavorite(fav.id)
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-500 active:text-red-600 opacity-100 transition"
+                            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                             title="삭제"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </div>
@@ -358,39 +406,39 @@ export default function SongFormModal({
 
         {/* 버튼 */}
         <div className="mt-6 flex justify-end gap-3">
-          <button
+          <TouchButton
             onClick={onClose}
-            className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium"
+            className="px-6 py-3 bg-gray-300 rounded-lg hover:bg-gray-400 active:bg-gray-500 font-medium min-h-[48px]"
           >
             취소
-          </button>
-          <button
+          </TouchButton>
+          <TouchButton
             onClick={handleSave}
-            className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold"
+            className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] active:bg-[#90B1DE] font-bold min-h-[48px]"
           >
             저장
-          </button>
+          </TouchButton>
         </div>
       </div>
 
       {/* 🎵 즐겨찾기 추가 모달 */}
       {showAddFavoriteModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
           style={{ zIndex: 60 }}
         >
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-lg font-bold">즐겨찾기 추가</h4>
-              <button
+              <TouchButton
                 onClick={() => {
                   setShowAddFavoriteModal(false)
                   setNewFavoriteLabel('')
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 active:text-gray-900 p-2"
               >
                 <X size={20} />
-              </button>
+              </TouchButton>
             </div>
 
             <div className="mb-4">
@@ -410,25 +458,26 @@ export default function SongFormModal({
                 onChange={(e) => setNewFavoriteLabel(e.target.value)}
                 placeholder="예: 주일 기본 송폼"
                 className="w-full px-3 py-2 border rounded-lg"
+                style={{ touchAction: 'manipulation', fontSize: '16px' }}
               />
             </div>
 
             <div className="flex gap-2">
-              <button
+              <TouchButton
                 onClick={() => {
                   setShowAddFavoriteModal(false)
                   setNewFavoriteLabel('')
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                className="flex-1 px-4 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 active:bg-gray-400 min-h-[48px]"
               >
                 취소
-              </button>
-              <button
+              </TouchButton>
+              <TouchButton
                 onClick={addToFavorites}
-                className="flex-1 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                className="flex-1 px-4 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 active:bg-yellow-700 min-h-[48px]"
               >
                 추가
-              </button>
+              </TouchButton>
             </div>
           </div>
         </div>
