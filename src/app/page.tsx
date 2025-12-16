@@ -169,6 +169,11 @@ const {
   shared_with_teams: [] as string[]
 })
 
+  // 🔍 중복 체크 관련 상태
+  const [duplicateSongs, setDuplicateSongs] = useState<Song[]>([])
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const duplicateCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // 🆕 사용자의 팀 목록 상태 추가
   const [uploadingFile, setUploadingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -682,11 +687,89 @@ const handleBPMChange = (bpmValue: string) => {
   }
 }
 
+// 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '')  // 모든 공백 제거
+    .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (영문, 숫자, 한글만 유지)
+}
+
+// 🔍 중복 곡 체크 함수
+const checkDuplicateSong = async (songName: string, teamName: string) => {
+  if (!songName.trim()) {
+    setDuplicateSongs([])
+    return
+  }
+
+  setCheckingDuplicate(true)
+
+  try {
+    // 먼저 모든 곡을 가져와서 클라이언트에서 비교
+    // (DB에서 정규화된 비교가 어려우므로)
+    const normalizedInput = normalizeText(songName)
+    const normalizedTeam = normalizeText(teamName)
+
+    // 이미 로드된 songs에서 검색 (성능 최적화)
+    const duplicates = songs.filter(song => {
+      const normalizedSongName = normalizeText(song.song_name || '')
+      const normalizedSongTeam = normalizeText(song.team_name || '')
+
+      // 제목이 같은 경우
+      if (normalizedSongName === normalizedInput) {
+        // 아티스트도 입력된 경우 아티스트도 비교
+        if (normalizedTeam && normalizedSongTeam) {
+          return normalizedSongTeam === normalizedTeam
+        }
+        // 아티스트 미입력 시 제목만 같아도 중복 후보
+        return true
+      }
+      return false
+    })
+
+    setDuplicateSongs(duplicates)
+  } catch (error) {
+    console.error('중복 체크 오류:', error)
+  } finally {
+    setCheckingDuplicate(false)
+  }
+}
+
+// 🔍 제목/아티스트 변경 시 디바운스로 중복 체크
+const handleSongNameChange = (value: string) => {
+  setNewSong({ ...newSong, song_name: value })
+
+  // 기존 타이머 취소
+  if (duplicateCheckTimeoutRef.current) {
+    clearTimeout(duplicateCheckTimeoutRef.current)
+  }
+
+  // 500ms 후 중복 체크 실행
+  duplicateCheckTimeoutRef.current = setTimeout(() => {
+    checkDuplicateSong(value, newSong.team_name)
+  }, 500)
+}
+
+const handleTeamNameChange = (value: string) => {
+  setNewSong({ ...newSong, team_name: value })
+  searchTeamNames(value)  // 기존 자동완성
+
+  // 기존 타이머 취소
+  if (duplicateCheckTimeoutRef.current) {
+    clearTimeout(duplicateCheckTimeoutRef.current)
+  }
+
+  // 500ms 후 중복 체크 실행
+  duplicateCheckTimeoutRef.current = setTimeout(() => {
+    checkDuplicateSong(newSong.song_name, value)
+  }, 500)
+}
+
 // 템포 선택 시 BPM 범위 검증
 const handleTempoChange = (tempoValue: string) => {
   const range = getBPMRangeFromTempo(tempoValue)
   const currentBPM = parseInt(newSong.bpm)
-  
+
   if (range && !isNaN(currentBPM)) {
     if (currentBPM < range.min || currentBPM > range.max) {
       setNewSong({ ...newSong, tempo: tempoValue, bpm: '' })
@@ -706,6 +789,21 @@ const handleTempoChange = (tempoValue: string) => {
   if (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0) {
     alert('공유할 팀을 최소 1개 선택해주세요')
     return
+  }
+
+  // 🔍 중복 곡 확인 (저장 전 최종 체크)
+  if (duplicateSongs.length > 0) {
+    const duplicateInfo = duplicateSongs.map(s =>
+      `• "${s.song_name}"${s.team_name ? ` - ${s.team_name}` : ''}`
+    ).join('\n')
+
+    const confirmed = confirm(
+      `⚠️ 비슷한 곡이 이미 존재합니다!\n\n${duplicateInfo}\n\n그래도 추가하시겠습니까?`
+    )
+
+    if (!confirmed) {
+      return
+    }
   }
 
   setUploading(true)
@@ -846,6 +944,7 @@ if (newSong.visibility === 'public') {
       shared_with_teams: []
     })
     setUploadingFile(null)
+    setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
 
     fetchSongs()
 
@@ -2301,6 +2400,7 @@ const hasMore = displayCount < filteredSongs.length
                     shared_with_teams: []
                   })
                   setUploadingFile(null)
+                  setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -2316,10 +2416,39 @@ const hasMore = displayCount < filteredSongs.length
                 <input
                   type="text"
                   value={newSong.song_name}
-                  onChange={(e) => setNewSong({ ...newSong, song_name: e.target.value })}
+                  onChange={(e) => handleSongNameChange(e.target.value)}
                   placeholder="예: 주의 이름 높이며"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    duplicateSongs.length > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-300'
+                  }`}
                 />
+                {/* 🔍 중복 경고 표시 */}
+                {checkingDuplicate && (
+                  <p className="mt-1 text-sm text-gray-500">중복 확인 중...</p>
+                )}
+                {!checkingDuplicate && duplicateSongs.length > 0 && (
+                  <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm font-medium text-orange-800 mb-1">
+                      ⚠️ 비슷한 곡이 {duplicateSongs.length}개 있습니다:
+                    </p>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      {duplicateSongs.slice(0, 5).map((song, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span>• {song.song_name}</span>
+                          {song.team_name && (
+                            <span className="text-orange-600">- {song.team_name}</span>
+                          )}
+                        </li>
+                      ))}
+                      {duplicateSongs.length > 5 && (
+                        <li className="text-orange-600">...외 {duplicateSongs.length - 5}곡</li>
+                      )}
+                    </ul>
+                    <p className="text-xs text-orange-600 mt-2">
+                      * 띄어쓰기와 특수문자는 무시하고 비교합니다
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="relative">
@@ -2329,10 +2458,7 @@ const hasMore = displayCount < filteredSongs.length
 <input
 type="text"
 value={newSong.team_name}
-onChange={(e) => {
-  setNewSong({ ...newSong, team_name: e.target.value })
-  searchTeamNames(e.target.value)
-}}
+onChange={(e) => handleTeamNameChange(e.target.value)}
 onFocus={() => {
   if (teamNameSuggestions.length > 0) setShowTeamSuggestions(true)
 }}
@@ -2722,6 +2848,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     shared_with_teams: []
                   })
                   setUploadingFile(null)
+                  setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
                 }}
                 className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                 disabled={uploading}
