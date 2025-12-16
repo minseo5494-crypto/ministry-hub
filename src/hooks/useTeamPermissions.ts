@@ -17,7 +17,7 @@ interface UseTeamPermissionsResult {
 }
 
 // 관리자 이메일 목록 (나중에 DB로 이동 가능)
-const ADMIN_EMAILS = ['lemonpulp0224@gmail.com']
+const ADMIN_EMAILS = ['minseo1885@naver.com']
 
 export function useTeamPermissions(teamId: string | null, userId: string | null): UseTeamPermissionsResult {
   const [permissions, setPermissions] = useState<Permission[]>([])

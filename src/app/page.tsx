@@ -9,7 +9,7 @@ import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart, Pencil
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -848,7 +848,16 @@ const handleTempoChange = (tempoValue: string) => {
     }
 
     console.log('📝 DB에 곡 정보 저장 중...')
-    
+
+    // 🔍 공식 업로더 여부 확인
+    const { data: officialUploader } = await supabase
+      .from('official_uploaders')
+      .select('id')
+      .eq('email', user.email.toLowerCase())
+      .single()
+
+    const isOfficial = !!officialUploader
+
     // ✅ 디버깅: 저장할 데이터 확인
     console.log('📋 저장할 곡 정보:', {
       song_name: newSong.song_name,
@@ -857,7 +866,8 @@ const handleTempoChange = (tempoValue: string) => {
       time_signature: newSong.time_signature,  // ← 박자 값 확인
       tempo: newSong.tempo,
       bpm: newSong.bpm,
-      visibility: newSong.visibility
+      visibility: newSong.visibility,
+      is_official: isOfficial
     })
 
     // ✨ 임시 변경: 모든 곡을 바로 songs 테이블에 저장 (승인 프로세스 비활성화)
@@ -883,7 +893,8 @@ const { error: insertError } = await supabase
     shared_with_teams: newSong.visibility === 'teams'
       ? newSong.shared_with_teams
       : null,
-    is_user_uploaded: true
+    is_user_uploaded: true,
+    is_official: isOfficial
   })
 
 if (insertError) throw insertError
@@ -1470,6 +1481,16 @@ const hasMore = displayCount < filteredSongs.length
                   </button>
                   <button
                     onClick={() => {
+                      router.push('/admin/official-uploaders')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                  >
+                    <Shield className="mr-2" size={18} />
+                    공식 업로더 관리
+                  </button>
+                  <button
+                    onClick={() => {
                       router.push('/admin/dashboard')
                       setShowMenu(false)
                     }}
@@ -1668,6 +1689,17 @@ const hasMore = displayCount < filteredSongs.length
                 >
                   <Activity size={20} />
                   <span>팀 승인 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/official-uploaders')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Shield size={20} />
+                  <span>공식 업로더 관리</span>
                 </button>
 
                 <button
@@ -2006,7 +2038,18 @@ const hasMore = displayCount < filteredSongs.length
         }`}
       >
         <div className="flex items-start justify-between mb-2">
-          <h3 className="font-bold text-gray-900 flex-1">{song.song_name}</h3>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 truncate">{song.song_name}</h3>
+            {song.is_official ? (
+              <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center gap-1" title="공식 악보">
+                <Shield size={12} />
+              </span>
+            ) : song.is_user_uploaded && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full" title="사용자 추가">
+                +
+              </span>
+            )}
+          </div>
           <div className="flex gap-1 ml-2">
             {/* 악보 미리보기 버튼 - 모달로 열기 */}
             {song.file_url && (
@@ -2149,6 +2192,16 @@ const hasMore = displayCount < filteredSongs.length
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
+                {song.is_official ? (
+                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center gap-1 flex-shrink-0" title="공식 악보">
+                    <Shield size={12} />
+                    공식
+                  </span>
+                ) : song.is_user_uploaded && (
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full flex-shrink-0" title="사용자 추가">
+                    사용자
+                  </span>
+                )}
                 {songForms[song.id] && songForms[song.id].length > 0 && (
                   <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded flex-shrink-0">
                     송폼: {songForms[song.id].join('-')}

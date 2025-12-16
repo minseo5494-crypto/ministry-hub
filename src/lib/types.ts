@@ -40,6 +40,16 @@ export interface TeamInfo extends Team {
   my_role?: 'admin' | 'leader' | 'member'
 }
 
+// 공식 업로더
+export interface OfficialUploader {
+  id: string
+  email: string
+  name?: string
+  description?: string
+  created_at?: string
+  created_by?: string
+}
+
 // 송폼 구조
 export interface SongStructure {
   [key: string]: string
@@ -78,6 +88,7 @@ export interface Song {
   shared_with_teams?: string[]
   upload_status?: string
   is_user_uploaded?: boolean
+  is_official?: boolean
 }
 
 // 송폼 위치 (PDF 생성용)
