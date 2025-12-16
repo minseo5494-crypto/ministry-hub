@@ -1439,7 +1439,20 @@ const openSelectedFixedSongsViewer = () => {
                         <Pencil size={18} />
                       </button>
 
-                      <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 group-hover:text-blue-600 transition flex-shrink-0" />
+                      <button
+                        onClick={() => {
+                          if (user) {
+                            logSetlistView(setlist.id, teamId, user.id).catch(error => {
+                              console.error('Error logging setlist view:', error)
+                            })
+                          }
+                          router.push(`/my-team/${teamId}/setlist/${setlist.id}`)
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition"
+                        title="콘티 열기"
+                      >
+                        <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 group-hover:text-blue-600 transition flex-shrink-0" />
+                      </button>
                     </div>
                   </div>
                 </div>
