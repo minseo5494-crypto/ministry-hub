@@ -68,6 +68,7 @@ const [loading, setLoading] = useState(true)
 // 🎵 좋아요 관련 상태
 const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
 const [sortBy, setSortBy] = useState<'recent' | 'likes' | 'name'>('recent')
+const [showUserUploaded, setShowUserUploaded] = useState(true) // 사용자 추가 악보 표시 여부
 
   // 🆕 무한 스크롤을 위한 상태
 const [displayCount, setDisplayCount] = useState(20)
@@ -1149,6 +1150,11 @@ if (newSong.visibility === 'public') {
       })
     }
 
+    // 🛡️ 공식/사용자 악보 필터
+    if (!showUserUploaded) {
+      result = result.filter(song => song.is_official === true)
+    }
+
     // 🎵 정렬 적용
 if (sortBy === 'likes') {
   result.sort((a, b) => ((b as any).like_count || 0) - ((a as any).like_count || 0))
@@ -1174,7 +1180,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy])
+  }, [songs, filters, user, sortBy, showUserUploaded])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1987,7 +1993,23 @@ const hasMore = displayCount < filteredSongs.length
         </select>
     </div>
 
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 md:gap-3">
+        {/* 🛡️ 공식/사용자 악보 토글 */}
+        <button
+          onClick={() => setShowUserUploaded(!showUserUploaded)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            showUserUploaded
+              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+          }`}
+          title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
+        >
+          <Shield size={16} className="flex-shrink-0" />
+          <span className="hidden sm:inline">{showUserUploaded ? '전체' : '공식만'}</span>
+        </button>
+
+        <div className="w-px h-6 bg-gray-200 hidden md:block"></div>
+
         <button
           onClick={() => setViewMode('grid')}
           className={`p-2 rounded-lg transition ${
