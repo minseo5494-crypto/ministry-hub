@@ -2248,6 +2248,19 @@ const hasMore = displayCount < filteredSongs.length
 
         {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
         <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
+          {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
+          {selectedSongs.find(s => s.id === song.id) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openFormModal(song)
+              }}
+              className="px-2 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs md:text-sm rounded hover:bg-[#B0A8D8] whitespace-nowrap"
+            >
+              송폼
+            </button>
+          )}
+
           {/* 미리보기 토글 버튼 */}
           {(song.lyrics || song.file_url) && (
             <button
@@ -2330,19 +2343,6 @@ const hasMore = displayCount < filteredSongs.length
               <span className="text-xs">{(song as any).like_count}</span>
             )}
           </button>
-
-          {/* 송폼 설정 버튼 */}
-          {selectedSongs.find(s => s.id === song.id) && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                openFormModal(song)
-              }}
-              className="px-2 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs md:text-sm rounded hover:bg-[#B0A8D8] whitespace-nowrap"
-            >
-              송폼
-            </button>
-          )}
         </div>
       </div>
 
