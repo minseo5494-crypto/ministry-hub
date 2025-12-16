@@ -2193,13 +2193,12 @@ const hasMore = displayCount < filteredSongs.length
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
                 {song.is_official ? (
-                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center gap-1 flex-shrink-0" title="공식 악보">
+                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center" title="공식 악보">
                     <Shield size={12} />
-                    공식
                   </span>
                 ) : song.is_user_uploaded && (
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full flex-shrink-0" title="사용자 추가">
-                    사용자
+                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full" title="사용자 추가">
+                    +
                   </span>
                 )}
                 {songForms[song.id] && songForms[song.id].length > 0 && (
