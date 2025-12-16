@@ -1051,11 +1051,19 @@ if (newSong.visibility === 'public') {
     let result = [...songs]
 
     if (filters.searchText) {
-      const searchLower = filters.searchText.toLowerCase()
-      result = result.filter(song =>
-        song.song_name.toLowerCase().includes(filters.searchText.toLowerCase()) ||
-        song.team_name?.toLowerCase().includes(filters.searchText.toLowerCase())
-      )
+      const normalizedSearch = normalizeText(filters.searchText)
+      result = result.filter(song => {
+        // 띄어쓰기/특수문자 무시 검색
+        const normalizedSongName = normalizeText(song.song_name)
+        const normalizedTeamName = normalizeText(song.team_name || '')
+
+        // 정규화된 검색과 일반 검색 둘 다 지원
+        const searchLower = filters.searchText.toLowerCase()
+        return normalizedSongName.includes(normalizedSearch) ||
+               normalizedTeamName.includes(normalizedSearch) ||
+               song.song_name.toLowerCase().includes(searchLower) ||
+               song.team_name?.toLowerCase().includes(searchLower)
+      })
     }
 
     // 절기 필터
