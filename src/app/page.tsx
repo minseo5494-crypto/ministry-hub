@@ -2212,7 +2212,7 @@ const hasMore = displayCount < filteredSongs.length
                 setFocusedSongIndex(index)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="mr-3 flex-shrink-0 mt-1 w-5 h-5 cursor-pointer"
+              className="mr-3 flex-shrink-0 mt-1 w-4 h-4 cursor-pointer"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
