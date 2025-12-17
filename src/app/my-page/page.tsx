@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, parseThemes } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, Globe,
@@ -770,7 +770,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
                             {renderVisibilityBadge(song)}
-                            {song.themes?.map(theme => (
+                            {parseThemes(song.themes).map(theme => (
                               <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
                                 {theme}
                               </span>
@@ -853,7 +853,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             {song.time_signature && <span>{song.time_signature}</span>}
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {song.themes?.map(theme => (
+                            {parseThemes(song.themes).map(theme => (
                               <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
                                 {theme}
                               </span>
