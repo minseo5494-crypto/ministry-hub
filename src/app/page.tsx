@@ -696,7 +696,7 @@ const normalizeText = (text: string): string => {
     .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (영문, 숫자, 한글만 유지)
 }
 
-// 🔍 중복 곡 체크 함수
+// 🔍 중복 곡 체크 함수 (DB 전체에서 검색)
 const checkDuplicateSong = async (songName: string, teamName: string) => {
   if (!songName.trim()) {
     setDuplicateSongs([])
@@ -706,29 +706,42 @@ const checkDuplicateSong = async (songName: string, teamName: string) => {
   setCheckingDuplicate(true)
 
   try {
-    // 먼저 모든 곡을 가져와서 클라이언트에서 비교
-    // (DB에서 정규화된 비교가 어려우므로)
     const normalizedInput = normalizeText(songName)
     const normalizedTeam = normalizeText(teamName)
 
-    // 이미 로드된 songs에서 검색 (성능 최적화)
-    const duplicates = songs.filter(song => {
+    // DB에서 비슷한 제목의 곡 검색 (ilike로 대소문자 무시)
+    const { data, error } = await supabase
+      .from('songs')
+      .select('id, song_name, team_name, is_official, visibility, uploaded_by')
+      .ilike('song_name', `%${songName.trim()}%`)
+      .limit(50)
+
+    if (error) throw error
+
+    // 클라이언트에서 정규화하여 비교 (포함 관계도 체크)
+    const duplicates = (data || []).filter(song => {
       const normalizedSongName = normalizeText(song.song_name || '')
       const normalizedSongTeam = normalizeText(song.team_name || '')
 
-      // 제목이 같은 경우
-      if (normalizedSongName === normalizedInput) {
+      // 정규화된 제목이 같거나 포함 관계인 경우
+      const isSimilar = normalizedSongName === normalizedInput ||
+                        normalizedSongName.includes(normalizedInput) ||
+                        normalizedInput.includes(normalizedSongName)
+
+      if (isSimilar) {
         // 아티스트도 입력된 경우 아티스트도 비교
         if (normalizedTeam && normalizedSongTeam) {
-          return normalizedSongTeam === normalizedTeam
+          return normalizedSongTeam === normalizedTeam ||
+                 normalizedSongTeam.includes(normalizedTeam) ||
+                 normalizedTeam.includes(normalizedSongTeam)
         }
-        // 아티스트 미입력 시 제목만 같아도 중복 후보
+        // 아티스트 미입력 시 제목만 비슷해도 중복 후보
         return true
       }
       return false
     })
 
-    setDuplicateSongs(duplicates)
+    setDuplicateSongs(duplicates as Song[])
   } catch (error) {
     console.error('중복 체크 오류:', error)
   } finally {

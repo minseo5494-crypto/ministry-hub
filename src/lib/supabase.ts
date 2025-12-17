@@ -173,6 +173,8 @@ export interface Song {
   visibility?: 'private' | 'teams' | 'public'
   upload_status?: 'pending' | 'completed' | 'failed'
   like_count?: number
+  is_official?: boolean
+  is_user_uploaded?: boolean
   // 악보 버전 관리
   primary_sheet_id?: string
   sheets?: SongSheet[]  // 연결된 악보들
@@ -358,9 +360,24 @@ export function parseThemes(themes: unknown): string[] {
     return themes.map(t => String(t).trim()).filter(t => t)
   }
 
-  // 문자열인 경우 (쉼표로 구분)
+  // 문자열인 경우
   if (typeof themes === 'string') {
-    return themes.split(',').map(t => t.trim()).filter(t => t)
+    const trimmed = themes.trim()
+
+    // JSON 배열 형식인 경우 (예: '["찬양","감사"]')
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return parsed.map(t => String(t).trim()).filter(t => t)
+        }
+      } catch (e) {
+        // JSON 파싱 실패 시 아래 로직으로 진행
+      }
+    }
+
+    // 쉼표로 구분된 문자열인 경우
+    return trimmed.split(',').map(t => t.trim()).filter(t => t)
   }
 
   return []
