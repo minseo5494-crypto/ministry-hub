@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, parseThemes } from '@/lib/supabase'
+import { supabase, parseThemes, ThemeCount, fetchThemeCounts } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
-  Music, Settings, Edit, Trash2, Eye, Globe,
+  Music, Settings, Edit, Trash2, Eye, EyeOff, Globe,
   Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Pencil, Image, Download
 } from 'lucide-react'
-import { SEASONS, THEMES, TEMPO_RANGES } from '@/lib/constants'
+import { SEASONS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -95,14 +95,27 @@ const [sharing, setSharing] = useState(false)
 
   // 곡 수정 모달
   const [showEditModal, setShowEditModal] = useState(false)
+  const [editingSongId, setEditingSongId] = useState<string | null>(null)
   const [editSong, setEditSong] = useState({
     song_name: '',
     team_name: '',
-    key: ''
+    key: '',
+    time_signature: '',
+    tempo: '',
+    bpm: '',
+    themes: [] as string[],
+    season: '',
+    youtube_url: '',
+    lyrics: '',
+    visibility: 'teams' as 'public' | 'teams' | 'private',
+    shared_with_teams: [] as string[]
   })
+  const [updating, setUpdating] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [editCustomTheme, setEditCustomTheme] = useState('')  // 수정 모달 사용자 정의 테마
 
-  // 곡 미리보기
-  const [previewSong, setPreviewSong] = useState<UploadedSong | null>(null)
+  // 곡 미리보기 (인라인)
+  const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
 
   // 검색 및 필터
   const [searchText, setSearchText] = useState('')
@@ -129,6 +142,16 @@ const [sharing, setSharing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 🔍 중복 체크 관련 상태
+  const [duplicateSongs, setDuplicateSongs] = useState<UploadedSong[]>([])
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false)
+  const duplicateCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 🎨 동적 테마 목록 상태
+  const [themeCounts, setThemeCounts] = useState<ThemeCount[]>([])
+  const [themesLoading, setThemesLoading] = useState(true)
+  const [newThemeInput, setNewThemeInput] = useState('')  // 새 테마 입력용
   
 
 // ✅ 모바일 감지
@@ -141,6 +164,98 @@ const {
   searchTeamNames,
   setShowSuggestions: setShowTeamSuggestions
 } = useTeamNameSearch()
+
+// 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '')  // 모든 공백 제거
+    .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (영문, 숫자, 한글만 유지)
+}
+
+// 🔍 중복 곡 체크 함수 (DB 전체에서 검색)
+const checkDuplicateSong = async (songName: string, teamName: string) => {
+  if (!songName.trim()) {
+    setDuplicateSongs([])
+    return
+  }
+
+  setCheckingDuplicate(true)
+
+  try {
+    const normalizedInput = normalizeText(songName)
+    const normalizedTeam = normalizeText(teamName)
+
+    // DB에서 비슷한 제목의 곡 검색 (ilike로 대소문자 무시)
+    const { data, error } = await supabase
+      .from('songs')
+      .select('id, song_name, team_name, is_official, visibility, uploaded_by')
+      .ilike('song_name', `%${songName.trim()}%`)
+      .limit(50)
+
+    if (error) throw error
+
+    // 클라이언트에서 정규화하여 비교 (포함 관계도 체크)
+    const duplicates = (data || []).filter(song => {
+      const normalizedSongName = normalizeText(song.song_name || '')
+      const normalizedSongTeam = normalizeText(song.team_name || '')
+
+      // 정규화된 제목이 같거나 포함 관계인 경우
+      const isSimilar = normalizedSongName === normalizedInput ||
+                        normalizedSongName.includes(normalizedInput) ||
+                        normalizedInput.includes(normalizedSongName)
+
+      if (isSimilar) {
+        // 아티스트도 입력된 경우 아티스트도 비교
+        if (normalizedTeam && normalizedSongTeam) {
+          return normalizedSongTeam === normalizedTeam ||
+                 normalizedSongTeam.includes(normalizedTeam) ||
+                 normalizedTeam.includes(normalizedSongTeam)
+        }
+        // 아티스트 미입력 시 제목만 비슷해도 중복 후보
+        return true
+      }
+      return false
+    })
+
+    setDuplicateSongs(duplicates as unknown as UploadedSong[])
+  } catch (error) {
+    console.error('중복 체크 오류:', error)
+  } finally {
+    setCheckingDuplicate(false)
+  }
+}
+
+// 🔍 제목 변경 시 디바운스로 중복 체크
+const handleSongNameChange = (value: string) => {
+  setNewSong({ ...newSong, song_name: value })
+
+  // 기존 타이머 취소
+  if (duplicateCheckTimeoutRef.current) {
+    clearTimeout(duplicateCheckTimeoutRef.current)
+  }
+
+  // 500ms 후 중복 체크 실행
+  duplicateCheckTimeoutRef.current = setTimeout(() => {
+    checkDuplicateSong(value, newSong.team_name)
+  }, 500)
+}
+
+// 🔍 아티스트 변경 시 디바운스로 중복 체크
+const handleTeamNameChange = (value: string) => {
+  setNewSong({ ...newSong, team_name: value })
+  searchTeamNames(value)  // 기존 자동완성
+
+  // 기존 타이머 취소
+  if (duplicateCheckTimeoutRef.current) {
+    clearTimeout(duplicateCheckTimeoutRef.current)
+  }
+
+  // 500ms 후 중복 체크 실행
+  duplicateCheckTimeoutRef.current = setTimeout(() => {
+    checkDuplicateSong(newSong.song_name, value)
+  }, 500)
+}
 
 // ✅ 곡 삭제
   const handleDeleteSong = async (song: any) => {
@@ -184,8 +299,124 @@ const {
   }
 }
 
+  // 미리보기 토글
+  const togglePreview = (songId: string) => {
+    setPreviewStates(prev => ({
+      ...prev,
+      [songId]: !prev[songId]
+    }))
+  }
+
+  // ✏️ 곡 수정 모달 열기
+  const openEditModal = (song: UploadedSong) => {
+    setEditingSongId(song.id)
+    setEditSong({
+      song_name: song.song_name || '',
+      team_name: song.team_name || '',
+      key: song.key || '',
+      time_signature: song.time_signature || '',
+      tempo: song.tempo || '',
+      bpm: song.bpm?.toString() || '',
+      themes: parseThemes(song.themes),
+      season: song.season || '',
+      youtube_url: song.youtube_url || '',
+      lyrics: song.lyrics || '',
+      visibility: song.visibility || 'teams',
+      shared_with_teams: song.shared_with_teams || []
+    })
+    setEditCustomTheme('')  // 사용자 정의 테마 입력 초기화
+    setShowEditModal(true)
+  }
+
+  // ✏️ 곡 수정 저장
+  const updateSong = async () => {
+    if (!editingSongId) return
+    if (!editSong.song_name.trim()) {
+      alert('곡 제목을 입력하세요.')
+      return
+    }
+
+    // 팀 공유 시 팀 선택 확인
+    if (editSong.visibility === 'teams' && editSong.shared_with_teams.length === 0) {
+      alert('공유할 팀을 최소 1개 선택해주세요')
+      return
+    }
+
+    setUpdating(true)
+
+    try {
+      const { error } = await supabase
+        .from('songs')
+        .update({
+          song_name: editSong.song_name.trim(),
+          team_name: editSong.team_name.trim() || null,
+          key: editSong.key || null,
+          time_signature: editSong.time_signature || null,
+          tempo: editSong.tempo || null,
+          bpm: editSong.bpm ? parseInt(editSong.bpm) : null,
+          themes: editSong.themes.length > 0 ? editSong.themes : null,
+          season: editSong.season || null,
+          youtube_url: editSong.youtube_url.trim() || null,
+          lyrics: editSong.lyrics.trim() || null,
+          visibility: editSong.visibility,
+          shared_with_teams: editSong.visibility === 'teams'
+            ? editSong.shared_with_teams
+            : null
+        })
+        .eq('id', editingSongId)
+
+      if (error) throw error
+
+      alert('✅ 곡 정보가 수정되었습니다!')
+      setShowEditModal(false)
+      setEditingSongId(null)
+      fetchUploadedSongs()  // 목록 새로고침
+    } catch (error: any) {
+      console.error('Error updating song:', error)
+      alert(`수정 실패: ${error.message}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  // BPM 입력 시 템포 자동 선택 (수정용)
+  const handleEditBPMChange = (bpmValue: string) => {
+    const bpm = parseInt(bpmValue)
+    if (!isNaN(bpm) && bpm > 0) {
+      const autoTempo = getTempoFromBPM(bpm)
+      setEditSong({ ...editSong, bpm: bpmValue, tempo: autoTempo })
+    } else {
+      setEditSong({ ...editSong, bpm: bpmValue })
+    }
+  }
+
+  // 템포 선택 시 BPM 범위 검증 (수정용)
+  const handleEditTempoChange = (tempoValue: string) => {
+    const range = getBPMRangeFromTempo(tempoValue)
+    const currentBPM = parseInt(editSong.bpm)
+
+    if (range && !isNaN(currentBPM)) {
+      if (currentBPM < range.min || currentBPM > range.max) {
+        setEditSong({ ...editSong, tempo: tempoValue, bpm: '' })
+        return
+      }
+    }
+    setEditSong({ ...editSong, tempo: tempoValue })
+  }
+
   useEffect(() => {
     checkUser()
+  }, [])
+
+  // 🎨 테마 목록 로드
+  useEffect(() => {
+    const loadThemes = async () => {
+      setThemesLoading(true)
+      const counts = await fetchThemeCounts()
+      setThemeCounts(counts)
+      setThemesLoading(false)
+    }
+    loadThemes()
   }, [])
 
   useEffect(() => {
@@ -206,6 +437,15 @@ const {
         return
       }
       setUser(currentUser)
+
+      // 관리자 여부 확인
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', currentUser.id)
+        .single()
+
+      setIsAdmin(userData?.is_admin || false)
     } catch (error) {
       console.error('Error checking user:', error)
       router.push('/login')
@@ -383,6 +623,21 @@ setNewSong({ ...newSong, tempo: tempoValue })
     return
   }
 
+  // 🔍 중복 곡 확인 (저장 전 최종 체크)
+  if (duplicateSongs.length > 0) {
+    const duplicateInfo = duplicateSongs.map(s =>
+      `• "${s.song_name}"${s.team_name ? ` - ${s.team_name}` : ''}`
+    ).join('\n')
+
+    const confirmed = confirm(
+      `⚠️ 비슷한 곡이 이미 존재합니다!\n\n${duplicateInfo}\n\n그래도 추가하시겠습니까?`
+    )
+
+    if (!confirmed) {
+      return
+    }
+  }
+
   setUploading(true)
 
   try {
@@ -426,62 +681,43 @@ setNewSong({ ...newSong, tempo: tempoValue })
 
     console.log('💾 DB에 곡 정보 저장 중...')
 
-    // ✨ 핵심 변경: visibility에 따라 다른 테이블에 저장
-    if (newSong.visibility === 'public') {
-      // 전체 공개 → 승인 요청 테이블에 저장
-      const { error: requestError } = await supabase
-        .from('song_approval_requests')
-        .insert({
-          song_name: newSong.song_name.trim(),
-          team_name: newSong.team_name.trim() || null,
-          key: newSong.key || null,
-          time_signature: newSong.time_signature || null,
-          tempo: newSong.tempo || null,
-          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
-          themes: newSong.themes.length > 0 ? newSong.themes : null,
-          season: newSong.season || null,
-          youtube_url: newSong.youtube_url.trim() || null,
-          lyrics: newSong.lyrics.trim() || null,
-          file_url: fileUrl || null,
-          file_type: fileType || null,
-          requester_id: user.id,
-          visibility: 'teams',
-          status: 'pending'
-        })
+    // 🔍 공식 업로더 여부 확인
+    const { data: officialUploader } = await supabase
+      .from('official_uploaders')
+      .select('id')
+      .eq('email', user.email.toLowerCase())
+      .single()
 
-      if (requestError) throw requestError
+    const isOfficial = !!officialUploader
 
-      alert('✅ 곡이 제출되었습니다!\n관리자 승인 후 전체 공개됩니다.')
+    // ✨ 모든 곡을 바로 songs 테이블에 저장 (메인페이지와 동일)
+    const { error: insertError } = await supabase
+      .from('songs')
+      .insert({
+        song_name: newSong.song_name.trim(),
+        team_name: newSong.team_name.trim() || null,
+        key: newSong.key || null,
+        time_signature: newSong.time_signature || null,
+        tempo: newSong.tempo || null,
+        bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
+        themes: newSong.themes.length > 0 ? newSong.themes : null,
+        season: newSong.season || null,
+        youtube_url: newSong.youtube_url.trim() || null,
+        lyrics: newSong.lyrics.trim() || null,
+        file_url: fileUrl || null,
+        file_type: fileType || null,
+        uploaded_by: user.id,
+        visibility: newSong.visibility,
+        shared_with_teams: newSong.visibility === 'teams'
+          ? newSong.shared_with_teams
+          : null,
+        is_user_uploaded: true,
+        is_official: isOfficial
+      })
 
-    } else {
-      // 팀 공개 또는 비공개 → 바로 songs 테이블에 저장
-      const { error: insertError } = await supabase
-        .from('songs')
-        .insert({
-          song_name: newSong.song_name.trim(),
-          team_name: newSong.team_name.trim() || null,
-          key: newSong.key || null,
-          time_signature: newSong.time_signature || null,
-          tempo: newSong.tempo || null,
-          bpm: newSong.bpm ? parseInt(newSong.bpm) : null,
-          themes: newSong.themes.length > 0 ? newSong.themes : null,
-          season: newSong.season || null,
-          youtube_url: newSong.youtube_url.trim() || null,
-          lyrics: newSong.lyrics.trim() || null,
-          file_url: fileUrl || null,
-          file_type: fileType || null,
-          uploaded_by: user.id,
-          visibility: newSong.visibility,
-          shared_with_teams: newSong.visibility === 'teams' 
-            ? newSong.shared_with_teams 
-            : null,
-          is_user_uploaded: true
-        })
+    if (insertError) throw insertError
 
-      if (insertError) throw insertError
-
-      alert('✅ 곡이 추가되었습니다!')
-    }
+    alert('✅ 곡이 추가되었습니다!')
 
     console.log('✅ 곡 저장 완료')
 
@@ -502,6 +738,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
       shared_with_teams: []
     })
     setUploadingFile(null)
+    setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
 
     fetchUploadedSongs()  // ✅ 이게 맞음
 
@@ -792,15 +1029,27 @@ setNewSong({ ...newSong, tempo: tempoValue })
                         </div>
 
                         <div className="flex gap-2 ml-4">
+                          {/* 미리보기 토글 버튼 */}
                           {song.file_url && (
                             <button
-                              onClick={() => setPreviewSong(song)}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-                              title="미리보기"
+                              onClick={() => togglePreview(song.id)}
+                              className={`p-2 rounded-lg ${
+                                previewStates[song.id]
+                                  ? 'text-blue-600 bg-blue-100'
+                                  : 'text-blue-600 hover:bg-blue-100'
+                              }`}
+                              title={previewStates[song.id] ? '접기' : '미리보기'}
                             >
-                              <Eye size={20} />
+                              {previewStates[song.id] ? <EyeOff size={20} /> : <Eye size={20} />}
                             </button>
                           )}
+                          <button
+                            onClick={() => openEditModal(song)}
+                            className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+                            title="수정"
+                          >
+                            <Edit size={20} />
+                          </button>
                           <button
                             onClick={() => handleDeleteSong(song)}
                             disabled={deleting === song.id}
@@ -815,6 +1064,25 @@ setNewSong({ ...newSong, tempo: tempoValue })
                           </button>
                         </div>
                       </div>
+
+                      {/* 인라인 미리보기 */}
+                      {previewStates[song.id] && song.file_url && (
+                        <div className="mt-4 border-t pt-4">
+                          <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+                          {song.file_type === 'pdf' ? (
+                            <iframe
+                              src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                              className="w-full h-[500px] border rounded"
+                            />
+                          ) : (
+                            <img
+                              src={song.file_url}
+                              alt={`${song.song_name} 악보`}
+                              className="max-w-full h-auto rounded shadow-sm"
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -839,11 +1107,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
               ) : (
                 <div className="divide-y">
                   {likedSongs.map((song) => (
-                    <div
-                      key={song.id}
-                      className="p-4 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setPreviewSong(song)}
-                    >
+                    <div key={song.id} className="p-4 hover:bg-gray-50">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
@@ -862,15 +1126,42 @@ setNewSong({ ...newSong, tempo: tempoValue })
                         </div>
                         <div className="flex items-center gap-2">
                           {song.file_url && (
-                            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
-                              악보
-                            </span>
+                            <button
+                              onClick={() => togglePreview(song.id)}
+                              className={`p-2 rounded-lg ${
+                                previewStates[song.id]
+                                  ? 'text-blue-600 bg-blue-100'
+                                  : 'text-blue-600 hover:bg-blue-100'
+                              }`}
+                              title={previewStates[song.id] ? '접기' : '미리보기'}
+                            >
+                              {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
                           )}
                           <span className="text-xs px-2 py-1 bg-red-100 text-red-500 rounded flex items-center gap-1">
                             <Heart size={12} fill="currentColor" />
                           </span>
                         </div>
                       </div>
+
+                      {/* 인라인 미리보기 */}
+                      {previewStates[song.id] && song.file_url && (
+                        <div className="mt-4 border-t pt-4">
+                          <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+                          {song.file_type === 'pdf' ? (
+                            <iframe
+                              src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                              className="w-full h-[500px] border rounded"
+                            />
+                          ) : (
+                            <img
+                              src={song.file_url}
+                              alt={`${song.song_name} 악보`}
+                              className="max-w-full h-auto rounded shadow-sm"
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1057,6 +1348,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                     shared_with_teams: []
                   })
                   setUploadingFile(null)
+                  setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -1074,10 +1366,39 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 <input
                   type="text"
                   value={newSong.song_name}
-                  onChange={(e) => setNewSong({ ...newSong, song_name: e.target.value })}
+                  onChange={(e) => handleSongNameChange(e.target.value)}
                   placeholder="예: 주의 이름 높이며"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                    duplicateSongs.length > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-300'
+                  }`}
                 />
+                {/* 🔍 중복 경고 표시 */}
+                {checkingDuplicate && (
+                  <p className="mt-1 text-sm text-gray-500">중복 확인 중...</p>
+                )}
+                {!checkingDuplicate && duplicateSongs.length > 0 && (
+                  <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm font-medium text-orange-800 mb-1">
+                      ⚠️ 비슷한 곡이 {duplicateSongs.length}개 있습니다:
+                    </p>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      {duplicateSongs.slice(0, 5).map((song, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span>• {song.song_name}</span>
+                          {song.team_name && (
+                            <span className="text-orange-600">- {song.team_name}</span>
+                          )}
+                        </li>
+                      ))}
+                      {duplicateSongs.length > 5 && (
+                        <li className="text-orange-600">...외 {duplicateSongs.length - 5}곡</li>
+                      )}
+                    </ul>
+                    <p className="text-xs text-orange-600 mt-2">
+                      * 띄어쓰기와 특수문자는 무시하고 비교합니다
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="relative">
@@ -1087,10 +1408,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
 <input
 type="text"
 value={newSong.team_name}
-onChange={(e) => {
-  setNewSong({ ...newSong, team_name: e.target.value })
-  searchTeamNames(e.target.value)
-}}
+onChange={(e) => handleTeamNameChange(e.target.value)}
 onFocus={() => {
   if (teamNameSuggestions.length > 0) setShowTeamSuggestions(true)
 }}
@@ -1338,39 +1656,115 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 </select>
               </div>
 
-              {/* 테마 선택 (다중) */}
+              {/* 🆕 테마 다중 선택 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  테마 (복수 선택 가능)
+                  테마 (다중 선택 가능)
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {THEMES.map(theme => (
-                    <button
-                      key={theme}
-                      type="button"
-                      onClick={() => {
-                        if (newSong.themes.includes(theme)) {
-                          setNewSong({
+
+                {/* 선택된 테마 표시 */}
+                {newSong.themes.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                    {newSong.themes.map((theme) => (
+                      <span
+                        key={theme}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#C5D7F2] text-white text-sm rounded-full"
+                      >
+                        {theme}
+                        <button
+                          type="button"
+                          onClick={() => setNewSong({
                             ...newSong,
                             themes: newSong.themes.filter(t => t !== theme)
-                          })
-                        } else {
+                          })}
+                          className="w-4 h-4 flex items-center justify-center hover:bg-white/20 rounded-full"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* 기존 테마 선택 */}
+                <div className="flex flex-wrap gap-2">
+                  {themesLoading ? (
+                    <p className="text-sm text-gray-500">테마 로딩 중...</p>
+                  ) : (
+                    themeCounts.map(({ theme }) => (
+                      <button
+                        key={theme}
+                        type="button"
+                        onClick={() => {
+                          if (newSong.themes.includes(theme)) {
+                            setNewSong({
+                              ...newSong,
+                              themes: newSong.themes.filter(t => t !== theme)
+                            })
+                          } else {
+                            setNewSong({
+                              ...newSong,
+                              themes: [...newSong.themes, theme]
+                            })
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-full text-sm transition ${
+                          newSong.themes.includes(theme)
+                            ? 'bg-[#C5D7F2] text-white'
+                            : 'bg-gray-100 hover:bg-gray-200'
+                        }`}
+                      >
+                        {theme}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* 새 테마 직접 입력 */}
+                <div className="flex gap-2 mt-3">
+                  <input
+                    id="newThemeInput"
+                    type="text"
+                    value={newThemeInput}
+                    onChange={(e) => setNewThemeInput(e.target.value)}
+                    placeholder="새 테마 직접 입력..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    onKeyDown={(e) => {
+                      // 한글 IME 조합 중이면 무시
+                      if (e.nativeEvent.isComposing) return
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const newTheme = newThemeInput.trim()
+                        if (newTheme && !newSong.themes.includes(newTheme)) {
                           setNewSong({
                             ...newSong,
-                            themes: [...newSong.themes, theme]
+                            themes: [...newSong.themes, newTheme]
                           })
+                          setNewThemeInput('')
                         }
-                      }}
-                      className={`px-3 py-1 rounded-full text-sm transition ${
-                        newSong.themes.includes(theme)
-                          ? 'bg-[#C5D7F2] text-white'
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      }`}
-                    >
-                      {theme}
-                    </button>
-                  ))}
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newTheme = newThemeInput.trim()
+                      if (newTheme && !newSong.themes.includes(newTheme)) {
+                        setNewSong({
+                          ...newSong,
+                          themes: [...newSong.themes, newTheme]
+                        })
+                        setNewThemeInput('')
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition"
+                  >
+                    추가
+                  </button>
                 </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  * Enter를 누르거나 추가 버튼을 클릭하면 새 테마가 추가됩니다
+                </p>
               </div>
 
               {/*  YouTube URL */}
@@ -1767,43 +2161,426 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         </div>
       )}
 
-      {/* 미리보기 모달 */}
-      {previewSong && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h2 className="text-2xl font-bold">{previewSong.song_name}</h2>
+      {/* ✏️ 곡 수정 모달 */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-2xl p-6 my-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">곡 정보 수정</h2>
               <button
-                onClick={() => setPreviewSong(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingSongId(null)
+                }}
+                className="text-gray-500 hover:text-gray-700"
               >
-                <X className="w-6 h-6" />
+                <X size={24} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              {previewSong.file_url ? (
-                previewSong.file_type === 'pdf' ? (
-                  <iframe
-                    src={previewSong.file_url}
-                    className="w-full h-[600px] border rounded"
-                  />
-                ) : (
-                  <img
-                    src={previewSong.file_url}
-                    alt={previewSong.song_name}
-                    className="max-w-full h-auto"
-                  />
-                )
-              ) : (
-                <div className="text-center text-gray-500">
-                  <p>악보 파일이 없습니다</p>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  곡 제목 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editSong.song_name}
+                  onChange={(e) => setEditSong({ ...editSong, song_name: e.target.value })}
+                  placeholder="예: 주의 이름 높이며"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  팀명 / 아티스트
+                </label>
+                <input
+                  type="text"
+                  value={editSong.team_name}
+                  onChange={(e) => setEditSong({ ...editSong, team_name: e.target.value })}
+                  placeholder="예: 위러브(Welove)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              {/* 🆕 공유 범위 선택 */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  공유 범위 <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="public"
+                      checked={editSong.visibility === 'public'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'public', shared_with_teams: [] })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">전체 공개</div>
+                      <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="teams"
+                      checked={editSong.visibility === 'teams'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'teams' })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">팀 공개</div>
+                      <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="private"
+                      checked={editSong.visibility === 'private'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'private', shared_with_teams: [] })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">비공개</div>
+                      <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
                 </div>
-              )}
+
+                {/* 팀 선택 (팀 공개 선택 시에만 표시) */}
+                {editSong.visibility === 'teams' && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      공유할 팀 선택 <span className="text-red-500">*</span>
+                    </label>
+                    {userTeams.length > 0 ? (
+                      <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
+                        {userTeams.map(team => (
+                          <label key={team.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editSong.shared_with_teams.includes(team.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setEditSong({
+                                    ...editSong,
+                                    shared_with_teams: [...editSong.shared_with_teams, team.id]
+                                  })
+                                } else {
+                                  setEditSong({
+                                    ...editSong,
+                                    shared_with_teams: editSong.shared_with_teams.filter(id => id !== team.id)
+                                  })
+                                }
+                              }}
+                              className="mr-2"
+                            />
+                            <span>{team.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">소속된 팀이 없습니다.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Key */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditSong({ ...editSong, key: editSong.key.replace('m', '') })}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+                        !editSong.key.includes('m')
+                          ? 'bg-[#C5D7F2] text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Major
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editSong.key.includes('m') && editSong.key) {
+                          setEditSong({ ...editSong, key: editSong.key + 'm' })
+                        }
+                      }}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+                        editSong.key.includes('m')
+                          ? 'bg-[#C4BEE2] text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Minor
+                    </button>
+                  </div>
+                  <select
+                    value={editSong.key.replace('m', '')}
+                    onChange={(e) => {
+                      const baseKey = e.target.value
+                      const isMinor = editSong.key.includes('m')
+                      setEditSong({ ...editSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {keys.map(key => (
+                      <option key={key} value={key}>{key}{editSong.key.includes('m') ? 'm' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 박자 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">박자</label>
+                  <select
+                    value={editSong.time_signature}
+                    onChange={(e) => setEditSong({ ...editSong, time_signature: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {timeSignatures.map(ts => (
+                      <option key={ts} value={ts}>{ts}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 템포 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+                  <select
+                    value={editSong.tempo}
+                    onChange={(e) => handleEditTempoChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {tempos.map(tempo => (
+                      <option key={tempo} value={tempo}>{tempo}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* BPM */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    BPM
+                    {editSong.tempo && getBPMRangeFromTempo(editSong.tempo) && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        ({getBPMRangeFromTempo(editSong.tempo)?.min} ~ {getBPMRangeFromTempo(editSong.tempo)?.max})
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    value={editSong.bpm}
+                    onChange={(e) => handleEditBPMChange(e.target.value)}
+                    placeholder="예: 120"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              {/* 절기 선택 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+                <select
+                  value={editSong.season}
+                  onChange={(e) => setEditSong({ ...editSong, season: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">선택</option>
+                  {SEASONS.filter(s => s !== '전체').map(season => (
+                    <option key={season} value={season}>{season}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 🆕 테마 다중 선택 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  테마 (다중 선택 가능)
+                </label>
+
+                {/* 선택된 테마 표시 */}
+                {editSong.themes.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                    {editSong.themes.map((theme) => (
+                      <span
+                        key={theme}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#C5D7F2] text-white text-sm rounded-full"
+                      >
+                        {theme}
+                        <button
+                          type="button"
+                          onClick={() => setEditSong({
+                            ...editSong,
+                            themes: editSong.themes.filter(t => t !== theme)
+                          })}
+                          className="w-4 h-4 flex items-center justify-center hover:bg-white/20 rounded-full"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* 기존 테마 선택 */}
+                <div className="flex flex-wrap gap-2">
+                  {themesLoading ? (
+                    <p className="text-sm text-gray-500">테마 로딩 중...</p>
+                  ) : (
+                    themeCounts.map(({ theme }) => (
+                      <button
+                        key={theme}
+                        type="button"
+                        onClick={() => {
+                          if (editSong.themes.includes(theme)) {
+                            setEditSong({
+                              ...editSong,
+                              themes: editSong.themes.filter(t => t !== theme)
+                            })
+                          } else {
+                            setEditSong({
+                              ...editSong,
+                              themes: [...editSong.themes, theme]
+                            })
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-full text-sm transition ${
+                          editSong.themes.includes(theme)
+                            ? 'bg-[#C5D7F2] text-white'
+                            : 'bg-gray-100 hover:bg-gray-200'
+                        }`}
+                      >
+                        {theme}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* 새 테마 직접 입력 */}
+                <div className="flex gap-2 mt-3">
+                  <input
+                    type="text"
+                    value={editCustomTheme}
+                    onChange={(e) => setEditCustomTheme(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return
+                      if (e.key === 'Enter' && editCustomTheme.trim()) {
+                        e.preventDefault()
+                        const newTheme = editCustomTheme.trim()
+                        if (!editSong.themes.includes(newTheme)) {
+                          setEditSong({
+                            ...editSong,
+                            themes: [...editSong.themes, newTheme]
+                          })
+                        }
+                        setEditCustomTheme('')
+                      }
+                    }}
+                    placeholder="새 테마 직접 입력..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editCustomTheme.trim()) {
+                        const newTheme = editCustomTheme.trim()
+                        if (!editSong.themes.includes(newTheme)) {
+                          setEditSong({
+                            ...editSong,
+                            themes: [...editSong.themes, newTheme]
+                          })
+                        }
+                        setEditCustomTheme('')
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition"
+                  >
+                    추가
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  * Enter를 누르거나 추가 버튼을 클릭하면 새 테마가 추가됩니다
+                </p>
+              </div>
+
+              {/* YouTube URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  YouTube URL (선택사항)
+                </label>
+                <input
+                  type="url"
+                  value={editSong.youtube_url}
+                  onChange={(e) => setEditSong({ ...editSong, youtube_url: e.target.value })}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              {/* 가사 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  가사 (선택사항)
+                </label>
+                <textarea
+                  value={editSong.lyrics}
+                  onChange={(e) => setEditSong({ ...editSong, lyrics: e.target.value })}
+                  rows={4}
+                  placeholder="곡의 가사를 입력하세요..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingSongId(null)
+                }}
+                className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={updateSong}
+                disabled={updating || !editSong.song_name.trim() || (editSong.visibility === 'teams' && editSong.shared_with_teams.length === 0)}
+                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {updating ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    수정 중...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    수정 완료
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   )
 }
