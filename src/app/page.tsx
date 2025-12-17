@@ -2460,22 +2460,6 @@ const hasMore = displayCount < filteredSongs.length
         </div>
       </div>
 
-      {/* 단축키 안내 */}
-      <div className="hidden md:block fixed bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 text-xs text-gray-600">
-        <div className="flex items-center gap-2 mb-1">
-          <kbd className="px-2 py-1 bg-gray-100 rounded border">Space</kbd>
-          <span>악보 미리보기</span>
-        </div>
-        <div className="flex items-center gap-2 mb-1">
-          <kbd className="px-2 py-1 bg-gray-100 rounded border">↑↓</kbd>
-          <span>이동</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <kbd className="px-2 py-1 bg-gray-100 rounded border">Enter</kbd>
-          <span>선택/해제</span>
-        </div>
-      </div>
-
       {/* 기존 모달들 그대로 유지 */}
       {/* 곡 추가 모달 */}
       {showAddSongModal && (
