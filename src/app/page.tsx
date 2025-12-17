@@ -692,6 +692,7 @@ const handleBPMChange = (bpmValue: string) => {
 const normalizeText = (text: string): string => {
   return text
     .toLowerCase()
+    .replace(/\([a-g][#b]?m?\)/gi, '')  // 키 표시 제거 (C), (D#), (Am), (Bb) 등
     .replace(/\s+/g, '')  // 모든 공백 제거
     .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (영문, 숫자, 한글만 유지)
 }
