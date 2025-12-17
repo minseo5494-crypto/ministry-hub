@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, parseThemes } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save } from 'lucide-react'
+import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save, Upload, FileText } from 'lucide-react'
 import { SEASONS, THEMES } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
@@ -62,6 +62,11 @@ export default function UserSongsPage() {
     shared_with_teams: [] as string[]
   })
   const [updating, setUpdating] = useState(false)
+
+  // 파일 수정 관련 상태
+  const [editFile, setEditFile] = useState<File | null>(null)
+  const [editCurrentFileUrl, setEditCurrentFileUrl] = useState<string | null>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     checkAdmin()
@@ -160,7 +165,21 @@ export default function UserSongsPage() {
       visibility: song.visibility || 'teams',
       shared_with_teams: song.shared_with_teams || []
     })
+    setEditFile(null)
+    setEditCurrentFileUrl(song.file_url || null)
     setShowEditModal(true)
+  }
+
+  // 파일 선택 핸들러
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('파일 크기는 10MB를 초과할 수 없습니다.')
+        return
+      }
+      setEditFile(file)
+    }
   }
 
   // 곡 수정 저장
@@ -174,6 +193,41 @@ export default function UserSongsPage() {
     setUpdating(true)
 
     try {
+      let fileUrl = editCurrentFileUrl
+      let fileType = editCurrentFileUrl ? editCurrentFileUrl.split('.').pop()?.toLowerCase() : null
+
+      // 새 파일이 선택된 경우 업로드
+      if (editFile) {
+        // 곡의 원래 소유자 ID 가져오기
+        const originalSong = songs.find(s => s.id === editingSongId)
+        const uploaderId = originalSong?.uploaded_by || 'admin'
+
+        const fileExt = editFile.name.split('.').pop()?.toLowerCase() || 'pdf'
+        const timestamp = Date.now()
+        const randomStr = Math.random().toString(36).substring(2, 8)
+        const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
+        const filePath = `${uploaderId}/${safeFileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('song-sheets')
+          .upload(filePath, editFile, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: editFile.type
+          })
+
+        if (uploadError) {
+          throw new Error(`파일 업로드 실패: ${uploadError.message}`)
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('song-sheets')
+          .getPublicUrl(filePath)
+
+        fileUrl = urlData.publicUrl
+        fileType = fileExt
+      }
+
       const { error } = await supabase
         .from('songs')
         .update({
@@ -191,7 +245,8 @@ export default function UserSongsPage() {
           shared_with_teams: editSong.visibility === 'teams'
             ? editSong.shared_with_teams
             : null,
-          updated_at: new Date().toISOString()
+          file_url: fileUrl,
+          file_type: fileType
         })
         .eq('id', editingSongId)
 
@@ -200,6 +255,8 @@ export default function UserSongsPage() {
       alert('✅ 곡 정보가 수정되었습니다!')
       setShowEditModal(false)
       setEditingSongId(null)
+      setEditFile(null)
+      setEditCurrentFileUrl(null)
       fetchUserSongs()
     } catch (error: any) {
       console.error('Error updating song:', error)
@@ -746,6 +803,63 @@ export default function UserSongsPage() {
                   placeholder="https://www.youtube.com/watch?v=..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 />
+              </div>
+
+              {/* 악보 파일 수정 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  악보 파일
+                </label>
+                <div className="mt-1">
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleEditFileSelect}
+                    className="hidden"
+                  />
+
+                  {/* 현재 파일 표시 */}
+                  {editCurrentFileUrl && !editFile && (
+                    <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <FileText size={16} />
+                        <span>현재 파일: {editCurrentFileUrl.split('/').pop()?.substring(0, 30)}...</span>
+                      </div>
+                      <button
+                        onClick={() => setEditCurrentFileUrl(null)}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        파일 삭제
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition flex items-center justify-center"
+                  >
+                    <Upload className="mr-2" size={20} />
+                    {editFile ? (
+                      <span className="text-green-600 font-medium">
+                        ✅ {editFile.name} ({(editFile.size / 1024 / 1024).toFixed(2)}MB)
+                      </span>
+                    ) : editCurrentFileUrl ? (
+                      '새 파일로 교체'
+                    ) : (
+                      '파일 선택 (PDF, JPG, PNG, 최대 10MB)'
+                    )}
+                  </button>
+                  {editFile && (
+                    <button
+                      onClick={() => setEditFile(null)}
+                      className="mt-2 text-sm text-red-600 hover:text-red-800"
+                    >
+                      새 파일 취소
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* 가사 */}
