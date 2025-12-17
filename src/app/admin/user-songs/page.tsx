@@ -2,17 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, parseThemes } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock } from 'lucide-react'
+import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save } from 'lucide-react'
+import { SEASONS, THEMES } from '@/lib/constants'
+import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
+
+// 상수
+const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+const timeSignatures = ['3/4', '4/4', '6/8', '12/8']
+const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
 interface UserSong {
   id: string
   song_name: string
   team_name: string | null
   key: string | null
+  time_signature: string | null
+  tempo: string | null
   bpm: number | null
+  themes: string[] | null
+  season: string | null
+  youtube_url: string | null
+  lyrics: string | null
   visibility: 'public' | 'private' | 'teams'
+  shared_with_teams: string[] | null
   is_user_uploaded: boolean
   uploaded_by: string
   created_at: string
@@ -29,6 +43,25 @@ export default function UserSongsPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private' | 'teams'>('all')
   const [deleting, setDeleting] = useState<string | null>(null)
   const [previewSong, setPreviewSong] = useState<UserSong | null>(null)
+
+  // 곡 수정 모달 상태
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingSongId, setEditingSongId] = useState<string | null>(null)
+  const [editSong, setEditSong] = useState({
+    song_name: '',
+    team_name: '',
+    key: '',
+    time_signature: '',
+    tempo: '',
+    bpm: '',
+    themes: [] as string[],
+    season: '',
+    youtube_url: '',
+    lyrics: '',
+    visibility: 'teams' as 'public' | 'teams' | 'private',
+    shared_with_teams: [] as string[]
+  })
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
     checkAdmin()
@@ -108,6 +141,97 @@ export default function UserSongsPage() {
     }
 
     setFilteredSongs(result)
+  }
+
+  // 곡 수정 모달 열기
+  const openEditModal = (song: UserSong) => {
+    setEditingSongId(song.id)
+    setEditSong({
+      song_name: song.song_name || '',
+      team_name: song.team_name || '',
+      key: song.key || '',
+      time_signature: song.time_signature || '',
+      tempo: song.tempo || '',
+      bpm: song.bpm?.toString() || '',
+      themes: parseThemes(song.themes),
+      season: song.season || '',
+      youtube_url: song.youtube_url || '',
+      lyrics: song.lyrics || '',
+      visibility: song.visibility || 'teams',
+      shared_with_teams: song.shared_with_teams || []
+    })
+    setShowEditModal(true)
+  }
+
+  // 곡 수정 저장
+  const updateSong = async () => {
+    if (!editingSongId) return
+    if (!editSong.song_name.trim()) {
+      alert('곡 제목을 입력하세요.')
+      return
+    }
+
+    setUpdating(true)
+
+    try {
+      const { error } = await supabase
+        .from('songs')
+        .update({
+          song_name: editSong.song_name.trim(),
+          team_name: editSong.team_name.trim() || null,
+          key: editSong.key || null,
+          time_signature: editSong.time_signature || null,
+          tempo: editSong.tempo || null,
+          bpm: editSong.bpm ? parseInt(editSong.bpm) : null,
+          themes: editSong.themes.length > 0 ? editSong.themes : null,
+          season: editSong.season || null,
+          youtube_url: editSong.youtube_url.trim() || null,
+          lyrics: editSong.lyrics.trim() || null,
+          visibility: editSong.visibility,
+          shared_with_teams: editSong.visibility === 'teams'
+            ? editSong.shared_with_teams
+            : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingSongId)
+
+      if (error) throw error
+
+      alert('✅ 곡 정보가 수정되었습니다!')
+      setShowEditModal(false)
+      setEditingSongId(null)
+      fetchUserSongs()
+    } catch (error: any) {
+      console.error('Error updating song:', error)
+      alert(`수정 실패: ${error.message}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  // BPM 입력 시 템포 자동 선택
+  const handleEditBPMChange = (bpmValue: string) => {
+    const bpm = parseInt(bpmValue)
+    if (!isNaN(bpm) && bpm > 0) {
+      const autoTempo = getTempoFromBPM(bpm)
+      setEditSong({ ...editSong, bpm: bpmValue, tempo: autoTempo })
+    } else {
+      setEditSong({ ...editSong, bpm: bpmValue })
+    }
+  }
+
+  // 템포 선택 시 BPM 범위 검증
+  const handleEditTempoChange = (tempoValue: string) => {
+    const range = getBPMRangeFromTempo(tempoValue)
+    const currentBPM = parseInt(editSong.bpm)
+
+    if (range && !isNaN(currentBPM)) {
+      if (currentBPM < range.min || currentBPM > range.max) {
+        setEditSong({ ...editSong, tempo: tempoValue, bpm: '' })
+        return
+      }
+    }
+    setEditSong({ ...editSong, tempo: tempoValue })
   }
 
   const handleDelete = async (song: UserSong) => {
@@ -319,6 +443,13 @@ export default function UserSongsPage() {
                         </button>
                       )}
                       <button
+                        onClick={() => openEditModal(song)}
+                        className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+                        title="수정"
+                      >
+                        <Edit size={20} />
+                      </button>
+                      <button
                         onClick={() => handleDelete(song)}
                         disabled={deleting === song.id}
                         className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -355,6 +486,310 @@ export default function UserSongsPage() {
                   className="w-full h-[600px] border rounded"
                 />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 곡 수정 모달 */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-2xl p-6 my-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">곡 정보 수정 (관리자)</h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingSongId(null)
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  곡 제목 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editSong.song_name}
+                  onChange={(e) => setEditSong({ ...editSong, song_name: e.target.value })}
+                  placeholder="예: 주의 이름 높이며"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  팀명 / 아티스트
+                </label>
+                <input
+                  type="text"
+                  value={editSong.team_name}
+                  onChange={(e) => setEditSong({ ...editSong, team_name: e.target.value })}
+                  placeholder="예: 위러브(Welove)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              {/* 공유 범위 선택 */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3">공유 범위</label>
+                <div className="space-y-2">
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="public"
+                      checked={editSong.visibility === 'public'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'public', shared_with_teams: [] })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">전체 공개</div>
+                      <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="teams"
+                      checked={editSong.visibility === 'teams'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'teams' })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">팀 공개</div>
+                      <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      value="private"
+                      checked={editSong.visibility === 'private'}
+                      onChange={(e) => setEditSong({ ...editSong, visibility: 'private', shared_with_teams: [] })}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">비공개</div>
+                      <div className="text-sm text-gray-500">업로더만 이 곡을 볼 수 있습니다</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Key */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditSong({ ...editSong, key: editSong.key.replace('m', '') })}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+                        !editSong.key.includes('m')
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Major
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editSong.key.includes('m') && editSong.key) {
+                          setEditSong({ ...editSong, key: editSong.key + 'm' })
+                        }
+                      }}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
+                        editSong.key.includes('m')
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Minor
+                    </button>
+                  </div>
+                  <select
+                    value={editSong.key.replace('m', '')}
+                    onChange={(e) => {
+                      const baseKey = e.target.value
+                      const isMinor = editSong.key.includes('m')
+                      setEditSong({ ...editSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {keys.map(key => (
+                      <option key={key} value={key}>{key}{editSong.key.includes('m') ? 'm' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 박자 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">박자</label>
+                  <select
+                    value={editSong.time_signature}
+                    onChange={(e) => setEditSong({ ...editSong, time_signature: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {timeSignatures.map(ts => (
+                      <option key={ts} value={ts}>{ts}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 템포 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+                  <select
+                    value={editSong.tempo}
+                    onChange={(e) => handleEditTempoChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">선택</option>
+                    {tempos.map(tempo => (
+                      <option key={tempo} value={tempo}>{tempo}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* BPM */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    BPM
+                    {editSong.tempo && getBPMRangeFromTempo(editSong.tempo) && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        ({getBPMRangeFromTempo(editSong.tempo)?.min} ~ {getBPMRangeFromTempo(editSong.tempo)?.max})
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    value={editSong.bpm}
+                    onChange={(e) => handleEditBPMChange(e.target.value)}
+                    placeholder="예: 120"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              {/* 절기 선택 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+                <select
+                  value={editSong.season}
+                  onChange={(e) => setEditSong({ ...editSong, season: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">선택</option>
+                  {SEASONS.filter(s => s !== '전체').map(season => (
+                    <option key={season} value={season}>{season}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 테마 선택 (다중) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  테마 (복수 선택 가능)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {THEMES.map(theme => (
+                    <button
+                      key={theme}
+                      type="button"
+                      onClick={() => {
+                        if (editSong.themes.includes(theme)) {
+                          setEditSong({
+                            ...editSong,
+                            themes: editSong.themes.filter(t => t !== theme)
+                          })
+                        } else {
+                          setEditSong({
+                            ...editSong,
+                            themes: [...editSong.themes, theme]
+                          })
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-full text-sm transition ${
+                        editSong.themes.includes(theme)
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 hover:bg-gray-200'
+                      }`}
+                    >
+                      {theme}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* YouTube URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  YouTube URL (선택사항)
+                </label>
+                <input
+                  type="url"
+                  value={editSong.youtube_url}
+                  onChange={(e) => setEditSong({ ...editSong, youtube_url: e.target.value })}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              {/* 가사 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  가사 (선택사항)
+                </label>
+                <textarea
+                  value={editSong.lyrics}
+                  onChange={(e) => setEditSong({ ...editSong, lyrics: e.target.value })}
+                  rows={4}
+                  placeholder="곡의 가사를 입력하세요..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingSongId(null)
+                }}
+                className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={updateSong}
+                disabled={updating || !editSong.song_name.trim()}
+                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {updating ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    수정 중...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    수정 완료
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
