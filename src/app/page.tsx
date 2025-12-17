@@ -1150,16 +1150,28 @@ if (newSong.visibility === 'public') {
       result = result.filter(song => song.tempo === filters.tempo)
     }
 
-    // 👇 BPM 범위 필터 추가
+    // 👇 BPM 범위 필터 추가 (템포 기반 범위도 지원)
     if (filters.bpmMin || filters.bpmMax) {
       result = result.filter(song => {
-        if (!song.bpm) return false
-      
-        const songBpm = typeof song.bpm === 'string' ? parseFloat(song.bpm) : song.bpm
-        const minBpm = filters.bpmMin ? parseFloat(filters.bpmMin) : 0
-        const maxBpm = filters.bpmMax ? parseFloat(filters.bpmMax) : Infinity
-      
-        return songBpm >= minBpm && songBpm <= maxBpm
+        const filterMin = filters.bpmMin ? parseFloat(filters.bpmMin) : 0
+        const filterMax = filters.bpmMax ? parseFloat(filters.bpmMax) : Infinity
+
+        // 1. BPM이 직접 설정된 경우
+        if (song.bpm) {
+          const songBpm = typeof song.bpm === 'string' ? parseFloat(song.bpm) : song.bpm
+          return songBpm >= filterMin && songBpm <= filterMax
+        }
+
+        // 2. BPM이 없지만 템포가 설정된 경우 → 템포의 BPM 범위로 필터링
+        if (song.tempo) {
+          const tempoRange = getBPMRangeFromTempo(song.tempo)
+          if (tempoRange) {
+            // 템포 범위와 필터 범위가 겹치는지 확인
+            return tempoRange.max >= filterMin && tempoRange.min <= filterMax
+          }
+        }
+
+        return false
       })
     }
 
