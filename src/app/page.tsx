@@ -2849,6 +2849,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     placeholder="새 테마 직접 입력..."
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     onKeyDown={(e) => {
+                      // 한글 IME 조합 중이면 무시
+                      if (e.nativeEvent.isComposing) return
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         const input = e.currentTarget
