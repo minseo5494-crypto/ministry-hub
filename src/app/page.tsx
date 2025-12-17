@@ -2786,6 +2786,32 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   테마 (다중 선택 가능)
                 </label>
+
+                {/* 선택된 테마 표시 */}
+                {newSong.themes.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                    {newSong.themes.map((theme) => (
+                      <span
+                        key={theme}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#C5D7F2] text-white text-sm rounded-full"
+                      >
+                        {theme}
+                        <button
+                          type="button"
+                          onClick={() => setNewSong({
+                            ...newSong,
+                            themes: newSong.themes.filter(t => t !== theme)
+                          })}
+                          className="w-4 h-4 flex items-center justify-center hover:bg-white/20 rounded-full"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* 기존 테마 선택 */}
                 <div className="flex flex-wrap gap-2">
                   {themeCounts.map(({ theme }) => (
                     <button
@@ -2814,12 +2840,14 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     </button>
                   ))}
                 </div>
+
                 {/* 새 테마 직접 입력 */}
-                <div className="mt-2 flex gap-2">
+                <div className="mt-3 flex gap-2">
                   <input
+                    id="newThemeInput"
                     type="text"
-                    placeholder="새 테마 입력..."
-                    className="flex-1 px-3 py-1 border border-gray-300 rounded-lg text-sm"
+                    placeholder="새 테마 직접 입력..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
@@ -2835,7 +2863,27 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       }
                     }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById('newThemeInput') as HTMLInputElement
+                      const newTheme = input?.value.trim()
+                      if (newTheme && !newSong.themes.includes(newTheme)) {
+                        setNewSong({
+                          ...newSong,
+                          themes: [...newSong.themes, newTheme]
+                        })
+                        input.value = ''
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition"
+                  >
+                    추가
+                  </button>
                 </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  기존 테마를 선택하거나, 새 테마를 직접 입력하세요
+                </p>
               </div>
 
               {/* 🆕 YouTube URL */}
