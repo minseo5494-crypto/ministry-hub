@@ -155,11 +155,14 @@ export default function SignupPage() {
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="name"
+                autoCapitalize="words"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="홍길동"
                 required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
               />
             </div>
           </div>
@@ -172,10 +175,13 @@ export default function SignupPage() {
 <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
 <input
   type="text"
+  inputMode="text"
+  autoComplete="organization"
+  autoCapitalize="words"
   value={formData.churchName}
   onChange={(e) => setFormData({ ...formData, churchName: e.target.value })}
   placeholder="출석 교회명"
-  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
 />
 </div>
 </div>
@@ -188,11 +194,15 @@ export default function SignupPage() {
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="your@email.com"
                 required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
               />
             </div>
           </div>
@@ -205,12 +215,15 @@ export default function SignupPage() {
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="password"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
               />
             </div>
             <p className="mt-1 text-xs text-gray-500">최소 6자 이상</p>
@@ -224,11 +237,14 @@ export default function SignupPage() {
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="password"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 placeholder="••••••••"
                 required
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
               />
             </div>
           </div>

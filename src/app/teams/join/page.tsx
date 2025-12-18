@@ -162,6 +162,10 @@ export default function JoinTeamPage() {
               </label>
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                 onKeyPress={handleKeyPress}

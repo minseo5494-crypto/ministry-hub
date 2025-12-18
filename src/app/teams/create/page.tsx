@@ -147,10 +147,13 @@ export default function CreateTeamPage() {
               </label>
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="words"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder="예: 청년부 찬양팀"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                 maxLength={50}
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -202,10 +205,13 @@ export default function CreateTeamPage() {
                 </label>
                 <input
                   type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="words"
                   value={churchName}
                   onChange={(e) => setChurchName(e.target.value)}
                   placeholder="예: 사랑의교회"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                   maxLength={50}
                 />
               </div>
