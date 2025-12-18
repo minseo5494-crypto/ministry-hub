@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signUp, signInWithGoogle } from '@/lib/auth'
-import { Mail, Lock, User, AlertCircle, Chrome, Building } from 'lucide-react'
+import { Mail, Lock, User, AlertCircle, Chrome, Building, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SignupPage() {
@@ -70,6 +70,15 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+        {/* 메인으로 돌아가기 */}
+        <Link
+          href="/"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 touch-manipulation"
+        >
+          <ArrowLeft size={20} className="mr-1" />
+          메인으로
+        </Link>
+
         {/* 헤더 */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">

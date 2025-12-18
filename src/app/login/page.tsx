@@ -3,7 +3,7 @@
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn, signInWithGoogle } from '@/lib/auth'
-import { Mail, Lock, AlertCircle, Chrome } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Chrome, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 // useSearchParams를 사용하는 컴포넌트를 분리
@@ -62,6 +62,15 @@ function LoginForm() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+        {/* 메인으로 돌아가기 */}
+        <Link
+          href="/"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 touch-manipulation"
+        >
+          <ArrowLeft size={20} className="mr-1" />
+          메인으로
+        </Link>
+
         {/* 헤더 */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
