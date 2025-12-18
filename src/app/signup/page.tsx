@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signUp, signInWithGoogle } from '@/lib/auth'
-import { Mail, Lock, User, AlertCircle, Chrome, CheckCircle, Building } from 'lucide-react'
+import { Mail, Lock, User, AlertCircle, Chrome, Building } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SignupPage() {
@@ -18,7 +18,6 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
 
   // 이메일/비밀번호 회원가입
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,12 +39,8 @@ export default function SignupPage() {
 
     try {
       await signUp(formData.email, formData.password, formData.name, formData.churchName)
-      setSuccess(true)
-      
-      // 3초 후 로그인 페이지로 이동
-      setTimeout(() => {
-        router.push('/login?message=회원가입이 완료되었습니다. 이메일을 확인하여 인증을 완료해주세요.')
-      }, 3000)
+      // 회원가입 성공 시 바로 로그인 페이지로 이동
+      router.push('/login?message=회원가입이 완료되었습니다. 로그인해주세요.')
     } catch (err: any) {
       console.error('Signup error:', err)
       if (err.message?.includes('already registered')) {
@@ -70,32 +65,6 @@ export default function SignupPage() {
       setError(err.message || 'Google 회원가입에 실패했습니다.')
       setGoogleLoading(false)
     }
-  }
-
-  // 회원가입 성공 화면
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            회원가입 완료!
-          </h2>
-          <p className="text-gray-600 mb-4">
-            가입하신 이메일로 인증 메일이 발송되었습니다.
-          </p>
-          <p className="text-sm text-gray-500">
-            이메일을 확인하여 인증을 완료해주세요.
-          </p>
-          <div className="mt-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-sm text-gray-500 mt-2">로그인 페이지로 이동 중...</p>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
