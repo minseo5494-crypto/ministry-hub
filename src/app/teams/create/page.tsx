@@ -117,10 +117,11 @@ export default function CreateTeamPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center">
             <button
-              onClick={() => router.push('/my-team')}
-              className="mr-4 p-2 hover:bg-gray-100 rounded-lg"
+              onClick={() => router.push('/')}
+              className="mr-4 p-2 hover:bg-gray-100 rounded-lg touch-manipulation flex items-center text-gray-600 hover:text-gray-900"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={20} className="mr-1" />
+              <span className="text-sm">메인으로</span>
             </button>
             <h1 className="text-2xl font-bold text-gray-900">팀 만들기</h1>
           </div>
