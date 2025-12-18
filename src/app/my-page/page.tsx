@@ -893,7 +893,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
   
             <button
                 onClick={() => router.push('/')}
-                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
+                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] touch-manipulation"
             >
                 메인으로
             </button>

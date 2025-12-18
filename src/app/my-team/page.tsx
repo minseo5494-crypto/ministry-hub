@@ -111,7 +111,7 @@ export default function MyTeamPage() {
             <h1 className="text-2xl font-bold text-gray-900">My Team</h1>
             <button
               onClick={() => router.push('/')}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg touch-manipulation"
             >
               메인으로
             </button>
