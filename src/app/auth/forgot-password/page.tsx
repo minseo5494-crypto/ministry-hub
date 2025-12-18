@@ -61,11 +61,11 @@ export default function ForgotPasswordPage() {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
         {/* 뒤로가기 */}
         <Link
-          href="/login"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6"
+          href="/"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6 touch-manipulation"
         >
           <ArrowLeft size={20} className="mr-1" />
-          로그인으로 돌아가기
+          메인으로
         </Link>
 
         {/* 헤더 */}
