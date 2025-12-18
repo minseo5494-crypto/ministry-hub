@@ -249,14 +249,21 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <div className="text-xs text-gray-600">
+          <div className="text-xs text-gray-600 space-y-2">
             <label className="flex items-start">
               <input type="checkbox" required className="mt-0.5 mr-2" />
               <span>
                 <Link href="/terms" className="text-blue-600 hover:text-blue-700">이용약관</Link>
                 {' '}및{' '}
                 <Link href="/privacy" className="text-blue-600 hover:text-blue-700">개인정보처리방침</Link>
-                에 동의합니다.
+                에 동의합니다. <span className="text-red-500">*</span>
+              </span>
+            </label>
+            <label className="flex items-start">
+              <input type="checkbox" required className="mt-0.5 mr-2" />
+              <span>
+                <Link href="/copyright" className="text-blue-600 hover:text-blue-700">저작권 정책</Link>
+                을 읽었으며, 악보 업로드 시 저작권 관련 책임이 업로더에게 있음에 동의합니다. <span className="text-red-500">*</span>
               </span>
             </label>
           </div>
