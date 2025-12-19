@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase, Song, SECTION_ABBREVIATIONS, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
+import { supabase, Song, User, SECTION_ABBREVIATIONS, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
 import { getCurrentUser, signOut } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { parseLyrics } from '@/lib/lyricParser'
@@ -47,7 +47,7 @@ const isMobileDevice = () => {
 export default function Home() {
   const router = useRouter()
   const isMobile = useMobile()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showMenu, setShowMenu] = useState(false)
 

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentUser, signOut } from '@/lib/auth'
+import { User } from '@/lib/supabase'
 
 interface UseAuthOptions {
   requireAuth?: boolean
@@ -13,7 +14,7 @@ interface UseAuthOptions {
 export function useAuth(options: UseAuthOptions = {}) {
   const { requireAuth = false, redirectTo = '/login' } = options
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

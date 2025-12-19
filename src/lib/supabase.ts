@@ -17,10 +17,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // ===== 타입 정의 =====
+
+// 사용자 (users 테이블 + auth.getUser 병합)
 export interface User {
   id: string;
   email: string;
-  name: string;
+  name?: string;
+  is_admin?: boolean;
   created_at?: string;
   last_login?: string;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, parseThemes, ThemeCount, fetchThemeCounts } from '@/lib/supabase'
+import { supabase, User, parseThemes, ThemeCount, fetchThemeCounts } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, EyeOff, Globe,
@@ -47,7 +47,7 @@ interface Team {
 
 export default function MyPagePage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [songs, setSongs] = useState<UploadedSong[]>([])
 const [userTeams, setUserTeams] = useState<Team[]>([])
