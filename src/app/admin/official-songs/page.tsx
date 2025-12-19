@@ -86,10 +86,7 @@ export default function OfficialSongsPage() {
   const loadSongs = async () => {
     let query = supabase
       .from('songs')
-      .select(`
-        *,
-        users:uploaded_by (email, name)
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
 
     // 검색 필터
@@ -116,15 +113,35 @@ export default function OfficialSongsPage() {
       return
     }
 
-    // 퍼블리셔 이름 매핑
+    // 업로더 ID 목록 추출
+    const uploaderIds = [...new Set((data || []).map((s: any) => s.uploaded_by).filter(Boolean))]
+
+    // 업로더 정보 조회
+    let uploaderMap: Record<string, { email: string; name?: string }> = {}
+    if (uploaderIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, email, name')
+        .in('id', uploaderIds)
+
+      if (users) {
+        uploaderMap = users.reduce((acc: any, u: any) => {
+          acc[u.id] = { email: u.email, name: u.name }
+          return acc
+        }, {})
+      }
+    }
+
+    // 퍼블리셔 이름 및 업로더 정보 매핑
     const songsWithUploader = (data || []).map((song: any) => {
       const publisherName = song.publisher_id
         ? publishers.find(p => p.id === song.publisher_id)?.name
         : undefined
+      const uploader = song.uploaded_by ? uploaderMap[song.uploaded_by] : null
       return {
         ...song,
-        uploader_email: song.users?.email,
-        uploader_name: song.users?.name,
+        uploader_email: uploader?.email,
+        uploader_name: uploader?.name,
         publisher_name: publisherName
       }
     })
@@ -219,7 +236,7 @@ export default function OfficialSongsPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push('/admin/dashboard')}
+              onClick={() => router.push('/')}
               className="p-2 hover:bg-gray-100 rounded-lg touch-manipulation"
             >
               <ArrowLeft size={20} />

@@ -298,7 +298,7 @@ export default function PublishersPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push('/admin/dashboard')}
+              onClick={() => router.push('/')}
               className="p-2 hover:bg-gray-100 rounded-lg touch-manipulation"
             >
               <ArrowLeft size={20} />

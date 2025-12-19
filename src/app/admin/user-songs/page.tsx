@@ -383,12 +383,6 @@ export default function UserSongsPage() {
                 곡 승인
               </button>
               <button
-                onClick={() => router.push('/admin/dashboard')}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-              >
-                대시보드
-              </button>
-              <button
                 onClick={() => router.push('/')}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
               >
