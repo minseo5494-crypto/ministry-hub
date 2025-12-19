@@ -38,10 +38,10 @@ export default function OfficialSongsPage() {
   }, [])
 
   useEffect(() => {
-    if (user) {
+    if (user && publishers.length >= 0) {
       loadSongs()
     }
-  }, [user, searchQuery, filterStatus, page])
+  }, [user, searchQuery, filterStatus, page, publishers])
 
   const checkAdminAndLoad = async () => {
     try {
@@ -88,8 +88,7 @@ export default function OfficialSongsPage() {
       .from('songs')
       .select(`
         *,
-        users:uploaded_by (email, name),
-        verified_publishers:publisher_id (name)
+        users:uploaded_by (email, name)
       `, { count: 'exact' })
       .order('created_at', { ascending: false })
 
@@ -117,12 +116,18 @@ export default function OfficialSongsPage() {
       return
     }
 
-    const songsWithUploader = (data || []).map((song: any) => ({
-      ...song,
-      uploader_email: song.users?.email,
-      uploader_name: song.users?.name,
-      publisher_name: song.verified_publishers?.name
-    }))
+    // 퍼블리셔 이름 매핑
+    const songsWithUploader = (data || []).map((song: any) => {
+      const publisherName = song.publisher_id
+        ? publishers.find(p => p.id === song.publisher_id)?.name
+        : undefined
+      return {
+        ...song,
+        uploader_email: song.users?.email,
+        uploader_name: song.users?.name,
+        publisher_name: publisherName
+      }
+    })
 
     setSongs(songsWithUploader)
     setTotalCount(count || 0)
