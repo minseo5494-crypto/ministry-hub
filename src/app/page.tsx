@@ -2134,8 +2134,8 @@ const hasMore = displayCount < filteredSongs.length
                 <Shield size={12} />
               </span>
             ) : song.is_user_uploaded && (
-              <span className="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full" title="사용자 추가">
-                +
+              <span className="flex-shrink-0 px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full flex items-center gap-0.5" title="사용자 추가">
+                <UserPlus size={10} />
               </span>
             )}
           </div>
@@ -2289,8 +2289,8 @@ const hasMore = displayCount < filteredSongs.length
                     <Shield size={12} />
                   </span>
                 ) : song.is_user_uploaded && (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full" title="사용자 추가">
-                    +
+                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full flex items-center gap-0.5" title="사용자 추가">
+                    <UserPlus size={10} />
                   </span>
                 )}
                 {songForms[song.id] && songForms[song.id].length > 0 && (
