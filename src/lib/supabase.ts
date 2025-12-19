@@ -179,6 +179,49 @@ export interface Song {
   primary_sheet_id?: string
   sheets?: SongSheet[]  // 연결된 악보들
   sheets_count?: number  // 악보 개수
+  // 퍼블리셔 관련
+  publisher_id?: string
+  publisher?: VerifiedPublisher
+}
+
+// 공식 업로더
+export interface OfficialUploader {
+  id: string
+  email: string
+  name?: string
+  description?: string
+  created_at?: string
+  created_by?: string
+}
+
+// 공식 퍼블리셔 (팀 계정)
+export interface VerifiedPublisher {
+  id: string
+  name: string
+  description?: string
+  contact_email?: string
+  website_url?: string
+  logo_url?: string
+  is_active: boolean
+  created_at?: string
+  created_by?: string
+  updated_at?: string
+  // 조인된 데이터
+  accounts?: PublisherAccount[]
+  account_count?: number
+}
+
+// 퍼블리셔 소속 계정
+export interface PublisherAccount {
+  id: string
+  publisher_id: string
+  user_id?: string
+  email: string
+  role: 'admin' | 'member'
+  created_at?: string
+  created_by?: string
+  // 조인된 데이터
+  publisher?: VerifiedPublisher
 }
 
 // Folder 타입 정의

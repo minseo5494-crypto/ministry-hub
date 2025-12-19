@@ -5,13 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase, parseThemes } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save, Upload, FileText } from 'lucide-react'
-import { SEASONS, THEMES } from '@/lib/constants'
+import { SEASONS, THEMES, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
-
-// 상수
-const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-const timeSignatures = ['3/4', '4/4', '6/8', '12/8']
-const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
 interface UserSong {
   id: string
@@ -679,7 +674,7 @@ export default function UserSongsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {keys.map(key => (
+                    {KEYS.map(key => (
                       <option key={key} value={key}>{key}{editSong.key.includes('m') ? 'm' : ''}</option>
                     ))}
                   </select>
@@ -694,7 +689,7 @@ export default function UserSongsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {timeSignatures.map(ts => (
+                    {TIME_SIGNATURES.map(ts => (
                       <option key={ts} value={ts}>{ts}</option>
                     ))}
                   </select>
@@ -709,7 +704,7 @@ export default function UserSongsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {tempos.map(tempo => (
+                    {TEMPOS.map(tempo => (
                       <option key={tempo} value={tempo}>{tempo}</option>
                     ))}
                   </select>

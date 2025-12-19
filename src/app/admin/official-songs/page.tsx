@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { Song, VerifiedPublisher } from '@/lib/types'
+import { Song, VerifiedPublisher } from '@/lib/supabase'
 import {
   ArrowLeft, Search, Shield, ShieldOff, Music,
   Filter, Check, X, ChevronLeft, ChevronRight, Building2
@@ -77,7 +77,7 @@ export default function OfficialSongsPage() {
   const loadPublishers = async () => {
     const { data } = await supabase
       .from('verified_publishers')
-      .select('id, name')
+      .select('id, name, is_active')
       .eq('is_active', true)
 
     setPublishers(data || [])

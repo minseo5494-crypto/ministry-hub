@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { Calendar, Tag, Music, Clock, Activity, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { ThemeCount, SeasonCount } from '@/lib/supabase'
+import { KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 
 interface FilterPanelProps {
   filters: {
@@ -31,10 +32,6 @@ interface FilterPanelProps {
   seasonsList?: SeasonCount[]
   seasonsLoading?: boolean
 }
-
-const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-const timeSignatures = ['4/4', '3/4', '6/8', '12/8', '6/4', '2/4']
-const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
 export default function FilterPanel({
   filters,
@@ -185,7 +182,7 @@ export default function FilterPanel({
           Key
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {keys.map(key => (
+          {KEYS.map(key => (
             <button
               key={key}
               onClick={() => onFilterChange('key', filters.key === key ? '' : key)}
@@ -225,7 +222,7 @@ export default function FilterPanel({
           className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         >
           <option value="">전체</option>
-          {timeSignatures.map(ts => (
+          {TIME_SIGNATURES.map(ts => (
             <option key={ts} value={ts}>{ts}</option>
           ))}
         </select>
@@ -238,7 +235,7 @@ export default function FilterPanel({
           템포
         </label>
         <div className="flex flex-wrap gap-2">
-          {tempos.map(tempo => (
+          {TEMPOS.map(tempo => (
             <button
               key={tempo}
               onClick={() => onFilterChange('tempo', filters.tempo === tempo ? '' : tempo)}

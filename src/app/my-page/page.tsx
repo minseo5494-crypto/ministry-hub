@@ -8,17 +8,12 @@ import {
   Music, Settings, Edit, Trash2, Eye, EyeOff, Globe,
   Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Pencil, Image, Download
 } from 'lucide-react'
-import { SEASONS } from '@/lib/constants'
+import { SEASONS, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import SheetMusicEditor from '@/components/SheetMusicEditor'
-
-// 상수
-const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-const timeSignatures = ['3/4', '4/4', '6/8', '12/8']
-const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
 interface UploadedSong {
   id: string
@@ -1636,7 +1631,7 @@ setNewSong({ ...newSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 >
 <option value="">선택</option>
-{keys.map(key => (
+{KEYS.map(key => (
 <option key={key} value={key}>{key}{newSong.key.includes('m') ? 'm' : ''}</option>
 ))}
 </select>
@@ -1651,7 +1646,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {timeSignatures.map(ts => (
+                    {TIME_SIGNATURES.map(ts => (
                       <option key={ts} value={ts}>{ts}</option>
                     ))}
                   </select>
@@ -1666,7 +1661,7 @@ onChange={(e) => handleTempoChange(e.target.value)}
 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 >
 <option value="">선택</option>
-{tempos.map(tempo => (
+{TEMPOS.map(tempo => (
 <option key={tempo} value={tempo}>{tempo}</option>
 ))}
 </select>
@@ -2393,7 +2388,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {keys.map(key => (
+                    {KEYS.map(key => (
                       <option key={key} value={key}>{key}{editSong.key.includes('m') ? 'm' : ''}</option>
                     ))}
                   </select>
@@ -2408,7 +2403,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {timeSignatures.map(ts => (
+                    {TIME_SIGNATURES.map(ts => (
                       <option key={ts} value={ts}>{ts}</option>
                     ))}
                   </select>
@@ -2423,7 +2418,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {tempos.map(tempo => (
+                    {TEMPOS.map(tempo => (
                       <option key={tempo} value={tempo}>{tempo}</option>
                     ))}
                   </select>

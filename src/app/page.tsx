@@ -28,7 +28,7 @@ import SheetMusicEditor from '@/components/SheetMusicEditor'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
-import { SEASONS, TEMPO_RANGES } from '@/lib/constants'
+import { SEASONS, TEMPO_RANGES, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
 // 🆕 TypeScript를 위한 전역 선언 (import 아래에 추가)
@@ -225,10 +225,6 @@ const {
 
   const songListRef = useRef<HTMLDivElement>(null)
 
-  // 사용 가능한 옵션들
-  const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-  const timeSignatures = ['4/4', '3/4', '6/8', '12/8', '6/4', '2/4']
-  const tempos = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름']
 
   
 
@@ -878,7 +874,7 @@ const handleTempoChange = (tempoValue: string) => {
       .eq('email', user.email.toLowerCase())
       .single()
 
-    const isOfficial = !!officialUploader || (!!publisherAccount && publisherAccount.verified_publishers?.is_active)
+    const isOfficial = !!officialUploader || (!!publisherAccount && (publisherAccount.verified_publishers as any)?.is_active)
     const publisherId = publisherAccount?.publisher_id || null
 
     // ✅ 디버깅: 저장할 데이터 확인
@@ -2766,7 +2762,7 @@ autoComplete="off"
       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     >
       <option value="">선택</option>
-      {keys.map(key => (
+      {KEYS.map(key => (
         <option key={key} value={key}>{key}{newSong.key.includes('m') ? 'm' : ''}</option>
       ))}
     </select>
@@ -2782,7 +2778,7 @@ autoComplete="off"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">선택</option>
-                    {timeSignatures.map(ts => (
+                    {TIME_SIGNATURES.map(ts => (
                       <option key={ts} value={ts}>{ts}</option>
                     ))}
                   </select>
@@ -2797,7 +2793,7 @@ onChange={(e) => handleTempoChange(e.target.value)}
 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 >
 <option value="">선택</option>
-{tempos.map(tempo => (
+{TEMPOS.map(tempo => (
 <option key={tempo} value={tempo}>{tempo}</option>
 ))}
 </select>

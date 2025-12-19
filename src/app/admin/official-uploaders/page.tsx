@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/auth';
-import { OfficialUploader } from '@/lib/types';
+import { OfficialUploader } from '@/lib/supabase';
 import { ArrowLeft, Plus, Trash2, Shield, UserCheck } from 'lucide-react';
 
 export default function OfficialUploadersPage() {

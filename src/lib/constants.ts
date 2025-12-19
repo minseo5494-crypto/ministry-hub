@@ -28,7 +28,7 @@ export const TEMPO_RANGES: { [key: string]: { min: number; max: number } } = {
 export const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
 // 박자 목록
-export const TIME_SIGNATURES = ['3/4', '4/4', '6/8', '12/8'] as const;
+export const TIME_SIGNATURES = ['4/4', '3/4', '6/8', '12/8', '6/4', '2/4'] as const;
 
 // 템포 목록
 export const TEMPOS = ['느림', '조금느림', '보통', '조금빠름', '빠름', '매우빠름'] as const;

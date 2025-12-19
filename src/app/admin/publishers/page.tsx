@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { VerifiedPublisher, PublisherAccount } from '@/lib/types'
+import { VerifiedPublisher, PublisherAccount } from '@/lib/supabase'
 import {
   ArrowLeft, Plus, Trash2, Building2, Users, Mail,
   Globe, Edit, X, Check, ChevronDown, ChevronUp, UserPlus
