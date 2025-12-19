@@ -50,6 +50,36 @@ export interface OfficialUploader {
   created_by?: string
 }
 
+// 공식 퍼블리셔 (팀 계정)
+export interface VerifiedPublisher {
+  id: string
+  name: string
+  description?: string
+  contact_email?: string
+  website_url?: string
+  logo_url?: string
+  is_active: boolean
+  created_at?: string
+  created_by?: string
+  updated_at?: string
+  // 조인된 데이터
+  accounts?: PublisherAccount[]
+  account_count?: number
+}
+
+// 퍼블리셔 소속 계정
+export interface PublisherAccount {
+  id: string
+  publisher_id: string
+  user_id?: string
+  email: string
+  role: 'admin' | 'member'
+  created_at?: string
+  created_by?: string
+  // 조인된 데이터
+  publisher?: VerifiedPublisher
+}
+
 // 송폼 구조
 export interface SongStructure {
   [key: string]: string
@@ -89,6 +119,9 @@ export interface Song {
   upload_status?: string
   is_user_uploaded?: boolean
   is_official?: boolean
+  publisher_id?: string
+  // 조인된 데이터
+  publisher?: VerifiedPublisher
 }
 
 // 송폼 위치 (PDF 생성용)

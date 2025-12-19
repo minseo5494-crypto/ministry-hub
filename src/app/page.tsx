@@ -9,7 +9,7 @@ import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -864,14 +864,22 @@ const handleTempoChange = (tempoValue: string) => {
 
     console.log('📝 DB에 곡 정보 저장 중...')
 
-    // 🔍 공식 업로더 여부 확인
+    // 🔍 공식 업로더 여부 확인 (기존 official_uploaders 테이블)
     const { data: officialUploader } = await supabase
       .from('official_uploaders')
       .select('id')
       .eq('email', user.email.toLowerCase())
       .single()
 
-    const isOfficial = !!officialUploader
+    // 🔍 공식 퍼블리셔 계정 여부 확인 (새로운 publisher_accounts 테이블)
+    const { data: publisherAccount } = await supabase
+      .from('publisher_accounts')
+      .select('publisher_id, verified_publishers!inner(is_active)')
+      .eq('email', user.email.toLowerCase())
+      .single()
+
+    const isOfficial = !!officialUploader || (!!publisherAccount && publisherAccount.verified_publishers?.is_active)
+    const publisherId = publisherAccount?.publisher_id || null
 
     // ✅ 디버깅: 저장할 데이터 확인
     console.log('📋 저장할 곡 정보:', {
@@ -909,7 +917,8 @@ const { error: insertError } = await supabase
       ? newSong.shared_with_teams
       : null,
     is_user_uploaded: true,
-    is_official: isOfficial
+    is_official: isOfficial,
+    publisher_id: publisherId
   })
 
 if (insertError) throw insertError
@@ -1523,6 +1532,26 @@ const hasMore = displayCount < filteredSongs.length
                   </button>
                   <button
                     onClick={() => {
+                      router.push('/admin/publishers')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                  >
+                    <Building2 className="mr-2" size={18} />
+                    공식 퍼블리셔 관리
+                  </button>
+                  <button
+                    onClick={() => {
+                      router.push('/admin/official-songs')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                  >
+                    <Music className="mr-2" size={18} />
+                    공식 악보 관리
+                  </button>
+                  <button
+                    onClick={() => {
                       router.push('/admin/dashboard')
                       setShowMenu(false)
                     }}
@@ -1732,6 +1761,28 @@ const hasMore = displayCount < filteredSongs.length
                 >
                   <Shield size={20} />
                   <span>공식 업로더 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/publishers')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Building2 size={20} />
+                  <span>공식 퍼블리셔 관리</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/official-songs')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                >
+                  <Music size={20} />
+                  <span>공식 악보 관리</span>
                 </button>
 
                 <button
