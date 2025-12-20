@@ -749,13 +749,17 @@ export function useDownload({
   }
   
   // ========================================
-  // 송폼 없이 이미지 다운로드
+  // 송폼 없이 이미지 다운로드 (모바일 미리보기 지원)
   // ========================================
   const downloadAsImageFilesNoForm = async () => {
     setDownloadingImage(true)
 
     const currentSongs = selectedSongsRef.current
     const opts = downloadOptionsRef.current
+    const isMobile = isMobileDevice()
+
+    // 모바일용 미리보기 이미지 수집
+    const collectedImages: PreviewImage[] = []
 
     try {
       let downloadCount = 0
@@ -779,9 +783,26 @@ export function useDownload({
 
         try {
           if (song.file_type === 'pdf') {
-            await downloadPdfAsJpgNoForm(song, i, opts.customFileName)
+            const images = await convertPdfToImages(song, i, opts.customFileName)
+            if (isMobile) {
+              collectedImages.push(...images)
+            } else {
+              // 데스크톱: 바로 다운로드
+              for (const img of images) {
+                downloadBlob(img.blob, img.filename)
+                URL.revokeObjectURL(img.url)
+              }
+            }
           } else {
-            await downloadImageNoForm(song, i, opts.customFileName)
+            const image = await convertImageToJpg(song, i, opts.customFileName)
+            if (image) {
+              if (isMobile) {
+                collectedImages.push(image)
+              } else {
+                downloadBlob(image.blob, image.filename)
+                URL.revokeObjectURL(image.url)
+              }
+            }
           }
           downloadCount++
         } catch (error) {
@@ -789,11 +810,17 @@ export function useDownload({
         }
 
         if (i < currentSongs.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500))
+          await new Promise(resolve => setTimeout(resolve, 300))
         }
       }
 
-      alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!`)
+      // 모바일에서 미리보기 모달 표시
+      if (isMobile && collectedImages.length > 0) {
+        setPreviewImages(collectedImages)
+        setShowPreview(true)
+      } else if (!isMobile) {
+        alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!`)
+      }
     } catch (error) {
       console.error('다운로드 오류:', error)
       alert('❌ 다운로드 중 오류가 발생했습니다.')
@@ -803,9 +830,21 @@ export function useDownload({
     }
   }
 
-  // 이미지 다운로드 (송폼 없음)
-  const downloadImageNoForm = async (song: Song, index: number, customFileName?: string): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
+  // 헬퍼: Blob 다운로드
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // 이미지를 JPG로 변환하여 PreviewImage 반환
+  const convertImageToJpg = async (song: Song, index: number, customFileName?: string): Promise<PreviewImage | null> => {
+    return new Promise((resolve, reject) => {
       const img = new Image()
       img.crossOrigin = 'anonymous'
 
@@ -828,35 +867,29 @@ export function useDownload({
               return
             }
 
-            // 단일 곡이고 사용자 지정 파일명이 있으면 사용
             const currentSongs = selectedSongsRef.current
             const baseFilename = currentSongs.length === 1 && customFileName
               ? customFileName
               : `${String(index + 1).padStart(2, '0')}_${song.song_name}`
-            const filename = sanitizeFilename(baseFilename)
-
+            const filename = sanitizeFilename(baseFilename) + '.jpg'
             const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${filename}.jpg`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-            resolve()
+
+            resolve({ url, filename, blob })
           }, 'image/jpeg', 0.95)
         } catch (error) {
           reject(error)
         }
       }
-      
+
       img.onerror = () => reject(new Error('이미지 로드 실패'))
       img.src = song.file_url!
     })
   }
-  
-  // PDF를 JPG로 변환 (송폼 없음)
-  const downloadPdfAsJpgNoForm = async (song: Song, index: number, customFileName?: string): Promise<void> => {
+
+  // PDF를 이미지들로 변환하여 PreviewImage[] 반환
+  const convertPdfToImages = async (song: Song, index: number, customFileName?: string): Promise<PreviewImage[]> => {
+    const images: PreviewImage[] = []
+
     try {
       const pdfjsLib = (window as any).pdfjsLib
       if (!pdfjsLib) {
@@ -867,7 +900,6 @@ export function useDownload({
       const pdf = await loadingTask.promise
       const pageCount = pdf.numPages
 
-      // 단일 곡이고 사용자 지정 파일명이 있으면 사용
       const currentSongs = selectedSongsRef.current
       const baseFilename = currentSongs.length === 1 && customFileName
         ? customFileName
@@ -887,36 +919,23 @@ export function useDownload({
 
         await page.render({ canvasContext: ctx, viewport }).promise
 
-        await new Promise<void>((resolve) => {
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              resolve()
-              return
-            }
-
-            const pageSuffix = pageCount > 1 ? `_p${pageNum}` : ''
-            const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`)
-
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `${filename}.jpg`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-            resolve()
-          }, 'image/jpeg', 0.95)
+        const blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95)
         })
 
-        if (pageNum < pageCount) {
-          await new Promise(resolve => setTimeout(resolve, 300))
+        if (blob) {
+          const pageSuffix = pageCount > 1 ? `_p${pageNum}` : ''
+          const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`) + '.jpg'
+          const url = URL.createObjectURL(blob)
+          images.push({ url, filename, blob })
         }
       }
     } catch (error) {
       console.error('PDF 변환 오류:', error)
       throw error
     }
+
+    return images
   }
   
   // 레거시: 기존 방식 이미지 다운로드 (fallback)
