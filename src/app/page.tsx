@@ -22,6 +22,7 @@ import { logSongSearch, logPPTDownload, logSongView, logPDFDownload } from '@/li
 // 🆕 추가
 import SongFormPositionModal from '@/components/SongFormPositionModal'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
+import ImagePreviewModal from '@/components/ImagePreviewModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
@@ -91,6 +92,12 @@ const {
   showPositionModal,
   showPPTModal,
   downloadProgress,  // 진행률 상태 추가
+  // 모바일 미리보기 상태
+  previewImages,
+  showPreview,
+  setShowPreview,
+  handlePreviewSave,
+  handlePreviewShare,
   setShowFormatModal,
   setShowPositionModal,
   setShowPPTModal,
@@ -3349,6 +3356,16 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
   type={downloadingPDF ? 'pdf' : downloadingImage ? 'image' : 'ppt'}
   progress={downloadProgress || undefined}
 />
+
+{/* 모바일 이미지 미리보기 모달 */}
+{showPreview && previewImages.length > 0 && (
+  <ImagePreviewModal
+    images={previewImages}
+    onClose={() => setShowPreview(false)}
+    onSave={handlePreviewSave}
+    onShare={handlePreviewShare}
+  />
+)}
 
 {/* 🆕 송폼 위치 선택 모달 */}
 {showPositionModal && (

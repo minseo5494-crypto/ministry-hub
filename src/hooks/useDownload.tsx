@@ -35,6 +35,13 @@ export interface DownloadOptions {
   customFileName: string  // 사용자 지정 파일명
 }
 
+// 미리보기 이미지 타입
+export interface PreviewImage {
+  url: string
+  filename: string
+  blob: Blob
+}
+
 interface UseDownloadReturn {
   downloadingPDF: boolean
   downloadingImage: boolean
@@ -45,6 +52,13 @@ interface UseDownloadReturn {
 
   // 진행률 상태
   downloadProgress: DownloadProgress | null
+
+  // 미리보기 상태
+  previewImages: PreviewImage[]
+  showPreview: boolean
+  setShowPreview: (show: boolean) => void
+  handlePreviewSave: (index: number) => void
+  handlePreviewShare: (index: number) => void
 
   setShowFormatModal: (show: boolean) => void
   setShowPositionModal: (show: boolean) => void
@@ -88,7 +102,65 @@ export function useDownload({
   const [showFormatModal, setShowFormatModal] = useState(false)
   const [showPositionModal, setShowPositionModal] = useState(false)
   const [showPPTModal, setShowPPTModal] = useState(false)
-  
+
+  // 미리보기 상태 (모바일용)
+  const [previewImages, setPreviewImages] = useState<PreviewImage[]>([])
+  const [showPreview, setShowPreview] = useState(false)
+
+  // 미리보기에서 저장
+  const handlePreviewSave = useCallback(async (index: number) => {
+    const image = previewImages[index]
+    if (!image) return
+
+    try {
+      // iOS Safari에서는 다운로드 링크 생성
+      const url = URL.createObjectURL(image.blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = image.filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('저장 실패:', error)
+      alert('저장에 실패했습니다.')
+    }
+  }, [previewImages])
+
+  // 미리보기에서 공유
+  const handlePreviewShare = useCallback(async (index: number) => {
+    const image = previewImages[index]
+    if (!image) return
+
+    try {
+      if (navigator.share) {
+        const file = new File([image.blob], image.filename, { type: 'image/jpeg' })
+        await navigator.share({ files: [file] })
+      } else {
+        // 공유 API 미지원 시 다운로드
+        handlePreviewSave(index)
+      }
+    } catch (error) {
+      // 사용자가 공유 취소한 경우 무시
+      if ((error as Error).name !== 'AbortError') {
+        console.error('공유 실패:', error)
+      }
+    }
+  }, [previewImages, handlePreviewSave])
+
+  // 미리보기 닫기 시 정리
+  const closePreview = useCallback(() => {
+    setShowPreview(false)
+    // URL 해제
+    previewImages.forEach(img => {
+      if (img.url.startsWith('blob:')) {
+        URL.revokeObjectURL(img.url)
+      }
+    })
+    setPreviewImages([])
+  }, [previewImages])
+
   // 기본 파일명 생성
   const getDefaultFileName = useCallback(() => {
     if (selectedSongs.length === 1) {
@@ -322,6 +394,10 @@ export function useDownload({
 
     const currentSongs = selectedSongsRef.current
     const opts = downloadOptionsRef.current
+    const isMobile = isMobileDevice()
+
+    // 모바일용 미리보기 이미지 수집
+    const collectedImages: PreviewImage[] = []
 
     try {
       console.log(`✅ 캔버스 이미지 다운로드 시작: ${Object.keys(canvasDataUrls).length}개 곡`)
@@ -370,16 +446,18 @@ export function useDownload({
             const baseFilename = currentSongs.length === 1 && opts.customFileName
               ? opts.customFileName
               : `${String(i + 1).padStart(2, '0')}_${song.song_name}`
-            const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`)
+            const filename = sanitizeFilename(`${baseFilename}${pageSuffix}`) + '.jpg'
 
-            if (isMobileDevice() && navigator.share) {
-              const file = new File([jpgBlob], `${filename}.jpg`, { type: 'image/jpeg' })
-              await navigator.share({ files: [file] })
+            if (isMobile) {
+              // 모바일: 미리보기용으로 수집
+              const url = URL.createObjectURL(jpgBlob)
+              collectedImages.push({ url, filename, blob: jpgBlob })
             } else {
+              // 데스크톱: 바로 다운로드
               const url = URL.createObjectURL(jpgBlob)
               const a = document.createElement('a')
               a.href = url
-              a.download = `${filename}.jpg`
+              a.download = filename
               document.body.appendChild(a)
               a.click()
               document.body.removeChild(a)
@@ -403,7 +481,13 @@ export function useDownload({
         }
       }
 
-      alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!\n\n※ 브라우저에서 여러 파일 다운로드를 차단한 경우\n설정에서 허용해주세요.`)
+      // 모바일에서 미리보기 모달 표시
+      if (isMobile && collectedImages.length > 0) {
+        setPreviewImages(collectedImages)
+        setShowPreview(true)
+      } else {
+        alert(`✅ 총 ${downloadCount}개 곡이 다운로드되었습니다!\n\n※ 브라우저에서 여러 파일 다운로드를 차단한 경우\n설정에서 허용해주세요.`)
+      }
     } catch (error) {
       console.error('다운로드 오류:', error)
       alert('❌ 다운로드 중 오류가 발생했습니다.')
@@ -965,6 +1049,13 @@ export function useDownload({
     // 진행률 상태
     downloadProgress,
 
+    // 미리보기 상태 (모바일용)
+    previewImages,
+    showPreview,
+    setShowPreview: closePreview,
+    handlePreviewSave,
+    handlePreviewShare,
+
     setShowFormatModal,
     setShowPositionModal,
     setShowPPTModal,
@@ -979,7 +1070,7 @@ export function useDownload({
     startDownloadWithFormat,
     startPPTDownload,
     generatePPTWithOptions,
-    
+
     // ✅ 공통 모달 컴포넌트
     DownloadFormatModal,
   }

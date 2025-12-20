@@ -35,6 +35,7 @@ import {
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
+import ImagePreviewModal from '@/components/ImagePreviewModal'
 
 interface SetlistSong {
   id: string
@@ -409,6 +410,12 @@ const {
   showFormatModal,
   showPositionModal,
   downloadProgress,  // 진행률 상태 추가
+  // 모바일 미리보기 상태
+  previewImages,
+  showPreview,
+  setShowPreview,
+  handlePreviewSave,
+  handlePreviewShare,
   setShowFormatModal,
   setShowPositionModal,
   handleDownload,
@@ -1949,6 +1956,16 @@ const saveNote = async () => {
         type={downloadingPDF ? 'pdf' : downloadingImage ? 'image' : 'ppt'}
         progress={downloadProgress || undefined}
       />
+
+      {/* 모바일 이미지 미리보기 모달 */}
+      {showPreview && previewImages.length > 0 && (
+        <ImagePreviewModal
+          images={previewImages}
+          onClose={() => setShowPreview(false)}
+          onSave={handlePreviewSave}
+          onShare={handlePreviewShare}
+        />
+      )}
     </div>
   )
 }
