@@ -33,6 +33,34 @@ export interface PartTagStyle {
   pageIndex?: number  // 페이지 인덱스 (0부터 시작)
 }
 
+// 피아노 악보 음표 타입
+export interface PianoNote {
+  pitch: string       // 음이름 (C4, D4, E4 등)
+  position: number    // 마디 내 위치 (0부터 시작)
+  duration?: 1 | 2 | 4 | 8 | 16  // 음표 길이 (1=온음표, 2=2분음표, 4=4분음표, 8=8분음표, 16=16분음표, 기본값 4)
+  beamGroup?: string  // 잇단음표 그룹 ID (같은 ID를 가진 음표끼리 연결)
+}
+
+// 피아노 악보 코드 타입
+export interface PianoChord {
+  name: string        // 코드 이름 (예: "Bb7")
+  position: number    // 마디 내 위치 (0-100, 자동 계산됨)
+}
+
+// 피아노 악보 요소 타입
+export interface PianoScoreElement {
+  id: string
+  x: number           // 0-100 (퍼센트)
+  y: number           // 0-100 (퍼센트)
+  pageIndex: number   // 페이지 인덱스
+  measureCount: 1 | 2 | 3 | 4  // 마디 수 (1=코드 하나)
+  measureWidths?: number[]  // 각 마디 너비 (없으면 균등 분배)
+  chordName?: string  // 코드 이름 (예: "Bb7") - 호환성용, deprecated
+  chords?: PianoChord[]  // 코드 배열 (마디당 최대 3개)
+  notes: PianoNote[]  // 음표 배열
+  scale?: number      // 크기 조절 (0.5-2.0, 기본값 1.0)
+}
+
 // 다중 곡 지원을 위한 곡 정보 타입
 export interface EditorSong {
   song_id: string
@@ -49,6 +77,7 @@ export interface SavedNoteData {
   songFormEnabled: boolean
   songFormStyle: SongFormStyle
   partTags: PartTagStyle[]
+  pianoScores?: PianoScoreElement[]
 }
 
 interface EditorProps {
@@ -57,7 +86,7 @@ interface EditorProps {
   songName: string
   artistName?: string
   initialAnnotations?: PageAnnotation[]
-  onSave?: (annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[] }) => void
+  onSave?: (annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[] }) => void
   onClose?: () => void
   queueInfo?: {
     current: number
@@ -69,10 +98,11 @@ interface EditorProps {
   initialSongFormStyle?: SongFormStyle
   initialSongFormEnabled?: boolean  // 초기 송폼 활성화 상태
   initialPartTags?: PartTagStyle[]
+  initialPianoScores?: PianoScoreElement[]  // 초기 피아노 악보
   // 다중 곡 모드 (콘티 필기용)
   songs?: EditorSong[]
   setlistTitle?: string
-  onSaveAll?: (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[] } }[]) => void
+  onSaveAll?: (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[] } }[]) => void
   // 보기/편집 모드 통합
   initialMode?: 'view' | 'edit'  // 초기 모드 (기본: edit)
 }
@@ -198,6 +228,7 @@ export default function SheetMusicEditor({
   initialSongFormStyle,
   initialSongFormEnabled = false,  // 초기 송폼 활성화 상태
   initialPartTags = [],
+  initialPianoScores = [],  // 초기 피아노 악보
   // 다중 곡 모드
   songs = [],
   setlistTitle,
@@ -350,8 +381,162 @@ export default function SheetMusicEditor({
     }
   )
   const [partTags, setPartTags] = useState<PartTagStyle[]>(initialPartTags)
-  const [draggingFormItem, setDraggingFormItem] = useState<{ type: 'songForm' | 'partTag', id?: string } | null>(null)
+  const [draggingFormItem, setDraggingFormItem] = useState<{ type: 'songForm' | 'partTag' | 'pianoScore', id?: string } | null>(null)
   const [draggingNewPartTag, setDraggingNewPartTag] = useState<string | null>(null)
+
+  // 피아노 악보 상태
+  const [pianoScores, setPianoScores] = useState<PianoScoreElement[]>(initialPianoScores)
+  const [showPianoModal, setShowPianoModal] = useState(false)
+  const [pianoModalStep, setPianoModalStep] = useState<'measure' | 'edit'>('measure')
+  const [editingPianoScore, setEditingPianoScore] = useState<{
+    measureCount: 1 | 2 | 3 | 4
+    measureWidths: number[]  // 각 마디 너비
+    chordName: string  // 현재 편집 중인 코드
+    chords: PianoChord[]  // 입력된 코드 배열
+    notes: PianoNote[]
+    currentDuration: 1 | 2 | 4 | 8 | 16  // 현재 선택된 음표 길이
+  } | null>(null)
+  const [editingPianoScoreId, setEditingPianoScoreId] = useState<string | null>(null) // 편집 중인 기존 악보 ID
+  const [chordPickerIndex, setChordPickerIndex] = useState<number | null>(null) // 코드 선택 팝업이 열린 슬롯 인덱스
+  const [selectedNotesForBeam, setSelectedNotesForBeam] = useState<number[]>([]) // beam 연결할 음표 인덱스들
+  const [resizingPianoScore, setResizingPianoScore] = useState<{ id: string, startX: number, startScale: number } | null>(null) // 크기 조절 중인 악보
+  const [dragSelection, setDragSelection] = useState<{ startX: number, startY: number, endX: number, endY: number } | null>(null) // 드래그 선택 영역
+  const [resizingMeasure, setResizingMeasure] = useState<{ index: number, startX: number, startWidths: number[] } | null>(null) // 마디 너비 조절 중
+
+  // 피아노 악보 히스토리 (undo/redo)
+  const [pianoHistory, setPianoHistory] = useState<{ notes: PianoNote[], chords: PianoChord[] }[]>([])
+  const [pianoHistoryIndex, setPianoHistoryIndex] = useState(-1)
+
+  // 피아노 악보 히스토리에 현재 상태 저장
+  const savePianoHistory = useCallback((notes: PianoNote[], chords: PianoChord[]) => {
+    setPianoHistory(prev => {
+      // 현재 인덱스 이후의 히스토리는 삭제 (새로운 액션 후에는 redo 불가)
+      const newHistory = prev.slice(0, pianoHistoryIndex + 1)
+      return [...newHistory, { notes: [...notes], chords: [...chords] }]
+    })
+    setPianoHistoryIndex(prev => prev + 1)
+  }, [pianoHistoryIndex])
+
+  // 피아노 악보 undo
+  const undoPiano = useCallback(() => {
+    if (pianoHistoryIndex > 0) {
+      const prevState = pianoHistory[pianoHistoryIndex - 1]
+      setEditingPianoScore(prev => prev ? { ...prev, notes: [...prevState.notes], chords: [...prevState.chords] } : prev)
+      setPianoHistoryIndex(prev => prev - 1)
+      setSelectedNotesForBeam([])
+      setChordPickerIndex(null)
+    }
+  }, [pianoHistory, pianoHistoryIndex])
+
+  // 피아노 악보 redo
+  const redoPiano = useCallback(() => {
+    if (pianoHistoryIndex < pianoHistory.length - 1) {
+      const nextState = pianoHistory[pianoHistoryIndex + 1]
+      setEditingPianoScore(prev => prev ? { ...prev, notes: [...nextState.notes], chords: [...nextState.chords] } : prev)
+      setPianoHistoryIndex(prev => prev + 1)
+      setSelectedNotesForBeam([])
+      setChordPickerIndex(null)
+    }
+  }, [pianoHistory, pianoHistoryIndex])
+
+  // Delete 키로 선택된 음표 삭제
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 피아노 모달이 열려 있고 선택된 음표가 있을 때만
+      if (!showPianoModal || !editingPianoScore || selectedNotesForBeam.length === 0) return
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        // 코드 피커 상태 처리
+        if (chordPickerIndex !== null && selectedNotesForBeam.includes(chordPickerIndex)) {
+          setChordPickerIndex(null)
+        }
+        setEditingPianoScore(prev => {
+          if (!prev) return prev
+          const newNotes = prev.notes.filter((_, idx) => !selectedNotesForBeam.includes(idx))
+          // 히스토리에 저장
+          savePianoHistory(newNotes, prev.chords)
+          return { ...prev, notes: newNotes }
+        })
+        setSelectedNotesForBeam([])
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showPianoModal, editingPianoScore, selectedNotesForBeam, chordPickerIndex, savePianoHistory])
+
+  // 마디 너비 리사이즈 핸들러
+  useEffect(() => {
+    if (!resizingMeasure) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizingMeasure.startX
+      const newWidths = [...resizingMeasure.startWidths]
+      const minWidth = 50 // 최소 마디 너비
+      const idx = resizingMeasure.index
+
+      // 마지막 마디가 아닌 경우: 현재 마디와 다음 마디 너비를 서로 조절 (전체 너비 유지)
+      if (idx < newWidths.length - 1) {
+        const currentOriginal = resizingMeasure.startWidths[idx]
+        const nextOriginal = resizingMeasure.startWidths[idx + 1]
+
+        // 최소 너비를 고려한 delta 제한
+        const maxIncrease = nextOriginal - minWidth // 다음 마디가 최소가 될 때까지
+        const maxDecrease = currentOriginal - minWidth // 현재 마디가 최소가 될 때까지
+        const clampedDelta = Math.max(-maxDecrease, Math.min(maxIncrease, deltaX))
+
+        newWidths[idx] = currentOriginal + clampedDelta
+        newWidths[idx + 1] = nextOriginal - clampedDelta
+      } else {
+        // 마지막 마디인 경우: 마지막 마디만 조절 (전체 너비 변경)
+        newWidths[idx] = Math.max(minWidth, resizingMeasure.startWidths[idx] + deltaX)
+      }
+
+      setEditingPianoScore(prev => prev ? { ...prev, measureWidths: newWidths } : prev)
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - resizingMeasure.startX
+      const newWidths = [...resizingMeasure.startWidths]
+      const minWidth = 50
+      const idx = resizingMeasure.index
+
+      // 마지막 마디가 아닌 경우: 현재 마디와 다음 마디 너비를 서로 조절 (전체 너비 유지)
+      if (idx < newWidths.length - 1) {
+        const currentOriginal = resizingMeasure.startWidths[idx]
+        const nextOriginal = resizingMeasure.startWidths[idx + 1]
+
+        const maxIncrease = nextOriginal - minWidth
+        const maxDecrease = currentOriginal - minWidth
+        const clampedDelta = Math.max(-maxDecrease, Math.min(maxIncrease, deltaX))
+
+        newWidths[idx] = currentOriginal + clampedDelta
+        newWidths[idx + 1] = nextOriginal - clampedDelta
+      } else {
+        newWidths[idx] = Math.max(minWidth, resizingMeasure.startWidths[idx] + deltaX)
+      }
+
+      setEditingPianoScore(prev => prev ? { ...prev, measureWidths: newWidths } : prev)
+    }
+
+    const handleEnd = () => {
+      setResizingMeasure(null)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleEnd)
+    window.addEventListener('touchmove', handleTouchMove)
+    window.addEventListener('touchend', handleEnd)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleEnd)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleEnd)
+    }
+  }, [resizingMeasure])
 
   // 히스토리 (undo/redo)
   const [history, setHistory] = useState<PageAnnotation[][]>([])
@@ -645,6 +830,52 @@ export default function SheetMusicEditor({
     img.src = effectiveFileUrl
   }, [effectiveFileUrl, effectiveFileType, fitToScreen])
 
+  // ===== 피아노 악보 크기 조절 핸들러 =====
+  useEffect(() => {
+    if (!resizingPianoScore) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizingPianoScore.startX
+      const scaleDelta = deltaX / 100 // 100px 이동 = 1.0 스케일 변화
+      const newScale = Math.max(0.5, Math.min(2.0, resizingPianoScore.startScale + scaleDelta))
+
+      setPianoScores(prev => prev.map(score =>
+        score.id === resizingPianoScore.id
+          ? { ...score, scale: newScale }
+          : score
+      ))
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - resizingPianoScore.startX
+      const scaleDelta = deltaX / 100
+      const newScale = Math.max(0.5, Math.min(2.0, resizingPianoScore.startScale + scaleDelta))
+
+      setPianoScores(prev => prev.map(score =>
+        score.id === resizingPianoScore.id
+          ? { ...score, scale: newScale }
+          : score
+      ))
+    }
+
+    const handleEnd = () => {
+      setResizingPianoScore(null)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleEnd)
+    document.addEventListener('touchmove', handleTouchMove)
+    document.addEventListener('touchend', handleEnd)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleEnd)
+      document.removeEventListener('touchmove', handleTouchMove)
+      document.removeEventListener('touchend', handleEnd)
+    }
+  }, [resizingPianoScore])
+
   // ===== 필기 렌더링 =====
   useEffect(() => {
     const canvas = canvasRef.current
@@ -706,20 +937,49 @@ export default function SheetMusicEditor({
 
     // 텍스트 렌더링
     pageAnnotation.textElements.forEach((textEl) => {
-      const isSelected = lassoSelection.selectedTextIds.includes(textEl.id)
+      const isLassoSelected = lassoSelection.selectedTextIds.includes(textEl.id)
+      const isTextToolSelected = (tool === 'text' || tool === 'pan') && selectedTextId === textEl.id
+      const isSelected = isLassoSelected || isTextToolSelected
+
       ctx.font = `${textEl.fontSize}px sans-serif`
       ctx.fillStyle = textEl.color
+
       if (isSelected) {
         ctx.save()
-        ctx.shadowColor = '#0066FF'
-        ctx.shadowBlur = 4
-      }
-      ctx.fillText(textEl.text, textEl.x, textEl.y)
-      if (isSelected) {
+        // 선택된 텍스트에 배경 및 테두리 표시
+        const metrics = ctx.measureText(textEl.text)
+        const textWidth = metrics.width
+        const textHeight = textEl.fontSize
+        const padding = 4
+
+        // 선택 배경
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.2)' // blue-500 with opacity
+        ctx.fillRect(
+          textEl.x - padding,
+          textEl.y - textHeight - padding,
+          textWidth + padding * 2,
+          textHeight + padding * 2
+        )
+
+        // 선택 테두리
+        ctx.strokeStyle = '#3B82F6' // blue-500
+        ctx.lineWidth = 2
+        ctx.strokeRect(
+          textEl.x - padding,
+          textEl.y - textHeight - padding,
+          textWidth + padding * 2,
+          textHeight + padding * 2
+        )
+
         ctx.restore()
       }
+
+      // 텍스트 그리기
+      ctx.font = `${textEl.fontSize}px sans-serif`
+      ctx.fillStyle = textEl.color
+      ctx.fillText(textEl.text, textEl.x, textEl.y)
     })
-  }, [annotations, currentStroke, currentPage, tool, color, strokeSize, getCurrentPageAnnotation, lassoSelection, canvasReady])
+  }, [annotations, currentStroke, currentPage, tool, color, strokeSize, getCurrentPageAnnotation, lassoSelection, canvasReady, selectedTextId])
 
   // 스트로크 렌더링 함수
   const renderStroke = (ctx: CanvasRenderingContext2D, stroke: Stroke, isSelected: boolean) => {
@@ -932,21 +1192,70 @@ export default function SheetMusicEditor({
         return
       }
 
-      if (tool === 'pan') {
-        isPanningRef.current = true
-        lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
-        return
-      }
-
-      if (tool === 'text') {
+      if (tool === 'pan' || tool === 'text') {
         // 텍스트 도구는 펜/마우스만 허용
         if (isFingerTouch) {
           isPanningRef.current = true
           lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
           return
         }
-        setTextPosition({ x: pos.x, y: pos.y })
-        setIsAddingText(true)
+
+        // 클릭한 위치에 기존 텍스트가 있는지 확인
+        const pageAnnotation = getCurrentPageAnnotation()
+        const canvas = canvasRef.current
+        const ctx = canvas?.getContext('2d')
+
+        const clickedText = pageAnnotation?.textElements.find(textEl => {
+          // 캔버스 measureText로 정확한 텍스트 너비 계산
+          let textWidth = textEl.text.length * textEl.fontSize * 0.6 // 기본값
+          if (ctx) {
+            ctx.font = `${textEl.fontSize}px sans-serif`
+            textWidth = ctx.measureText(textEl.text).width
+          }
+          const textHeight = textEl.fontSize
+          const padding = 10
+
+          // 텍스트 박스 영역: (x - padding) ~ (x + width + padding), (y - height - padding) ~ (y + padding)
+          const inX = pos.x >= textEl.x - padding && pos.x <= textEl.x + textWidth + padding
+          const inY = pos.y >= textEl.y - textHeight - padding && pos.y <= textEl.y + padding
+
+          return inX && inY
+        })
+
+        if (clickedText) {
+          // 기존 텍스트 클릭
+          const now = Date.now()
+          const timeSinceLastTap = now - lastTapTimeRef.current
+          lastTapTimeRef.current = now
+
+          if (timeSinceLastTap < 300 && selectedTextId === clickedText.id) {
+            // 더블클릭 - 편집 모드
+            setIsDraggingText(false)
+            textDragStartRef.current = null
+            setEditingTextId(clickedText.id)
+            setTextInput(clickedText.text)
+            setTextPosition({ x: clickedText.x, y: clickedText.y })
+          } else {
+            // 클릭 - 선택 + 드래그 준비 (마우스 누른 상태로 움직이면 드래그)
+            setSelectedTextId(clickedText.id)
+            setEditingTextId(null)
+            setIsDraggingText(true)
+            textDragStartRef.current = { x: e.clientX, y: e.clientY }
+          }
+          return
+        }
+
+        // 빈 공간 클릭
+        setSelectedTextId(null)
+        if (tool === 'text') {
+          // text 도구: 새 텍스트 추가
+          setTextPosition({ x: pos.x, y: pos.y })
+          setIsAddingText(true)
+        } else {
+          // pan 도구: panning 시작
+          isPanningRef.current = true
+          lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+        }
         return
       }
 
@@ -988,7 +1297,7 @@ export default function SheetMusicEditor({
       setIsDrawing(true)
       setCurrentStroke([pos])
     },
-    [tool, getPointerPosition, eraseAtPosition, lassoSelection.boundingBox]
+    [tool, getPointerPosition, eraseAtPosition, lassoSelection.boundingBox, getCurrentPageAnnotation, selectedTextId]
   )
 
   const handlePointerMove = useCallback(
@@ -1032,6 +1341,25 @@ export default function SheetMusicEditor({
         }
       }
 
+      // 텍스트 드래그 처리 (text 또는 pan 모드)
+      if ((tool === 'text' || tool === 'pan') && isDraggingText && selectedTextId && textDragStartRef.current) {
+        const dx = (e.clientX - textDragStartRef.current.x) / scale
+        const dy = (e.clientY - textDragStartRef.current.y) / scale
+        textDragStartRef.current = { x: e.clientX, y: e.clientY }
+
+        setAnnotations(prev => prev.map(a => {
+          if (a.pageNumber !== currentPage) return a
+          return {
+            ...a,
+            textElements: a.textElements.map(t => {
+              if (t.id !== selectedTextId) return t
+              return { ...t, x: t.x + dx, y: t.y + dy }
+            })
+          }
+        }))
+        return
+      }
+
       if (!isDrawingRef.current) return
 
       // ref에만 즉시 추가 (동기적)
@@ -1048,7 +1376,7 @@ export default function SheetMusicEditor({
         })
       }
     },
-    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
   )
 
   const handlePointerUp = useCallback(() => {
@@ -1064,6 +1392,12 @@ export default function SheetMusicEditor({
 
     if (usedTool === 'pan' || tool === 'pan') {
       isPanningRef.current = false
+      // 텍스트 드래그 중이면 드래그 종료 처리
+      if (isDraggingText) {
+        setIsDraggingText(false)
+        textDragStartRef.current = null
+        saveToHistory()
+      }
       return
     }
 
@@ -1091,6 +1425,16 @@ export default function SheetMusicEditor({
         return
       }
       drawingToolRef.current = null
+      return
+    }
+
+    // 텍스트 도구 - 드래그 종료
+    if (tool === 'text') {
+      if (isDraggingText) {
+        setIsDraggingText(false)
+        textDragStartRef.current = null
+        saveToHistory()
+      }
       return
     }
 
@@ -1152,7 +1496,7 @@ export default function SheetMusicEditor({
 
     // 히스토리에 추가
     saveToHistory()
-  }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection])
+  }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection, isDraggingText])
 
   // ===== 텍스트 추가 =====
   const addTextElement = useCallback(() => {
@@ -1194,43 +1538,6 @@ export default function SheetMusicEditor({
     setIsAddingText(false)
     saveToHistory()
   }, [textInput, textPosition, color, currentPage])
-
-  // ===== 텍스트 요소 선택/드래그/편집 (텍스트 모드) =====
-  const handleTextClick = useCallback((textId: string, e: React.MouseEvent | React.TouchEvent) => {
-    if (tool !== 'text') return
-
-    const now = Date.now()
-    const timeSinceLastTap = now - lastTapTimeRef.current
-    lastTapTimeRef.current = now
-
-    // 더블 클릭/탭 감지 (300ms 이내)
-    if (timeSinceLastTap < 300 && selectedTextId === textId) {
-      // 편집 모드 진입
-      setEditingTextId(textId)
-      const textEl = getCurrentPageAnnotation()?.textElements.find(t => t.id === textId)
-      if (textEl) {
-        setTextInput(textEl.text)
-        setTextPosition({ x: textEl.x, y: textEl.y })
-      }
-      return
-    }
-
-    // 단일 클릭: 선택
-    setSelectedTextId(textId)
-    setEditingTextId(null)
-  }, [tool, selectedTextId, getCurrentPageAnnotation])
-
-  const handleTextDragStart = useCallback((textId: string, e: React.MouseEvent | React.TouchEvent) => {
-    if (tool !== 'text') return
-
-    e.preventDefault()
-
-    setSelectedTextId(textId)
-    setIsDraggingText(true)
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    textDragStartRef.current = { x: clientX, y: clientY }
-  }, [tool])
 
   const handleTextDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!isDraggingText || !selectedTextId || !textDragStartRef.current) return
@@ -1512,6 +1819,12 @@ export default function SheetMusicEditor({
           tag.id === draggingFormItem.id ? { ...tag, x, y } : tag
         )
       )
+    } else if (draggingFormItem.type === 'pianoScore' && draggingFormItem.id) {
+      setPianoScores(prev =>
+        prev.map(score =>
+          score.id === draggingFormItem.id ? { ...score, x, y } : score
+        )
+      )
     }
   }, [draggingFormItem])
 
@@ -1536,6 +1849,12 @@ export default function SheetMusicEditor({
       setPartTags(prev =>
         prev.map(tag =>
           tag.id === draggingFormItem.id ? { ...tag, x, y } : tag
+        )
+      )
+    } else if (draggingFormItem.type === 'pianoScore' && draggingFormItem.id) {
+      setPianoScores(prev =>
+        prev.map(score =>
+          score.id === draggingFormItem.id ? { ...score, x, y } : score
         )
       )
     }
@@ -1605,17 +1924,18 @@ export default function SheetMusicEditor({
           extra: {
             songFormEnabled: formState.enabled,
             songFormStyle: formState.style,
-            partTags: formState.partTags
+            partTags: formState.partTags,
+            pianoScores: pianoScores.filter(s => s.pageIndex >= 0) // 다중 곡 모드에서도 피아노 악보 포함
           }
         }
       })
 
       onSaveAll?.(dataToSave)
     } else {
-      // 송폼 정보도 함께 전달
-      onSave?.(currentAnnotations, { songFormEnabled, songFormStyle, partTags })
+      // 송폼 정보와 피아노 악보도 함께 전달
+      onSave?.(currentAnnotations, { songFormEnabled, songFormStyle, partTags, pianoScores })
     }
-  }, [isMultiSongMode, onSave, songs, allAnnotations, onSaveAll, currentSong, songFormEnabled, songFormStyle, partTags])
+  }, [isMultiSongMode, onSave, songs, allAnnotations, onSaveAll, currentSong, songFormEnabled, songFormStyle, partTags, pianoScores])
 
   // ===== 내보내기 (PDF/이미지) - 캔버스 기반으로 화면 그대로 렌더링 =====
   const handleExport = useCallback(async (format: 'pdf' | 'image') => {
@@ -1743,6 +2063,301 @@ export default function SheetMusicEditor({
             ctx.globalAlpha = 1
           })
 
+          // 3.5. 피아노 악보 렌더링 (해당 페이지의 악보만)
+          const pageScores = pianoScores.filter(score => score.pageIndex === pageNum - 1)
+          pageScores.forEach(score => {
+            // measureWidths가 있으면 합산, 없으면 기본값 사용
+            const defaultWidth = score.measureCount === 1 ? 100 : 70
+            const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
+            const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0) // 0.7은 편집 화면 대비 비율
+            const scoreHeight = 80
+            const baseScaleFactor = baseHeight * 0.001
+            const userScale = score.scale || 1.0
+            const scaleFactor = baseScaleFactor * userScale
+
+            const scoreX = (score.x / 100) * baseWidth
+            const scoreY = (score.y / 100) * baseHeight
+
+            // 배경
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+            const bgWidth = scoreWidth * scaleFactor + 8
+            const bgHeight = scoreHeight * scaleFactor + 8
+            ctx.fillRect(scoreX - bgWidth / 2, scoreY - bgHeight / 2, bgWidth, bgHeight)
+
+            // 오프셋 계산 (중앙 정렬)
+            const offsetX = scoreX - (scoreWidth * scaleFactor) / 2
+            const offsetY = scoreY - (scoreHeight * scaleFactor) / 2
+
+            // 코드 이름 (여러 개 지원)
+            ctx.font = `bold ${10 * scaleFactor}px Arial, sans-serif`
+            ctx.fillStyle = '#000000'
+            ctx.textBaseline = 'top'
+
+            if (score.chords && score.chords.length > 0) {
+              ctx.textAlign = 'center'
+              score.chords.forEach(chord => {
+                const chordX = offsetX + (chord.position / 100) * scoreWidth * scaleFactor
+                ctx.fillText(chord.name, chordX, offsetY + 2 * scaleFactor)
+              })
+            } else if (score.chordName) {
+              ctx.textAlign = 'left'
+              ctx.fillText(score.chordName, offsetX + 5 * scaleFactor, offsetY + 2 * scaleFactor)
+            }
+
+            // 오선 (5줄)
+            ctx.strokeStyle = '#333333'
+            ctx.lineWidth = 0.8 * scaleFactor
+            for (let i = 0; i < 5; i++) {
+              const lineY = offsetY + (22 + i * 10) * scaleFactor
+              ctx.beginPath()
+              ctx.moveTo(offsetX + 3 * scaleFactor, lineY)
+              ctx.lineTo(offsetX + (scoreWidth - 3) * scaleFactor, lineY)
+              ctx.stroke()
+            }
+
+            // 세로줄 (마디 구분) - measureWidths 기반
+            ctx.beginPath()
+            ctx.moveTo(offsetX + 3 * scaleFactor, offsetY + 22 * scaleFactor)
+            ctx.lineTo(offsetX + 3 * scaleFactor, offsetY + 62 * scaleFactor)
+            ctx.stroke()
+
+            // 중간 마디선 - measureWidths 기반
+            if (score.measureCount > 1) {
+              let accumulatedWidth = 0
+              for (let i = 0; i < score.measureCount - 1; i++) {
+                accumulatedWidth += measureWidths[i] * 0.7
+                const barX = offsetX + accumulatedWidth * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(barX, offsetY + 22 * scaleFactor)
+                ctx.lineTo(barX, offsetY + 62 * scaleFactor)
+                ctx.stroke()
+              }
+            }
+
+            ctx.lineWidth = 1.5 * scaleFactor
+            ctx.beginPath()
+            ctx.moveTo(offsetX + (scoreWidth - 3) * scaleFactor, offsetY + 22 * scaleFactor)
+            ctx.lineTo(offsetX + (scoreWidth - 3) * scaleFactor, offsetY + 62 * scaleFactor)
+            ctx.stroke()
+
+            // 음표 - 오선 기준 (첫째 줄 22, 간격 10, 음표 간격 5)
+            const pitchToY: { [key: string]: number } = {
+              'A5': 12, 'G5': 17, 'F5': 22, 'E5': 27, 'D5': 32,
+              'C5': 37, 'B4': 42, 'A4': 47, 'G4': 52, 'F4': 57,
+              'E4': 62, 'D4': 67, 'C4': 72, 'B3': 77, 'A3': 82
+            }
+            const stemLength = 20
+
+            // Beam 연결선 먼저 그리기 (대각선)
+            const beamGroups: { [key: string]: PianoNote[] } = {}
+            score.notes.forEach(note => {
+              if (note.beamGroup) {
+                if (!beamGroups[note.beamGroup]) beamGroups[note.beamGroup] = []
+                beamGroups[note.beamGroup].push(note)
+              }
+            })
+
+            Object.values(beamGroups).forEach(notesInGroup => {
+              if (notesInGroup.length < 2) return
+
+              notesInGroup.sort((a, b) => a.position - b.position)
+
+              const firstNote = notesInGroup[0]
+              const lastNote = notesInGroup[notesInGroup.length - 1]
+
+              const firstY = pitchToY[firstNote.pitch] || 47
+              const lastY = pitchToY[lastNote.pitch] || 47
+              const avgY = (firstY + lastY) / 2
+              const stemUp = avgY >= 42
+
+              const firstX = (firstNote.position / 100) * scoreWidth
+              const lastX = (lastNote.position / 100) * scoreWidth
+
+              // 각 음표의 기둥 끝 위치 계산 (대각선 beam)
+              const firstBeamY = stemUp ? firstY - stemLength : firstY + stemLength
+              const lastBeamY = stemUp ? lastY - stemLength : lastY + stemLength
+
+              const hasEighth = notesInGroup.some(n => (n.duration || 4) >= 8)
+              const hasSixteenth = notesInGroup.some(n => (n.duration || 4) >= 16)
+
+              ctx.strokeStyle = '#000000'
+              ctx.lineWidth = 3 * scaleFactor
+
+              // 첫 번째 beam (8분음표) - 대각선
+              if (hasEighth) {
+                ctx.beginPath()
+                const stemOffsetX = stemUp ? 4 : -4
+                ctx.moveTo(offsetX + (firstX + stemOffsetX) * scaleFactor, offsetY + firstBeamY * scaleFactor)
+                ctx.lineTo(offsetX + (lastX + stemOffsetX) * scaleFactor, offsetY + lastBeamY * scaleFactor)
+                ctx.stroke()
+              }
+
+              // 두 번째 beam (16분음표) - 대각선
+              if (hasSixteenth) {
+                ctx.beginPath()
+                const stemOffsetX = stemUp ? 4 : -4
+                const beamOffset = stemUp ? 4 : -4
+                ctx.moveTo(offsetX + (firstX + stemOffsetX) * scaleFactor, offsetY + (firstBeamY + beamOffset) * scaleFactor)
+                ctx.lineTo(offsetX + (lastX + stemOffsetX) * scaleFactor, offsetY + (lastBeamY + beamOffset) * scaleFactor)
+                ctx.stroke()
+              }
+            })
+
+            // 화음 처리: 비슷한 position의 음표들을 그룹화하여 렌더링
+            const pitchOrder = ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3']
+            const CHORD_THRESHOLD = 5
+            const chordGroups: PianoNote[][] = []
+            const sortedNotes = [...score.notes].sort((a, b) => a.position - b.position)
+
+            sortedNotes.forEach(note => {
+              const foundGroup = chordGroups.find(group => {
+                const groupAvgPos = group.reduce((sum, n) => sum + n.position, 0) / group.length
+                return Math.abs(groupAvgPos - note.position) < CHORD_THRESHOLD
+              })
+              if (foundGroup) {
+                foundGroup.push(note)
+              } else {
+                chordGroups.push([note])
+              }
+            })
+
+            chordGroups.forEach(notesInChord => {
+              // 화음 내 음표들을 높이순으로 정렬
+              notesInChord.sort((a, b) => pitchOrder.indexOf(a.pitch) - pitchOrder.indexOf(b.pitch))
+
+              // 화음의 평균 position으로 baseX 계산
+              const avgPosition = notesInChord.reduce((sum, n) => sum + n.position, 0) / notesInChord.length
+              const baseX = (avgPosition / 100) * scoreWidth
+              const firstNote = notesInChord[0]
+
+              // 화음 전체의 평균 Y로 기둥 방향 결정
+              const avgY = notesInChord.reduce((sum, n) => sum + (pitchToY[n.pitch] || 47), 0) / notesInChord.length
+              const hasBeam = notesInChord.some(n => n.beamGroup)
+              let stemUp = avgY >= 42
+              if (hasBeam) {
+                const beamGroup = notesInChord.find(n => n.beamGroup)?.beamGroup
+                if (beamGroup) {
+                  const beamNotes = score.notes.filter(n => n.beamGroup === beamGroup)
+                  const beamAvgY = beamNotes.reduce((sum, n) => sum + (pitchToY[n.pitch] || 47), 0) / beamNotes.length
+                  stemUp = beamAvgY >= 42
+                }
+              }
+
+              // 인접한 음표 x 오프셋 계산
+              const noteOffsets: number[] = []
+              for (let i = 0; i < notesInChord.length; i++) {
+                const currentPitchIdx = pitchOrder.indexOf(notesInChord[i].pitch)
+                let needsOffset = false
+                if (i > 0) {
+                  const prevPitchIdx = pitchOrder.indexOf(notesInChord[i - 1].pitch)
+                  if (Math.abs(currentPitchIdx - prevPitchIdx) === 1 && noteOffsets[i - 1] === 0) {
+                    needsOffset = true
+                  }
+                }
+                noteOffsets.push(needsOffset ? (stemUp ? -8 : 8) : 0)
+              }
+
+              const highestY = Math.min(...notesInChord.map(n => pitchToY[n.pitch] || 47))
+              const lowestY = Math.max(...notesInChord.map(n => pitchToY[n.pitch] || 47))
+
+              const duration = firstNote.duration || 4
+              const isFilled = duration >= 4
+              const hasStem = duration >= 2
+              const isBeamed = notesInChord.some(n => n.beamGroup)
+              const showFlag = !isBeamed && duration >= 8
+              const stemX = stemUp ? baseX + 4 : baseX - 4
+
+              // 각 음표 머리 렌더링
+              notesInChord.forEach((note, i) => {
+                const noteY = pitchToY[note.pitch] || 47
+                const xOffset = noteOffsets[i]
+                const noteXRatio = baseX + xOffset
+                const needsLedgerLine = ['C4', 'D4', 'A5', 'B3', 'A3'].includes(note.pitch)
+                const ledgerLineY = note.pitch === 'C4' || note.pitch === 'D4' ? 72
+                  : note.pitch === 'A5' ? 12
+                  : note.pitch === 'B3' ? 77
+                  : note.pitch === 'A3' ? 82 : noteY
+
+                // 보조선
+                if (needsLedgerLine) {
+                  ctx.strokeStyle = '#333333'
+                  ctx.lineWidth = 0.8 * scaleFactor
+                  ctx.beginPath()
+                  ctx.moveTo(offsetX + (noteXRatio - 8) * scaleFactor, offsetY + ledgerLineY * scaleFactor)
+                  ctx.lineTo(offsetX + (noteXRatio + 8) * scaleFactor, offsetY + ledgerLineY * scaleFactor)
+                  ctx.stroke()
+                }
+
+                // 음표 머리
+                ctx.beginPath()
+                ctx.ellipse(
+                  offsetX + noteXRatio * scaleFactor,
+                  offsetY + noteY * scaleFactor,
+                  5 * scaleFactor,
+                  3.5 * scaleFactor,
+                  0, 0, Math.PI * 2
+                )
+                if (isFilled) {
+                  ctx.fillStyle = '#000000'
+                  ctx.fill()
+                } else {
+                  ctx.strokeStyle = '#000000'
+                  ctx.lineWidth = 1 * scaleFactor
+                  ctx.stroke()
+                }
+              })
+
+              // 기둥 - 화음 전체에 하나만
+              if (hasStem) {
+                ctx.strokeStyle = '#000000'
+                ctx.lineWidth = 1 * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (stemUp ? lowestY : highestY) * scaleFactor)
+                ctx.lineTo(offsetX + stemX * scaleFactor, offsetY + (stemUp ? highestY - stemLength : lowestY + stemLength) * scaleFactor)
+                ctx.stroke()
+
+                // 깃발
+                if (showFlag) {
+                  ctx.lineWidth = 1.5 * scaleFactor
+                  ctx.beginPath()
+                  if (stemUp) {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (highestY - stemLength) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX + 8) * scaleFactor, offsetY + (highestY - stemLength + 6) * scaleFactor,
+                      offsetX + (stemX + 3) * scaleFactor, offsetY + (highestY - stemLength + 12) * scaleFactor
+                    )
+                  } else {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (lowestY + stemLength) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX - 8) * scaleFactor, offsetY + (lowestY + stemLength - 6) * scaleFactor,
+                      offsetX + (stemX - 3) * scaleFactor, offsetY + (lowestY + stemLength - 12) * scaleFactor
+                    )
+                  }
+                  ctx.stroke()
+                }
+
+                // 두 번째 깃발 - 16분음표
+                if (showFlag && duration >= 16) {
+                  ctx.beginPath()
+                  if (stemUp) {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (highestY - stemLength + 5) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX + 8) * scaleFactor, offsetY + (highestY - stemLength + 11) * scaleFactor,
+                      offsetX + (stemX + 3) * scaleFactor, offsetY + (highestY - stemLength + 17) * scaleFactor
+                    )
+                  } else {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (lowestY + stemLength - 5) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX - 8) * scaleFactor, offsetY + (lowestY + stemLength - 11) * scaleFactor,
+                      offsetX + (stemX - 3) * scaleFactor, offsetY + (lowestY + stemLength - 17) * scaleFactor
+                    )
+                  }
+                  ctx.stroke()
+                }
+              }
+            })
+          })
+
           // 4. 필기(스트로크) 렌더링
           const pageAnnotation = songAnnotations.find(a => a.pageNumber === pageNum)
           if (pageAnnotation) {
@@ -1797,31 +2412,26 @@ export default function SheetMusicEditor({
         : `${effectiveSongName}_필기_${dateStr}`
 
       if (format === 'image') {
-        // 이미지: 여러 페이지면 ZIP으로, 단일 페이지면 바로 다운로드
-        if (allPages.length === 1) {
+        // 이미지: 각 페이지를 순차적으로 개별 PNG 파일로 다운로드
+        for (let idx = 0; idx < allPages.length; idx++) {
+          const page = allPages[idx]
           const link = document.createElement('a')
-          link.download = `${baseName}.png`
-          link.href = allPages[0].imageDataUrl
-          link.click()
-        } else {
-          // 다중 페이지: JSZip 사용
-          const JSZip = (await import('jszip')).default
-          const zip = new JSZip()
 
-          allPages.forEach((page, idx) => {
-            const base64Data = page.imageDataUrl.split(',')[1]
-            const fileName = allPages.length > 1 && songsToExport.length > 1
-              ? `${page.songName}_p${page.pageNum}.png`
-              : `${idx + 1}.png`
-            zip.file(fileName, base64Data, { base64: true })
-          })
+          // 파일명 생성
+          const fileName = allPages.length === 1
+            ? `${baseName}.png`
+            : songsToExport.length > 1
+              ? `${baseName}_${page.songName}_p${page.pageNum}.png`
+              : `${baseName}_${idx + 1}.png`
 
-          const zipBlob = await zip.generateAsync({ type: 'blob' })
-          const link = document.createElement('a')
-          link.download = `${baseName}.zip`
-          link.href = URL.createObjectURL(zipBlob)
+          link.download = fileName
+          link.href = page.imageDataUrl
           link.click()
-          URL.revokeObjectURL(link.href)
+
+          // 다음 다운로드 전 약간의 딜레이 (브라우저가 연속 다운로드를 처리할 수 있도록)
+          if (idx < allPages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
         }
       } else {
         // PDF: 모든 페이지를 하나의 PDF로
@@ -2395,6 +3005,23 @@ export default function SheetMusicEditor({
             </button>
           </>
         )}
+
+        {/* 피아노 악보 버튼 */}
+        <>
+          <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
+          <button
+            onClick={() => {
+              setShowPianoModal(true)
+              setPianoModalStep('measure')
+              setEditingPianoScore(null)
+              setEditingPianoScoreId(null)
+            }}
+            className={`rounded font-medium flex items-center gap-1 bg-blue-50 text-blue-600 hover:bg-blue-100 ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
+            title="피아노 악보 추가"
+          >
+            🎹 {isMobile ? '' : '피아노'}
+          </button>
+        </>
       </div>
 
       {/* 캔버스 영역 */}
@@ -2478,7 +3105,7 @@ export default function SheetMusicEditor({
           {isAddingText && (
             <div
               className="absolute bg-white border-2 border-blue-500 rounded shadow-lg p-2"
-              style={{ left: textPosition.x, top: textPosition.y }}
+              style={{ left: textPosition.x, top: textPosition.y, zIndex: 200 }}
             >
               <input
                 ref={textInputRef}
@@ -2506,7 +3133,7 @@ export default function SheetMusicEditor({
           {editingTextId && (
             <div
               className="absolute bg-white border-2 border-green-500 rounded shadow-lg p-2"
-              style={{ left: textPosition.x, top: textPosition.y }}
+              style={{ left: textPosition.x, top: textPosition.y, zIndex: 200 }}
             >
               <input
                 ref={textInputRef}
@@ -2533,49 +3160,8 @@ export default function SheetMusicEditor({
             </div>
           )}
 
-          {/* 텍스트 요소 인터랙션 오버레이 (텍스트 모드에서만) - 투명 오버레이로 상호작용만 */}
-          {tool === 'text' && !isAddingText && !editingTextId && getCurrentPageAnnotation()?.textElements.map(textEl => (
-            <div
-              key={textEl.id}
-              className={`absolute cursor-move select-none ${
-                selectedTextId === textEl.id
-                  ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-100/50'
-                  : 'hover:bg-blue-100/30'
-              }`}
-              style={{
-                left: textEl.x,
-                top: textEl.y - textEl.fontSize,
-                fontSize: textEl.fontSize,
-                color: 'transparent', // 투명하게 - 캔버스가 실제 텍스트 표시
-                padding: '2px 4px',
-                borderRadius: '2px',
-                whiteSpace: 'nowrap',
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleTextClick(textEl.id, e)
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation()
-                handleTextClick(textEl.id, e)
-                // 선택 후 바로 드래그 시작 가능
-                setTimeout(() => {
-                  if (selectedTextId === textEl.id || !selectedTextId) {
-                    setSelectedTextId(textEl.id)
-                    handleTextDragStart(textEl.id, e)
-                  }
-                }, 0)
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation()
-                handleTextClick(textEl.id, e)
-                setSelectedTextId(textEl.id)
-                handleTextDragStart(textEl.id, e)
-              }}
-            >
-              {textEl.text}
-            </div>
-          ))}
+          {/* 텍스트 요소 선택은 캔버스에서 직접 처리 (handlePointerDown) */}
+          {/* 선택된 텍스트는 캔버스에서 파란 테두리로 표시됨 */}
 
           {/* 송폼 & 파트 태그 오버레이 - songFormEnabled일 때 항상 표시, 캔버스가 렌더링된 후에만 */}
           {effectiveSongForms.length > 0 && songFormEnabled && canvasReady && canvasSize.height > 0 && (
@@ -2690,6 +3276,413 @@ export default function SheetMusicEditor({
               )}
             </>
           )}
+
+          {/* 피아노 악보 렌더링 */}
+          {pianoScores.filter(score => score.pageIndex === currentPage - 1).map(score => {
+            // measureWidths가 있으면 합산, 없으면 기본값 사용
+            const defaultWidth = score.measureCount === 1 ? 100 : 70
+            const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
+            const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0) // 0.7은 편집 화면 대비 비율
+            const scoreHeight = 80
+            const baseScaleFactor = canvasSize.height * 0.001
+            const userScale = score.scale || 1.0
+            const scaleFactor = baseScaleFactor * userScale
+
+            return (
+              <div
+                key={score.id}
+                className="absolute cursor-move select-none hover:ring-2 hover:ring-blue-400 rounded bg-white/90"
+                style={{
+                  left: `${score.x}%`,
+                  top: `${score.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'auto',
+                  touchAction: 'none',
+                  padding: '4px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation()
+                  if (!isViewMode) {
+                    setDraggingFormItem({ type: 'pianoScore', id: score.id })
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  if (!isViewMode) {
+                    // 더블 클릭 시 편집 모달 열기
+                    // 기존 chords가 있으면 사용, 없으면 chordName에서 변환
+                    const existingChords = score.chords || (score.chordName ? [{ name: score.chordName, position: 50 }] : [])
+                    const defaultWidth = score.measureCount === 1 ? 150 : 100
+                    setEditingPianoScore({
+                      measureCount: score.measureCount,
+                      measureWidths: score.measureWidths ? [...score.measureWidths] : Array(score.measureCount).fill(defaultWidth),
+                      chordName: '',
+                      chords: [...existingChords],
+                      notes: [...score.notes],
+                      currentDuration: 4
+                    })
+                    setEditingPianoScoreId(score.id)
+                    setPianoModalStep('edit')
+                    setShowPianoModal(true)
+                    // 히스토리 초기화
+                    setPianoHistory([{ notes: [...score.notes], chords: [...existingChords] }])
+                    setPianoHistoryIndex(0)
+                  }
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation()
+                  if (!isViewMode) {
+                    e.preventDefault()
+                    // 더블 탭 감지
+                    const now = Date.now()
+                    const timeSinceLastTap = now - lastTapTimeRef.current
+                    lastTapTimeRef.current = now
+
+                    if (timeSinceLastTap < 300) {
+                      // 더블 탭 - 편집 모달 열기
+                      const existingChords = score.chords || (score.chordName ? [{ name: score.chordName, position: 50 }] : [])
+                      const defaultWidth = score.measureCount === 1 ? 150 : 100
+                      setEditingPianoScore({
+                        measureCount: score.measureCount,
+                        measureWidths: score.measureWidths ? [...score.measureWidths] : Array(score.measureCount).fill(defaultWidth),
+                        chordName: '',
+                        chords: [...existingChords],
+                        notes: [...score.notes],
+                        currentDuration: 4
+                      })
+                      setEditingPianoScoreId(score.id)
+                      setPianoModalStep('edit')
+                      setShowPianoModal(true)
+                      // 히스토리 초기화
+                      setPianoHistory([{ notes: [...score.notes], chords: [...existingChords] }])
+                      setPianoHistoryIndex(0)
+                    } else {
+                      // 단일 탭 - 드래그 준비
+                      setDraggingFormItem({ type: 'pianoScore', id: score.id })
+                    }
+                  }
+                }}
+                onTouchMove={handleFormTouchMove}
+                onTouchEnd={handleFormTouchEnd}
+              >
+                <svg
+                  width={scoreWidth * scaleFactor}
+                  height={scoreHeight * scaleFactor}
+                  viewBox={`0 0 ${scoreWidth} ${scoreHeight}`}
+                >
+                  {/* 코드 이름 (여러 개 지원) */}
+                  {(score.chords && score.chords.length > 0) ? (
+                    score.chords.map((chord, idx) => {
+                      const x = (chord.position / 100) * scoreWidth
+                      return (
+                        <text key={idx} x={x} y="12" fontSize="10" fontWeight="bold" textAnchor="middle">
+                          {chord.name}
+                        </text>
+                      )
+                    })
+                  ) : score.chordName && (
+                    <text x="5" y="12" fontSize="10" fontWeight="bold">
+                      {score.chordName}
+                    </text>
+                  )}
+
+                  {/* 오선 (5줄) */}
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <line
+                      key={i}
+                      x1="3"
+                      y1={22 + i * 10}
+                      x2={scoreWidth - 3}
+                      y2={22 + i * 10}
+                      stroke="#333"
+                      strokeWidth="0.8"
+                    />
+                  ))}
+
+                  {/* 세로줄 (마디 구분) - measureWidths 기반 */}
+                  <line x1="3" y1="22" x2="3" y2="62" stroke="#333" strokeWidth="0.8" />
+                  {score.measureCount > 1 && (() => {
+                    const lines: React.ReactElement[] = []
+                    let accumulatedWidth = 0
+                    for (let i = 0; i < score.measureCount - 1; i++) {
+                      accumulatedWidth += measureWidths[i] * 0.7
+                      lines.push(
+                        <line
+                          key={`bar-${i}`}
+                          x1={accumulatedWidth}
+                          y1="22"
+                          x2={accumulatedWidth}
+                          y2="62"
+                          stroke="#333"
+                          strokeWidth="0.8"
+                        />
+                      )
+                    }
+                    return lines
+                  })()}
+                  <line x1={scoreWidth - 3} y1="22" x2={scoreWidth - 3} y2="62" stroke="#333" strokeWidth="1.5" />
+
+                  {/* Beam 연결선 (오버레이) - 대각선 */}
+                  {(() => {
+                    const pitchToY: { [key: string]: number } = {
+                      'A5': 12, 'G5': 17, 'F5': 22, 'E5': 27, 'D5': 32,
+                      'C5': 37, 'B4': 42, 'A4': 47, 'G4': 52, 'F4': 57,
+                      'E4': 62, 'D4': 67, 'C4': 72, 'B3': 77, 'A3': 82
+                    }
+                    const stemLength = 20
+
+                    const beamGroups: { [key: string]: { note: PianoNote, idx: number }[] } = {}
+                    score.notes.forEach((note, idx) => {
+                      if (note.beamGroup) {
+                        if (!beamGroups[note.beamGroup]) beamGroups[note.beamGroup] = []
+                        beamGroups[note.beamGroup].push({ note, idx })
+                      }
+                    })
+
+                    return Object.entries(beamGroups).map(([groupId, notesInGroup]) => {
+                      if (notesInGroup.length < 2) return null
+
+                      notesInGroup.sort((a, b) => a.note.position - b.note.position)
+
+                      const firstNote = notesInGroup[0].note
+                      const lastNote = notesInGroup[notesInGroup.length - 1].note
+
+                      const firstY = pitchToY[firstNote.pitch] || 47
+                      const lastY = pitchToY[lastNote.pitch] || 47
+                      const avgY = (firstY + lastY) / 2
+                      const stemUp = avgY >= 42
+
+                      const firstX = (firstNote.position / 100) * scoreWidth
+                      const lastX = (lastNote.position / 100) * scoreWidth
+
+                      // 각 음표의 기둥 끝 위치 계산 (대각선 beam)
+                      const firstBeamY = stemUp ? firstY - stemLength : firstY + stemLength
+                      const lastBeamY = stemUp ? lastY - stemLength : lastY + stemLength
+
+                      const hasEighth = notesInGroup.some(n => (n.note.duration || 4) >= 8)
+                      const hasSixteenth = notesInGroup.some(n => (n.note.duration || 4) >= 16)
+
+                      return (
+                        <g key={`beam-${groupId}`}>
+                          {hasEighth && (
+                            <line
+                              x1={stemUp ? firstX + 4 : firstX - 4}
+                              y1={firstBeamY}
+                              x2={stemUp ? lastX + 4 : lastX - 4}
+                              y2={lastBeamY}
+                              stroke="#000"
+                              strokeWidth="3"
+                            />
+                          )}
+                          {hasSixteenth && (
+                            <line
+                              x1={stemUp ? firstX + 4 : firstX - 4}
+                              y1={stemUp ? firstBeamY + 4 : firstBeamY - 4}
+                              x2={stemUp ? lastX + 4 : lastX - 4}
+                              y2={stemUp ? lastBeamY + 4 : lastBeamY - 4}
+                              stroke="#000"
+                              strokeWidth="3"
+                            />
+                          )}
+                        </g>
+                      )
+                    })
+                  })()}
+
+                  {/* 음표 - 오선 기준 (첫째 줄 22, 간격 10, 음표 간격 5) */}
+                  {/* 화음 처리: 비슷한 position의 음표들을 그룹화하여 렌더링 */}
+                  {(() => {
+                    const pitchToY: { [key: string]: number } = {
+                      'A5': 12, 'G5': 17, 'F5': 22, 'E5': 27, 'D5': 32,
+                      'C5': 37, 'B4': 42, 'A4': 47, 'G4': 52, 'F4': 57,
+                      'E4': 62, 'D4': 67, 'C4': 72, 'B3': 77, 'A3': 82
+                    }
+                    const pitchOrder = ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3']
+
+                    // 비슷한 position의 음표들을 화음으로 그룹화 (차이 5 이내)
+                    const CHORD_THRESHOLD = 5
+                    const chordGroups: { note: PianoNote, idx: number }[][] = []
+                    const notesWithIdx = score.notes.map((note, idx) => ({ note, idx }))
+                    notesWithIdx.sort((a, b) => a.note.position - b.note.position)
+
+                    notesWithIdx.forEach(item => {
+                      const foundGroup = chordGroups.find(group => {
+                        const groupAvgPos = group.reduce((sum, g) => sum + g.note.position, 0) / group.length
+                        return Math.abs(groupAvgPos - item.note.position) < CHORD_THRESHOLD
+                      })
+                      if (foundGroup) {
+                        foundGroup.push(item)
+                      } else {
+                        chordGroups.push([item])
+                      }
+                    })
+
+                    return chordGroups.map((notesInChord, groupIdx) => {
+                      // 화음 내 음표들을 높이순으로 정렬 (높은 음 -> 낮은 음)
+                      notesInChord.sort((a, b) => {
+                        const aIdx = pitchOrder.indexOf(a.note.pitch)
+                        const bIdx = pitchOrder.indexOf(b.note.pitch)
+                        return aIdx - bIdx
+                      })
+
+                      // 화음의 평균 position으로 baseX 계산
+                      const avgPosition = notesInChord.reduce((sum, n) => sum + n.note.position, 0) / notesInChord.length
+                      const baseX = (avgPosition / 100) * scoreWidth
+                      const firstNote = notesInChord[0].note
+
+                      // 화음 전체의 평균 Y로 기둥 방향 결정
+                      const avgY = notesInChord.reduce((sum, n) => sum + (pitchToY[n.note.pitch] || 47), 0) / notesInChord.length
+
+                      // beam 그룹이 있는 경우 beam 그룹 전체의 평균으로 결정
+                      const hasBeam = notesInChord.some(n => n.note.beamGroup)
+                      let stemUp = avgY >= 42
+                      if (hasBeam) {
+                        const beamGroup = notesInChord.find(n => n.note.beamGroup)?.note.beamGroup
+                        if (beamGroup) {
+                          const beamNotes = score.notes.filter(n => n.beamGroup === beamGroup)
+                          const beamAvgY = beamNotes.reduce((sum, n) => sum + (pitchToY[n.pitch] || 47), 0) / beamNotes.length
+                          stemUp = beamAvgY >= 42
+                        }
+                      }
+
+                      // 인접한 음표(2도 간격) 체크 및 x 오프셋 계산
+                      const noteOffsets: number[] = []
+                      for (let i = 0; i < notesInChord.length; i++) {
+                        const currentPitchIdx = pitchOrder.indexOf(notesInChord[i].note.pitch)
+                        let needsOffset = false
+
+                        if (i > 0) {
+                          const prevPitchIdx = pitchOrder.indexOf(notesInChord[i - 1].note.pitch)
+                          if (Math.abs(currentPitchIdx - prevPitchIdx) === 1) {
+                            if (noteOffsets[i - 1] === 0) {
+                              needsOffset = true
+                            }
+                          }
+                        }
+                        noteOffsets.push(needsOffset ? (stemUp ? -8 : 8) : 0)
+                      }
+
+                      // 화음의 최고음, 최저음 찾기
+                      const highestY = Math.min(...notesInChord.map(n => pitchToY[n.note.pitch] || 47))
+                      const lowestY = Math.max(...notesInChord.map(n => pitchToY[n.note.pitch] || 47))
+                      const stemLength = 20
+
+                      const duration = firstNote.duration || 4
+                      const isFilled = duration >= 4
+                      const hasStem = duration >= 2
+                      const isBeamed = notesInChord.some(n => n.note.beamGroup)
+                      const showFlag = !isBeamed && duration >= 8
+
+                      const stemX = stemUp ? baseX + 4 : baseX - 4
+
+                      return (
+                        <g key={groupIdx}>
+                          {/* 각 음표 머리 렌더링 */}
+                          {notesInChord.map(({ note, idx }, i) => {
+                            const y = pitchToY[note.pitch] || 47
+                            const xOffset = noteOffsets[i]
+                            const noteX = baseX + xOffset
+                            const needsLedgerLine = ['C4', 'D4', 'A5', 'B3', 'A3'].includes(note.pitch)
+                            const ledgerLineY = note.pitch === 'C4' || note.pitch === 'D4' ? 72
+                              : note.pitch === 'A5' ? 12
+                              : note.pitch === 'B3' ? 77
+                              : note.pitch === 'A3' ? 82 : y
+
+                            return (
+                              <g key={idx}>
+                                {needsLedgerLine && (
+                                  <line x1={noteX - 8} y1={ledgerLineY} x2={noteX + 8} y2={ledgerLineY} stroke="#333" strokeWidth="0.8" />
+                                )}
+                                <ellipse cx={noteX} cy={y} rx="5" ry="3.5" fill={isFilled ? '#000' : 'none'} stroke="#000" strokeWidth="1" />
+                              </g>
+                            )
+                          })}
+
+                          {/* 기둥 - 화음 전체에 하나만 */}
+                          {hasStem && (
+                            <line
+                              x1={stemX}
+                              y1={stemUp ? lowestY : highestY}
+                              x2={stemX}
+                              y2={stemUp ? highestY - stemLength : lowestY + stemLength}
+                              stroke="#000"
+                              strokeWidth="1"
+                            />
+                          )}
+
+                          {/* 깃발 */}
+                          {showFlag && (
+                            <path
+                              d={stemUp
+                                ? `M${stemX},${highestY - stemLength} Q${stemX + 8},${highestY - stemLength + 6} ${stemX + 3},${highestY - stemLength + 12}`
+                                : `M${stemX},${lowestY + stemLength} Q${stemX - 8},${lowestY + stemLength - 6} ${stemX - 3},${lowestY + stemLength - 12}`}
+                              stroke="#000"
+                              strokeWidth="1.5"
+                              fill="none"
+                            />
+                          )}
+                          {showFlag && duration >= 16 && (
+                            <path
+                              d={stemUp
+                                ? `M${stemX},${highestY - stemLength + 5} Q${stemX + 8},${highestY - stemLength + 11} ${stemX + 3},${highestY - stemLength + 17}`
+                                : `M${stemX},${lowestY + stemLength - 5} Q${stemX - 8},${lowestY + stemLength - 11} ${stemX - 3},${lowestY + stemLength - 17}`}
+                              stroke="#000"
+                              strokeWidth="1.5"
+                              fill="none"
+                            />
+                          )}
+                        </g>
+                      )
+                    })
+                  })()}
+                </svg>
+
+                {/* 삭제 버튼 (편집 모드에서만) */}
+                {!isViewMode && (
+                  <button
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPianoScores(prev => prev.filter(s => s.id !== score.id))
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+
+                {/* 크기 조절 핸들 (편집 모드에서만) */}
+                {!isViewMode && (
+                  <div
+                    className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center cursor-nwse-resize hover:bg-blue-600 shadow-md"
+                    onMouseDown={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      setResizingPianoScore({
+                        id: score.id,
+                        startX: e.clientX,
+                        startScale: score.scale || 1.0
+                      })
+                    }}
+                    onTouchStart={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      const touch = e.touches[0]
+                      setResizingPianoScore({
+                        id: score.id,
+                        startX: touch.clientX,
+                        startScale: score.scale || 1.0
+                      })
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                      <path d="M11 1L1 11M11 5L5 11M11 9L9 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+            )
+          })}
           </div> {/* exportAreaRef div 닫기 */}
         </div>
       </div>
@@ -2960,6 +3953,1088 @@ export default function SheetMusicEditor({
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 피아노 악보 모달 */}
+      {showPianoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden ${isMobile ? 'mx-2' : ''}`}>
+            {/* 헤더 */}
+            <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                🎹 피아노 악보 {pianoModalStep === 'measure' ? '- 마디 선택' : '- 음표 입력'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowPianoModal(false)
+                  setChordPickerIndex(null)
+                  setSelectedNotesForBeam([])
+                }}
+                className="text-white/80 hover:text-white text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* 마디 선택 단계 */}
+            {pianoModalStep === 'measure' && (
+              <div className="p-6">
+                <p className="text-gray-600 mb-4">악보 길이를 선택하세요</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: 1 as const, label: '코드 하나', desc: '단일 코드 표시' },
+                    { value: 2 as const, label: '2마디', desc: '짧은 프레이즈' },
+                    { value: 3 as const, label: '3마디', desc: '중간 길이' },
+                    { value: 4 as const, label: '4마디', desc: '긴 프레이즈' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        // 기본 마디 너비: 1마디=150, 나머지=100씩
+                        const defaultWidth = opt.value === 1 ? 150 : 100
+                        setEditingPianoScore({
+                          measureCount: opt.value,
+                          measureWidths: Array(opt.value).fill(defaultWidth),
+                          chordName: '',
+                          chords: [],
+                          notes: [],
+                          currentDuration: 4
+                        })
+                        setPianoModalStep('edit')
+                        // 히스토리 초기화
+                        setPianoHistory([{ notes: [], chords: [] }])
+                        setPianoHistoryIndex(0)
+                      }}
+                      className="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                    >
+                      <div className="font-bold text-lg">{opt.label}</div>
+                      <div className="text-sm text-gray-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 음표 입력 단계 */}
+            {pianoModalStep === 'edit' && editingPianoScore && (
+              <div className="p-4 overflow-y-auto max-h-[70vh]">
+
+                {/* 코드 선택 팝업 (음표 기반) */}
+                {chordPickerIndex !== null && editingPianoScore.notes[chordPickerIndex] && (() => {
+                  const selectedNote = editingPianoScore.notes[chordPickerIndex]
+                  const existingChord = editingPianoScore.chords.find(c => c && Math.abs(c.position - selectedNote.position) < 5)
+                  const currentChordName = existingChord?.name || 'C'
+
+                  return (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-blue-700">
+                          코드 선택 (음표 {chordPickerIndex + 1}: {selectedNote.pitch})
+                        </span>
+                        <div className="flex gap-2">
+                          {existingChord && (
+                            <button
+                              onClick={() => {
+                                setEditingPianoScore(prev => {
+                                  if (!prev) return prev
+                                  const newChords = prev.chords.filter(c => !c || Math.abs(c.position - selectedNote.position) >= 5)
+                                  // 히스토리에 저장
+                                  savePianoHistory(prev.notes, newChords)
+                                  return { ...prev, chords: newChords }
+                                })
+                                setChordPickerIndex(null)
+                              }}
+                              className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                            >
+                              삭제
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setChordPickerIndex(null)}
+                            className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                          >
+                            닫기
+                          </button>
+                        </div>
+                      </div>
+                      {/* 루트 음 */}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(note => (
+                          <button
+                            key={note}
+                            onClick={() => {
+                              const currentType = currentChordName.replace(/^[A-G][#b]?/, '')
+                              const newChordName = note + currentType
+                              setEditingPianoScore(prev => {
+                                if (!prev) return prev
+                                // 같은 위치에 기존 코드가 있으면 업데이트, 없으면 추가
+                                const newChords = prev.chords.filter(c => !c || Math.abs(c.position - selectedNote.position) >= 5)
+                                newChords.push({ name: newChordName, position: selectedNote.position })
+                                // 히스토리에 저장
+                                savePianoHistory(prev.notes, newChords)
+                                return { ...prev, chords: newChords }
+                              })
+                            }}
+                            className={`px-3 py-1.5 rounded font-bold text-sm ${
+                              currentChordName.startsWith(note)
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white hover:bg-gray-100'
+                            }`}
+                          >
+                            {note}
+                          </button>
+                        ))}
+                      </div>
+                      {/* 변환 기호 */}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {[
+                          { symbol: '', label: '♮' },
+                          { symbol: 'b', label: '♭' },
+                          { symbol: '#', label: '♯' },
+                        ].map(mod => {
+                          const hasSymbol = mod.symbol ? currentChordName.includes(mod.symbol) : !currentChordName.match(/^[A-G][#b]/)
+                          return (
+                            <button
+                              key={mod.symbol}
+                              onClick={() => {
+                                const root = currentChordName.match(/^[A-G]/)?.[0] || 'C'
+                                const chordType = currentChordName.replace(/^[A-G][#b]?/, '')
+                                const newChordName = root + mod.symbol + chordType
+                                setEditingPianoScore(prev => {
+                                  if (!prev) return prev
+                                  const newChords = prev.chords.filter(c => !c || Math.abs(c.position - selectedNote.position) >= 5)
+                                  newChords.push({ name: newChordName, position: selectedNote.position })
+                                  // 히스토리에 저장
+                                  savePianoHistory(prev.notes, newChords)
+                                  return { ...prev, chords: newChords }
+                                })
+                              }}
+                              className={`px-3 py-1.5 rounded text-sm ${
+                                hasSymbol ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-100'
+                              }`}
+                            >
+                              {mod.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {/* 코드 타입 */}
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          { type: '', label: 'Maj' },
+                          { type: 'm', label: 'min' },
+                          { type: '7', label: '7' },
+                          { type: 'maj7', label: 'M7' },
+                          { type: 'm7', label: 'm7' },
+                          { type: 'dim', label: 'dim' },
+                          { type: 'aug', label: 'aug' },
+                          { type: 'sus4', label: 'sus4' },
+                        ].map(chord => {
+                          const currentType = currentChordName.replace(/^[A-G][#b]?/, '')
+                          return (
+                            <button
+                              key={chord.type}
+                              onClick={() => {
+                                const rootWithMod = currentChordName.match(/^[A-G][#b]?/)?.[0] || 'C'
+                                const newChordName = rootWithMod + chord.type
+                                setEditingPianoScore(prev => {
+                                  if (!prev) return prev
+                                  const newChords = prev.chords.filter(c => !c || Math.abs(c.position - selectedNote.position) >= 5)
+                                  newChords.push({ name: newChordName, position: selectedNote.position })
+                                  // 히스토리에 저장
+                                  savePianoHistory(prev.notes, newChords)
+                                  return { ...prev, chords: newChords }
+                                })
+                              }}
+                              className={`px-2 py-1 rounded text-xs ${
+                                currentType === chord.type ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-100'
+                              }`}
+                            >
+                              {chord.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* 오선지 (SVG) */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    오선지 (클릭: 음표 추가 / 드래그: 여러 음표 선택 / Delete: 삭제 / 마디 끝 드래그: 너비 조절)
+                  </label>
+                  <div className="border rounded-lg p-2 bg-white overflow-x-auto">
+                    <svg
+                      width={editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)}
+                      height="130"
+                      className="cursor-crosshair select-none"
+                      onMouseDown={(e) => {
+                        // 음표 위 클릭은 무시 (음표 선택 이벤트가 처리함)
+                        if ((e.target as Element).closest('g.cursor-pointer')) return
+
+                        const svg = e.currentTarget
+                        const rect = svg.getBoundingClientRect()
+                        const x = e.clientX - rect.left
+                        const y = e.clientY - rect.top
+
+                        // 코드 영역 클릭은 무시 (y < 25)
+                        if (y < 25) return
+
+                        // 드래그 선택 시작
+                        setDragSelection({ startX: x, startY: y, endX: x, endY: y })
+                      }}
+                      onMouseMove={(e) => {
+                        if (!dragSelection) return
+
+                        const svg = e.currentTarget
+                        const rect = svg.getBoundingClientRect()
+                        const x = e.clientX - rect.left
+                        const y = e.clientY - rect.top
+
+                        setDragSelection(prev => prev ? { ...prev, endX: x, endY: y } : null)
+                      }}
+                      onMouseUp={(e) => {
+                        if (!dragSelection) return
+
+                        const svg = e.currentTarget
+                        const rect = svg.getBoundingClientRect()
+                        const x = e.clientX - rect.left
+                        const y = e.clientY - rect.top
+
+                        // 드래그 거리 계산
+                        const dragDistance = Math.sqrt(
+                          Math.pow(dragSelection.endX - dragSelection.startX, 2) +
+                          Math.pow(dragSelection.endY - dragSelection.startY, 2)
+                        )
+
+                        // 드래그 거리가 작으면 클릭으로 처리
+                        if (dragDistance < 10) {
+                          // 코드 영역 클릭은 무시 (y < 25)
+                          if (y >= 25) {
+                            // 선택된 음표가 있으면 선택 해제만
+                            if (selectedNotesForBeam.length > 0) {
+                              setSelectedNotesForBeam([])
+                            } else {
+                              // 선택된 음표가 없으면 새 음표 추가
+                              // y 좌표를 음높이로 변환 (A5=21부터 시작, 간격 7)
+                              const pitches = ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3']
+                              const pitchIndex = Math.max(0, Math.min(14, Math.round((y - 21) / 7)))
+                              const pitch = pitches[pitchIndex] || 'A4'
+
+                              // x 좌표를 0-100 비율로 변환
+                              const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                              const position = Math.max(5, Math.min(95, (x / svgWidth) * 100))
+
+                              setEditingPianoScore(prev => {
+                                if (!prev) return prev
+                                const newNotes = [...prev.notes, { pitch, position, duration: prev.currentDuration }]
+                                // 히스토리에 저장
+                                savePianoHistory(newNotes, prev.chords)
+                                return { ...prev, notes: newNotes }
+                              })
+                            }
+                          }
+                        } else {
+                          // 드래그 선택: 영역 내 음표 선택
+                          const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                          const pitchToY: { [key: string]: number } = {
+                            'A5': 21, 'G5': 28, 'F5': 35, 'E5': 42, 'D5': 49,
+                            'C5': 56, 'B4': 63, 'A4': 70, 'G4': 77, 'F4': 84,
+                            'E4': 91, 'D4': 98, 'C4': 105, 'B3': 112, 'A3': 119
+                          }
+
+                          const minX = Math.min(dragSelection.startX, dragSelection.endX)
+                          const maxX = Math.max(dragSelection.startX, dragSelection.endX)
+                          const minY = Math.min(dragSelection.startY, dragSelection.endY)
+                          const maxY = Math.max(dragSelection.startY, dragSelection.endY)
+
+                          const selectedIndices: number[] = []
+                          editingPianoScore.notes.forEach((note, idx) => {
+                            const noteX = (note.position / 100) * svgWidth
+                            const noteY = pitchToY[note.pitch] || 70
+
+                            if (noteX >= minX && noteX <= maxX && noteY >= minY && noteY <= maxY) {
+                              selectedIndices.push(idx)
+                            }
+                          })
+
+                          if (selectedIndices.length > 0) {
+                            setSelectedNotesForBeam(selectedIndices)
+                          }
+                        }
+
+                        setDragSelection(null)
+                      }}
+                      onMouseLeave={() => {
+                        // 마우스가 SVG를 벗어나면 드래그 취소
+                        setDragSelection(null)
+                      }}
+                      onTouchStart={(e) => {
+                        // 음표 위 터치는 무시 (음표 선택 이벤트가 처리함)
+                        if ((e.target as Element).closest('g.cursor-pointer')) return
+
+                        const svg = e.currentTarget
+                        const rect = svg.getBoundingClientRect()
+                        const touch = e.touches[0]
+                        const x = touch.clientX - rect.left
+                        const y = touch.clientY - rect.top
+
+                        // 코드 영역 터치는 무시 (y < 25)
+                        if (y < 25) return
+
+                        // 드래그 선택 시작
+                        setDragSelection({ startX: x, startY: y, endX: x, endY: y })
+                      }}
+                      onTouchMove={(e) => {
+                        if (!dragSelection) return
+
+                        const svg = e.currentTarget
+                        const rect = svg.getBoundingClientRect()
+                        const touch = e.touches[0]
+                        const x = touch.clientX - rect.left
+                        const y = touch.clientY - rect.top
+
+                        setDragSelection(prev => prev ? { ...prev, endX: x, endY: y } : null)
+                      }}
+                      onTouchEnd={(e) => {
+                        if (!dragSelection) return
+
+                        // 드래그 거리 계산
+                        const dragDistance = Math.sqrt(
+                          Math.pow(dragSelection.endX - dragSelection.startX, 2) +
+                          Math.pow(dragSelection.endY - dragSelection.startY, 2)
+                        )
+
+                        // 드래그 거리가 작으면 클릭으로 처리
+                        if (dragDistance < 10) {
+                          const y = dragSelection.startY
+                          const x = dragSelection.startX
+
+                          // 코드 영역 터치는 무시 (y < 25)
+                          if (y >= 25) {
+                            // 선택된 음표가 있으면 선택 해제만
+                            if (selectedNotesForBeam.length > 0) {
+                              setSelectedNotesForBeam([])
+                            } else {
+                              // 선택된 음표가 없으면 새 음표 추가
+                              // y 좌표를 음높이로 변환 (A5=21부터 시작, 간격 7)
+                              const pitches = ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3']
+                              const pitchIndex = Math.max(0, Math.min(14, Math.round((y - 21) / 7)))
+                              const pitch = pitches[pitchIndex] || 'A4'
+
+                              // x 좌표를 0-100 비율로 변환
+                              const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                              const position = Math.max(5, Math.min(95, (x / svgWidth) * 100))
+
+                              setEditingPianoScore(prev => {
+                                if (!prev) return prev
+                                const newNotes = [...prev.notes, { pitch, position, duration: prev.currentDuration }]
+                                // 히스토리에 저장
+                                savePianoHistory(newNotes, prev.chords)
+                                return { ...prev, notes: newNotes }
+                              })
+                            }
+                          }
+                        } else {
+                          // 드래그 선택: 영역 내 음표 선택
+                          const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                          const pitchToY: { [key: string]: number } = {
+                            'A5': 21, 'G5': 28, 'F5': 35, 'E5': 42, 'D5': 49,
+                            'C5': 56, 'B4': 63, 'A4': 70, 'G4': 77, 'F4': 84,
+                            'E4': 91, 'D4': 98, 'C4': 105, 'B3': 112, 'A3': 119
+                          }
+
+                          const minX = Math.min(dragSelection.startX, dragSelection.endX)
+                          const maxX = Math.max(dragSelection.startX, dragSelection.endX)
+                          const minY = Math.min(dragSelection.startY, dragSelection.endY)
+                          const maxY = Math.max(dragSelection.startY, dragSelection.endY)
+
+                          const selectedIndices: number[] = []
+                          editingPianoScore.notes.forEach((note, idx) => {
+                            const noteX = (note.position / 100) * svgWidth
+                            const noteY = pitchToY[note.pitch] || 70
+
+                            if (noteX >= minX && noteX <= maxX && noteY >= minY && noteY <= maxY) {
+                              selectedIndices.push(idx)
+                            }
+                          })
+
+                          if (selectedIndices.length > 0) {
+                            setSelectedNotesForBeam(selectedIndices)
+                          }
+                        }
+
+                        setDragSelection(null)
+                      }}
+                    >
+                      {/* 화음 그룹당 코드 슬롯 하나만 표시 */}
+                      {(() => {
+                        const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                        const CHORD_THRESHOLD = 5
+
+                        // 화음 그룹화
+                        const chordSlotGroups: { notes: { note: PianoNote, idx: number }[], avgPosition: number }[] = []
+                        const notesWithIdx = editingPianoScore.notes.map((note, idx) => ({ note, idx }))
+                        notesWithIdx.sort((a, b) => a.note.position - b.note.position)
+
+                        notesWithIdx.forEach(item => {
+                          const foundGroup = chordSlotGroups.find(group =>
+                            Math.abs(group.avgPosition - item.note.position) < CHORD_THRESHOLD
+                          )
+                          if (foundGroup) {
+                            foundGroup.notes.push(item)
+                            foundGroup.avgPosition = foundGroup.notes.reduce((sum, n) => sum + n.note.position, 0) / foundGroup.notes.length
+                          } else {
+                            chordSlotGroups.push({ notes: [item], avgPosition: item.note.position })
+                          }
+                        })
+
+                        return chordSlotGroups.map((group, groupIdx) => {
+                          const slotX = (group.avgPosition / 100) * svgWidth
+                          const chord = editingPianoScore.chords.find(c => c && Math.abs(c.position - group.avgPosition) < CHORD_THRESHOLD)
+                          const firstNoteIdx = group.notes[0].idx
+                          const isSelected = chordPickerIndex !== null && group.notes.some(n => n.idx === chordPickerIndex)
+
+                          return (
+                            <g key={`chord-slot-${groupIdx}`} className="cursor-pointer" onClick={(e) => {
+                              e.stopPropagation()
+                              setChordPickerIndex(firstNoteIdx)
+                            }}>
+                              <rect
+                                x={slotX - 18}
+                                y="2"
+                                width="36"
+                                height="22"
+                                fill={isSelected ? '#dbeafe' : 'transparent'}
+                                stroke={chord ? '#3b82f6' : '#9ca3af'}
+                                strokeWidth="1"
+                                strokeDasharray={chord ? 'none' : '3,2'}
+                                rx="3"
+                                className="hover:fill-blue-50"
+                              />
+                              <text
+                                x={slotX}
+                                y="17"
+                                fontSize="11"
+                                fontWeight={chord ? 'bold' : 'normal'}
+                                textAnchor="middle"
+                                fill={chord ? '#1d4ed8' : '#9ca3af'}
+                              >
+                                {chord?.name || '+'}
+                              </text>
+                            </g>
+                          )
+                        })
+                      })()}
+
+                      {/* 오선 (5줄) */}
+                      {[0, 1, 2, 3, 4].map(i => {
+                        const totalWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                        return (
+                          <line
+                            key={i}
+                            x1="5"
+                            y1={35 + i * 14}
+                            x2={totalWidth - 5}
+                            y2={35 + i * 14}
+                            stroke="#333"
+                            strokeWidth="1"
+                          />
+                        )
+                      })}
+
+                      {/* 세로줄 (마디 구분) + 드래그 핸들 */}
+                      <line x1="5" y1="35" x2="5" y2="91" stroke="#333" strokeWidth="1" />
+                      {editingPianoScore.measureWidths.map((_, i) => {
+                        // 각 마디의 끝 x 좌표 계산
+                        const endX = editingPianoScore.measureWidths.slice(0, i + 1).reduce((sum, w) => sum + w, 0)
+                        const isLast = i === editingPianoScore.measureCount - 1
+
+                        return (
+                          <g key={i}>
+                            {/* 마디 구분선 */}
+                            <line
+                              x1={endX - 5}
+                              y1="35"
+                              x2={endX - 5}
+                              y2="91"
+                              stroke="#333"
+                              strokeWidth={isLast ? 2 : 1}
+                            />
+                            {/* 드래그 핸들 (투명한 넓은 영역) */}
+                            <rect
+                              x={endX - 12}
+                              y="25"
+                              width="14"
+                              height="80"
+                              fill="transparent"
+                              className="cursor-ew-resize"
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                setResizingMeasure({
+                                  index: i,
+                                  startX: e.clientX,
+                                  startWidths: [...editingPianoScore.measureWidths]
+                                })
+                              }}
+                              onTouchStart={(e) => {
+                                e.stopPropagation()
+                                const touch = e.touches[0]
+                                setResizingMeasure({
+                                  index: i,
+                                  startX: touch.clientX,
+                                  startWidths: [...editingPianoScore.measureWidths]
+                                })
+                              }}
+                            />
+                            {/* 시각적 핸들 표시 (호버 시) */}
+                            <rect
+                              x={endX - 8}
+                              y="40"
+                              width="6"
+                              height="30"
+                              rx="2"
+                              fill={resizingMeasure?.index === i ? '#3b82f6' : '#d1d5db'}
+                              className="pointer-events-none opacity-0 hover:opacity-100"
+                              style={{ opacity: resizingMeasure?.index === i ? 1 : undefined }}
+                            />
+                          </g>
+                        )
+                      })}
+
+                      {/* Beam 연결선 그리기 (8분음표/16분음표 연결) - 대각선 */}
+                      {(() => {
+                        const pitchToY: { [key: string]: number } = {
+                          'A5': 21, 'G5': 28, 'F5': 35, 'E5': 42, 'D5': 49,
+                          'C5': 56, 'B4': 63, 'A4': 70, 'G4': 77, 'F4': 84,
+                          'E4': 91, 'D4': 98, 'C4': 105, 'B3': 112, 'A3': 119
+                        }
+                        const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+                        const stemLength = 28
+
+                        // beamGroup별로 묶기
+                        const beamGroups: { [key: string]: { note: PianoNote, idx: number }[] } = {}
+                        editingPianoScore.notes.forEach((note, idx) => {
+                          if (note.beamGroup) {
+                            if (!beamGroups[note.beamGroup]) beamGroups[note.beamGroup] = []
+                            beamGroups[note.beamGroup].push({ note, idx })
+                          }
+                        })
+
+                        return Object.entries(beamGroups).map(([groupId, notesInGroup]) => {
+                          if (notesInGroup.length < 2) return null
+
+                          // position 순으로 정렬
+                          notesInGroup.sort((a, b) => a.note.position - b.note.position)
+
+                          const firstNote = notesInGroup[0].note
+                          const lastNote = notesInGroup[notesInGroup.length - 1].note
+
+                          const firstY = pitchToY[firstNote.pitch] || 70
+                          const lastY = pitchToY[lastNote.pitch] || 70
+                          const avgY = (firstY + lastY) / 2
+                          const stemUp = avgY >= 63
+
+                          const firstX = (firstNote.position / 100) * svgWidth
+                          const lastX = (lastNote.position / 100) * svgWidth
+
+                          // 각 음표의 기둥 끝 위치 계산 (대각선 beam)
+                          const firstBeamY = stemUp ? firstY - stemLength : firstY + stemLength
+                          const lastBeamY = stemUp ? lastY - stemLength : lastY + stemLength
+
+                          // 8분음표용 beam
+                          const hasEighth = notesInGroup.some(n => (n.note.duration || 4) >= 8)
+
+                          // 16분음표 부분 beam 계산 (연속된 16분음표 구간만)
+                          const sixteenthSegments: { startIdx: number, endIdx: number }[] = []
+                          let segmentStart: number | null = null
+                          for (let i = 0; i < notesInGroup.length; i++) {
+                            const isSixteenth = (notesInGroup[i].note.duration || 4) >= 16
+                            if (isSixteenth && segmentStart === null) {
+                              segmentStart = i
+                            } else if (!isSixteenth && segmentStart !== null) {
+                              if (i - 1 > segmentStart) {
+                                sixteenthSegments.push({ startIdx: segmentStart, endIdx: i - 1 })
+                              }
+                              segmentStart = null
+                            }
+                          }
+                          if (segmentStart !== null && notesInGroup.length - 1 > segmentStart) {
+                            sixteenthSegments.push({ startIdx: segmentStart, endIdx: notesInGroup.length - 1 })
+                          }
+
+                          // 위치와 Y 값을 계산하는 헬퍼 함수
+                          const getBeamPosition = (note: PianoNote) => {
+                            const nY = pitchToY[note.pitch] || 70
+                            const nX = (note.position / 100) * svgWidth
+                            const nBeamY = stemUp ? nY - stemLength : nY + stemLength
+                            return { x: nX, beamY: nBeamY }
+                          }
+
+                          return (
+                            <g key={`beam-${groupId}`}>
+                              {/* 첫 번째 beam (8분음표) - 대각선 */}
+                              {hasEighth && (
+                                <line
+                                  x1={stemUp ? firstX + 6 : firstX - 6}
+                                  y1={firstBeamY}
+                                  x2={stemUp ? lastX + 6 : lastX - 6}
+                                  y2={lastBeamY}
+                                  stroke="#000"
+                                  strokeWidth="4"
+                                />
+                              )}
+                              {/* 두 번째 beam (16분음표) - 연속된 16분음표 구간만 */}
+                              {sixteenthSegments.map((seg, segIdx) => {
+                                const startNote = notesInGroup[seg.startIdx].note
+                                const endNote = notesInGroup[seg.endIdx].note
+                                const startPos = getBeamPosition(startNote)
+                                const endPos = getBeamPosition(endNote)
+                                return (
+                                  <line
+                                    key={`16th-beam-${segIdx}`}
+                                    x1={stemUp ? startPos.x + 6 : startPos.x - 6}
+                                    y1={stemUp ? startPos.beamY + 6 : startPos.beamY - 6}
+                                    x2={stemUp ? endPos.x + 6 : endPos.x - 6}
+                                    y2={stemUp ? endPos.beamY + 6 : endPos.beamY - 6}
+                                    stroke="#000"
+                                    strokeWidth="4"
+                                  />
+                                )
+                              })}
+                            </g>
+                          )
+                        })
+                      })()}
+
+                      {/* 음표 표시 - 오선 기준 (첫째 줄 35, 간격 14, 음표 간격 7) */}
+                      {/* 화음 처리: 비슷한 position의 음표들을 그룹화하여 렌더링 */}
+                      {(() => {
+                        const pitchToY: { [key: string]: number } = {
+                          'A5': 21, 'G5': 28, 'F5': 35, 'E5': 42, 'D5': 49,
+                          'C5': 56, 'B4': 63, 'A4': 70, 'G4': 77, 'F4': 84,
+                          'E4': 91, 'D4': 98, 'C4': 105, 'B3': 112, 'A3': 119
+                        }
+                        const pitchOrder = ['A5', 'G5', 'F5', 'E5', 'D5', 'C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3']
+                        const svgWidth = editingPianoScore.measureWidths.reduce((sum, w) => sum + w, 0)
+
+                        // 비슷한 position의 음표들을 화음으로 그룹화 (차이 5 이내)
+                        const CHORD_THRESHOLD = 5
+                        const chordGroups: { note: PianoNote, idx: number }[][] = []
+                        const notesWithIdx = editingPianoScore.notes.map((note, idx) => ({ note, idx }))
+                        // position 순으로 정렬
+                        notesWithIdx.sort((a, b) => a.note.position - b.note.position)
+
+                        notesWithIdx.forEach(item => {
+                          // 기존 그룹 중 비슷한 position을 가진 그룹 찾기
+                          let foundGroup = chordGroups.find(group => {
+                            const groupAvgPos = group.reduce((sum, g) => sum + g.note.position, 0) / group.length
+                            return Math.abs(groupAvgPos - item.note.position) < CHORD_THRESHOLD
+                          })
+                          if (foundGroup) {
+                            foundGroup.push(item)
+                          } else {
+                            chordGroups.push([item])
+                          }
+                        })
+
+                        return chordGroups.map((notesInChord, groupIdx) => {
+                          // 화음 내 음표들을 높이순으로 정렬 (높은 음 -> 낮은 음)
+                          notesInChord.sort((a, b) => {
+                            const aIdx = pitchOrder.indexOf(a.note.pitch)
+                            const bIdx = pitchOrder.indexOf(b.note.pitch)
+                            return aIdx - bIdx
+                          })
+
+                          // 화음의 평균 position으로 baseX 계산
+                          const avgPosition = notesInChord.reduce((sum, n) => sum + n.note.position, 0) / notesInChord.length
+                          const baseX = (avgPosition / 100) * svgWidth
+                          const firstNote = notesInChord[0].note
+
+                          // 화음 전체의 평균 Y로 기둥 방향 결정
+                          const avgY = notesInChord.reduce((sum, n) => sum + (pitchToY[n.note.pitch] || 70), 0) / notesInChord.length
+
+                          // beam 그룹이 있는 경우 beam 그룹 전체의 평균으로 결정
+                          const hasBeam = notesInChord.some(n => n.note.beamGroup)
+                          let stemUp = avgY >= 63
+                          if (hasBeam) {
+                            const beamGroup = notesInChord.find(n => n.note.beamGroup)?.note.beamGroup
+                            if (beamGroup) {
+                              const beamNotes = editingPianoScore.notes.filter(n => n.beamGroup === beamGroup)
+                              const beamAvgY = beamNotes.reduce((sum, n) => sum + (pitchToY[n.pitch] || 70), 0) / beamNotes.length
+                              stemUp = beamAvgY >= 63
+                            }
+                          }
+
+                          // 인접한 음표(2도 간격) 체크 및 x 오프셋 계산
+                          const noteOffsets: number[] = []
+                          for (let i = 0; i < notesInChord.length; i++) {
+                            const currentPitchIdx = pitchOrder.indexOf(notesInChord[i].note.pitch)
+                            let needsOffset = false
+
+                            // 바로 위 음표와 2도 간격인지 체크
+                            if (i > 0) {
+                              const prevPitchIdx = pitchOrder.indexOf(notesInChord[i - 1].note.pitch)
+                              if (Math.abs(currentPitchIdx - prevPitchIdx) === 1) {
+                                // 이전 음표가 오프셋이 없으면 이 음표에 오프셋
+                                if (noteOffsets[i - 1] === 0) {
+                                  needsOffset = true
+                                }
+                              }
+                            }
+                            noteOffsets.push(needsOffset ? (stemUp ? -12 : 12) : 0)
+                          }
+
+                          // 화음의 최고음, 최저음 찾기 (기둥 길이 계산용)
+                          const highestY = Math.min(...notesInChord.map(n => pitchToY[n.note.pitch] || 70))
+                          const lowestY = Math.max(...notesInChord.map(n => pitchToY[n.note.pitch] || 70))
+                          const stemLength = 28
+
+                          // 대표 음표의 duration 사용 (화음은 보통 같은 duration)
+                          const duration = firstNote.duration || 4
+                          const isFilled = duration >= 4
+                          const hasStem = duration >= 2
+                          const isBeamed = notesInChord.some(n => n.note.beamGroup)
+                          const showFlag = !isBeamed && duration >= 8
+
+                          // 기둥 위치 계산 (화음일 때는 오프셋 없는 음표 기준)
+                          const stemX = stemUp ? baseX + 6 : baseX - 6
+
+                          return (
+                            <g key={groupIdx}>
+                              {/* 각 음표 머리 렌더링 */}
+                              {notesInChord.map(({ note, idx }, i) => {
+                                const y = pitchToY[note.pitch] || 70
+                                const xOffset = noteOffsets[i]
+                                const noteX = baseX + xOffset
+                                const needsLedgerLine = ['C4', 'D4', 'A5', 'B3', 'A3'].includes(note.pitch)
+                                const isSelected = selectedNotesForBeam.includes(idx)
+                                const noteIsBeamed = !!note.beamGroup
+
+                                return (
+                                  <g key={idx} className="cursor-pointer" onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedNotesForBeam(prev =>
+                                      prev.includes(idx)
+                                        ? prev.filter(i => i !== idx)
+                                        : [...prev, idx]
+                                    )
+                                  }}>
+                                    {/* 선택 표시 */}
+                                    {isSelected && (
+                                      <circle cx={noteX} cy={y} r="12" fill="rgba(59, 130, 246, 0.3)" stroke="#3b82f6" strokeWidth="2" />
+                                    )}
+                                    {/* 보조선 */}
+                                    {needsLedgerLine && (
+                                      <line x1={noteX - 15} y1={y} x2={noteX + 15} y2={y} stroke="#333" strokeWidth="1" />
+                                    )}
+                                    {/* 음표 머리 */}
+                                    <ellipse
+                                      cx={noteX}
+                                      cy={y}
+                                      rx="7"
+                                      ry="5"
+                                      fill={isFilled ? (noteIsBeamed ? '#1d4ed8' : '#000') : 'none'}
+                                      stroke={noteIsBeamed ? '#1d4ed8' : '#000'}
+                                      strokeWidth="1.5"
+                                    />
+                                  </g>
+                                )
+                              })}
+
+                              {/* 기둥 (stem) - 화음 전체에 하나만 */}
+                              {hasStem && (
+                                <line
+                                  x1={stemX}
+                                  y1={stemUp ? lowestY : highestY}
+                                  x2={stemX}
+                                  y2={stemUp ? highestY - stemLength : lowestY + stemLength}
+                                  stroke={isBeamed ? '#1d4ed8' : '#000'}
+                                  strokeWidth="1.5"
+                                />
+                              )}
+
+                              {/* 깃발 - 화음에 하나만 */}
+                              {showFlag && (
+                                <path
+                                  d={stemUp
+                                    ? `M${stemX},${highestY - stemLength} Q${stemX + 12},${highestY - stemLength + 10} ${stemX + 4},${highestY - stemLength + 18}`
+                                    : `M${stemX},${lowestY + stemLength} Q${stemX - 12},${lowestY + stemLength - 10} ${stemX - 4},${lowestY + stemLength - 18}`}
+                                  stroke="#000"
+                                  strokeWidth="2"
+                                  fill="none"
+                                />
+                              )}
+                              {/* 두 번째 깃발 - 16분음표 */}
+                              {showFlag && duration >= 16 && (
+                                <path
+                                  d={stemUp
+                                    ? `M${stemX},${highestY - stemLength + 8} Q${stemX + 12},${highestY - stemLength + 18} ${stemX + 4},${highestY - stemLength + 26}`
+                                    : `M${stemX},${lowestY + stemLength - 8} Q${stemX - 12},${lowestY + stemLength - 18} ${stemX - 4},${lowestY + stemLength - 26}`}
+                                  stroke="#000"
+                                  strokeWidth="2"
+                                  fill="none"
+                                />
+                              )}
+                            </g>
+                          )
+                        })
+                      })()}
+
+                      {/* 드래그 선택 영역 표시 */}
+                      {dragSelection && (
+                        <rect
+                          x={Math.min(dragSelection.startX, dragSelection.endX)}
+                          y={Math.min(dragSelection.startY, dragSelection.endY)}
+                          width={Math.abs(dragSelection.endX - dragSelection.startX)}
+                          height={Math.abs(dragSelection.endY - dragSelection.startY)}
+                          fill="rgba(59, 130, 246, 0.2)"
+                          stroke="#3b82f6"
+                          strokeWidth="1"
+                          strokeDasharray="4,2"
+                        />
+                      )}
+                    </svg>
+                  </div>
+                </div>
+
+                {/* 음표 길이 선택 및 실행취소/다시실행 */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      음표 길이 선택
+                    </label>
+                    {/* 실행취소/다시실행 버튼 */}
+                    <div className="flex gap-1">
+                      <button
+                        onClick={undoPiano}
+                        disabled={pianoHistoryIndex <= 0}
+                        className={`px-2 py-1 rounded text-sm transition-colors flex items-center gap-1 ${
+                          pianoHistoryIndex <= 0
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                        }`}
+                        title="실행취소"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a4 4 0 014 4v2M3 10l4-4m-4 4l4 4" />
+                        </svg>
+                        <span className="hidden sm:inline">뒤로</span>
+                      </button>
+                      <button
+                        onClick={redoPiano}
+                        disabled={pianoHistoryIndex >= pianoHistory.length - 1}
+                        className={`px-2 py-1 rounded text-sm transition-colors flex items-center gap-1 ${
+                          pianoHistoryIndex >= pianoHistory.length - 1
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                        }`}
+                        title="다시실행"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a4 4 0 00-4 4v2M21 10l-4-4m4 4l-4 4" />
+                        </svg>
+                        <span className="hidden sm:inline">앞으로</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    {[
+                      { value: 1 as const, label: '온', icon: '𝅝' },
+                      { value: 2 as const, label: '2분', icon: '𝅗𝅥' },
+                      { value: 4 as const, label: '4분', icon: '♩' },
+                      { value: 8 as const, label: '8분', icon: '♪' },
+                      { value: 16 as const, label: '16분', icon: '♬' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditingPianoScore(prev => prev ? { ...prev, currentDuration: opt.value } : prev)}
+                        className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
+                          editingPianoScore.currentDuration === opt.value
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        <span className="text-base">{opt.icon}</span>
+                        <span className="block text-[10px]">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 선택된 음표 액션 (beam/삭제) */}
+                {selectedNotesForBeam.length > 0 && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-blue-700">
+                        {selectedNotesForBeam.length}개 음표 선택됨
+                      </span>
+                      <button
+                        onClick={() => setSelectedNotesForBeam([])}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        선택 해제
+                      </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {/* 연결 버튼 (2개 이상 선택 시) */}
+                      {selectedNotesForBeam.length >= 2 && (
+                        <button
+                          onClick={() => {
+                            const beamGroupId = `beam-${Date.now()}`
+                            setEditingPianoScore(prev => {
+                              if (!prev) return prev
+                              const newNotes = prev.notes.map((note, idx) =>
+                                selectedNotesForBeam.includes(idx)
+                                  ? { ...note, beamGroup: beamGroupId }
+                                  : note
+                              )
+                              // 히스토리에 저장
+                              savePianoHistory(newNotes, prev.chords)
+                              return { ...prev, notes: newNotes }
+                            })
+                            setSelectedNotesForBeam([])
+                          }}
+                          className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
+                        >
+                          🔗 연결
+                        </button>
+                      )}
+                      {/* 연결 해제 버튼 (beam이 있는 음표 선택 시) */}
+                      {selectedNotesForBeam.some(idx => editingPianoScore.notes[idx]?.beamGroup) && (
+                        <button
+                          onClick={() => {
+                            setEditingPianoScore(prev => {
+                              if (!prev) return prev
+                              const newNotes = prev.notes.map((note, idx) =>
+                                selectedNotesForBeam.includes(idx)
+                                  ? { ...note, beamGroup: undefined }
+                                  : note
+                              )
+                              // 히스토리에 저장
+                              savePianoHistory(newNotes, prev.chords)
+                              return { ...prev, notes: newNotes }
+                            })
+                            setSelectedNotesForBeam([])
+                          }}
+                          className="px-3 py-1.5 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                        >
+                          ✂️ 연결 해제
+                        </button>
+                      )}
+                      {/* 삭제 버튼 */}
+                      <button
+                        onClick={() => {
+                          // 코드 피커 상태 처리
+                          if (chordPickerIndex !== null && selectedNotesForBeam.includes(chordPickerIndex)) {
+                            setChordPickerIndex(null)
+                          }
+                          setEditingPianoScore(prev => {
+                            if (!prev) return prev
+                            const newNotes = prev.notes.filter((_, idx) => !selectedNotesForBeam.includes(idx))
+                            // 히스토리에 저장
+                            savePianoHistory(newNotes, prev.chords)
+                            return { ...prev, notes: newNotes }
+                          })
+                          setSelectedNotesForBeam([])
+                        }}
+                        className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
+                      >
+                        🗑️ 삭제
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 음표 전체 삭제 */}
+                {editingPianoScore.notes.length > 0 && selectedNotesForBeam.length === 0 && (
+                  <div className="mb-4">
+                    <button
+                      onClick={() => {
+                        setChordPickerIndex(null)
+                        setSelectedNotesForBeam([])
+                        setEditingPianoScore(prev => {
+                          if (!prev) return prev
+                          // 히스토리에 저장
+                          savePianoHistory([], prev.chords)
+                          return { ...prev, notes: [] }
+                        })
+                      }}
+                      className="px-3 py-2 text-xs bg-red-100 text-red-600 hover:bg-red-200 rounded-lg"
+                    >
+                      음표 전체 삭제
+                    </button>
+                  </div>
+                )}
+
+                {/* 버튼 */}
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    onClick={() => {
+                      if (editingPianoScoreId) {
+                        // 기존 악보 편집 취소 시 모달 닫기
+                        setShowPianoModal(false)
+                      }
+                      setPianoModalStep('measure')
+                      setEditingPianoScore(null)
+                      setEditingPianoScoreId(null)
+                      setChordPickerIndex(null)
+                      setSelectedNotesForBeam([])
+                    }}
+                    className="flex-1 py-2 px-4 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                  >
+                    {editingPianoScoreId ? '취소' : '뒤로'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (editingPianoScore && editingPianoScore.notes.length > 0) {
+                        if (editingPianoScoreId) {
+                          // 기존 악보 수정
+                          setPianoScores(prev => prev.map(score =>
+                            score.id === editingPianoScoreId
+                              ? {
+                                  ...score,
+                                  measureCount: editingPianoScore.measureCount,
+                                  measureWidths: editingPianoScore.measureWidths,
+                                  chords: editingPianoScore.chords,
+                                  chordName: undefined, // 호환성용 필드는 제거
+                                  notes: editingPianoScore.notes
+                                }
+                              : score
+                          ))
+                        } else {
+                          // 새 악보 추가
+                          const newScore: PianoScoreElement = {
+                            id: `piano-${Date.now()}`,
+                            x: 50,
+                            y: 50,
+                            pageIndex: currentPage - 1,
+                            measureCount: editingPianoScore.measureCount,
+                            measureWidths: editingPianoScore.measureWidths,
+                            chords: editingPianoScore.chords,
+                            notes: editingPianoScore.notes
+                          }
+                          setPianoScores(prev => [...prev, newScore])
+                        }
+                        setShowPianoModal(false)
+                        setPianoModalStep('measure')
+                        setEditingPianoScore(null)
+                        setEditingPianoScoreId(null)
+                        setChordPickerIndex(null)
+                        setSelectedNotesForBeam([])
+                      }
+                    }}
+                    disabled={!editingPianoScore || editingPianoScore.notes.length === 0}
+                    className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {editingPianoScoreId ? '수정' : '추가'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

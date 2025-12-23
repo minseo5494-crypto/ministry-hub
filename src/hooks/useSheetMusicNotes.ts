@@ -27,6 +27,32 @@ export interface SavedPartTagStyle {
   pageIndex?: number
 }
 
+// 피아노 악보 타입
+export interface SavedPianoNote {
+  pitch: string
+  position: number
+  duration?: 1 | 2 | 4 | 8 | 16  // 음표 길이 (1=온음표, 2=2분음표, 4=4분음표, 8=8분음표, 16=16분음표)
+  beamGroup?: string  // 잇단음표 그룹 ID (같은 ID를 가진 음표끼리 연결)
+}
+
+export interface SavedPianoChord {
+  name: string
+  position: number
+}
+
+export interface SavedPianoScoreElement {
+  id: string
+  x: number
+  y: number
+  pageIndex: number
+  measureCount: 1 | 2 | 3 | 4
+  measureWidths?: number[]  // 각 마디 너비 (없으면 균등 분배)
+  chordName?: string  // 호환성용, deprecated
+  chords?: SavedPianoChord[]  // 코드 배열 (마디당 최대 3개)
+  notes: SavedPianoNote[]
+  scale?: number  // 크기 조절 (0.5-2.0)
+}
+
 // 노트 타입 정의
 export interface LocalSheetMusicNote {
   id: string
@@ -46,6 +72,8 @@ export interface LocalSheetMusicNote {
   songFormEnabled?: boolean
   songFormStyle?: SavedSongFormStyle
   partTags?: SavedPartTagStyle[]
+  // 피아노 악보 필드
+  pianoScores?: SavedPianoScoreElement[]
 }
 
 interface UseSheetMusicNotesReturn {
@@ -57,7 +85,7 @@ interface UseSheetMusicNotesReturn {
   fetchNotes: (userId: string) => Promise<void>
   fetchNotesBySong: (userId: string, songId: string) => Promise<LocalSheetMusicNote[]>
   saveNote: (note: Omit<LocalSheetMusicNote, 'id' | 'created_at' | 'updated_at'>) => Promise<LocalSheetMusicNote | null>
-  updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[] }) => Promise<boolean>
+  updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[] }) => Promise<boolean>
   updateNoteTitle: (id: string, title: string) => Promise<boolean>
   deleteNote: (id: string) => Promise<boolean>
   getNoteById: (id: string) => LocalSheetMusicNote | undefined
@@ -192,7 +220,7 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     id: string,
     annotations: PageAnnotation[],
     title?: string,
-    extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[] }
+    extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[] }
   ): Promise<boolean> => {
     setLoading(true)
     setError(null)
@@ -213,6 +241,7 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
         ...(extra?.songFormEnabled !== undefined && { songFormEnabled: extra.songFormEnabled }),
         ...(extra?.songFormStyle && { songFormStyle: extra.songFormStyle }),
         ...(extra?.partTags && { partTags: extra.partTags }),
+        ...(extra?.pianoScores && { pianoScores: extra.pianoScores }),
         updated_at: now,
       }
 

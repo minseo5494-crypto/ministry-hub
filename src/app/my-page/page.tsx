@@ -1355,6 +1355,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
           initialSongFormEnabled={editingNote.songFormEnabled}
           initialSongFormStyle={editingNote.songFormStyle}
           initialPartTags={editingNote.partTags}
+          initialPianoScores={editingNote.pianoScores}
           onSave={async (annotations, extra) => {
             const success = await updateSheetMusicNote(editingNote.id, annotations, undefined, extra)
             if (success) {

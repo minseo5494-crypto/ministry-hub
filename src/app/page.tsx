@@ -3410,6 +3410,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         songFormEnabled: extra?.songFormEnabled,
         songFormStyle: extra?.songFormStyle,
         partTags: extra?.partTags,
+        pianoScores: extra?.pianoScores,  // 피아노 악보도 저장
       })
       console.log('📝 saveNote 결과:', result)
       if (result) {
