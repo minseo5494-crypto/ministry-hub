@@ -2024,41 +2024,43 @@ const hasMore = displayCount < filteredSongs.length
           </div>
 
 {/* 오른쪽: 곡 목록 */}
-<div className="flex-1">
+<div className="flex-1 min-w-0">
   {/* 툴바 */}
-  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
+  <div className="bg-white rounded-lg shadow-md p-2 md:p-4 mb-4">
+    <div className="flex items-center justify-between gap-2">
+      {/* 왼쪽: 필터 + 곡 수 + 정렬 */}
+      <div className="flex items-center gap-1 md:gap-4 min-w-0 flex-shrink">
         <button
           onClick={() => setShowFilterPanel(!showFilterPanel)}
-          className="p-2 hover:bg-gray-100 rounded-lg"
+          className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg flex-shrink-0"
         >
-          <Filter size={20} />
+          <Filter size={18} className="md:w-5 md:h-5" />
         </button>
-        <span className="text-gray-600">
-{displayCount < filteredSongs.length 
-  ? `${displayCount} / ${filteredSongs.length}개의 찬양`
-  : `${filteredSongs.length}개의 찬양`
-}
-</span>
+        <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">
+          {displayCount < filteredSongs.length
+            ? `${displayCount} / ${filteredSongs.length}개`
+            : `${filteredSongs.length}개`
+          }
+        </span>
 
         {/* 🎵 정렬 드롭다운 */}
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          className="px-2 md:px-3 py-1 md:py-1.5 border border-gray-300 rounded-lg text-xs md:text-sm focus:ring-2 focus:ring-blue-500 flex-shrink-0"
         >
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
           <option value="name">이름순</option>
         </select>
-    </div>
+      </div>
 
-    <div className="flex items-center gap-1.5 md:gap-3">
+      {/* 오른쪽: 공식/전체 토글 + 뷰 모드 */}
+      <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
         {/* 🛡️ 공식/사용자 악보 토글 */}
         <button
           onClick={() => setShowUserUploaded(!showUserUploaded)}
-          className={`flex items-center gap-1 md:gap-1.5 px-2 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center gap-1 p-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
             showUserUploaded
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
@@ -2066,7 +2068,7 @@ const hasMore = displayCount < filteredSongs.length
           title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
         >
           <Shield size={14} className="flex-shrink-0 md:w-4 md:h-4" />
-          <span className="hidden sm:inline">{showUserUploaded ? '전체' : '공식만'}</span>
+          <span className="hidden md:inline">{showUserUploaded ? '전체' : '공식만'}</span>
         </button>
 
         <div className="w-px h-5 md:h-6 bg-gray-200 hidden md:block"></div>
@@ -2077,7 +2079,7 @@ const hasMore = displayCount < filteredSongs.length
             viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <Grid size={18} className="md:w-5 md:h-5" />
+          <Grid size={16} className="md:w-5 md:h-5" />
         </button>
         <button
           onClick={() => setViewMode('list')}
@@ -2085,7 +2087,7 @@ const hasMore = displayCount < filteredSongs.length
             viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <List size={18} className="md:w-5 md:h-5" />
+          <List size={16} className="md:w-5 md:h-5" />
         </button>
       </div>
     </div>
@@ -2247,7 +2249,7 @@ const hasMore = displayCount < filteredSongs.length
       key={song.id}
       tabIndex={0}
       onFocus={() => setFocusedSongIndex(index)}
-      className={`p-4 cursor-pointer transition-all ${
+      className={`p-2 md:p-4 cursor-pointer transition-all ${
         selectedSongs.find(s => s.id === song.id)
           ? 'bg-blue-50'
           : focusedSongIndex === index
@@ -2273,11 +2275,11 @@ const hasMore = displayCount < filteredSongs.length
                 setFocusedSongIndex(index)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="mr-3 flex-shrink-0 mt-1 w-4 h-4 cursor-pointer"
+              className="mr-2 md:mr-3 flex-shrink-0 mt-0.5 w-4 h-4 cursor-pointer"
             />
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
+              <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+                <h3 className="font-semibold text-sm md:text-base text-gray-900">{song.song_name}</h3>
                 {song.is_official ? (
                   <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center" title="공식 악보">
                     <Shield size={12} />
@@ -2293,11 +2295,11 @@ const hasMore = displayCount < filteredSongs.length
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 mt-1">
-                {song.team_name && `${song.team_name} | `}
-                Key: {song.key || '-'} | 
-                박자: {song.time_signature || '-'} | 
-                템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
+              <p className="text-xs md:text-sm text-gray-600 mt-1">
+                {song.team_name && <span className="hidden sm:inline">{song.team_name} | </span>}
+                Key: {song.key || '-'} |
+                <span className="hidden sm:inline">박자: </span>{song.time_signature || '-'} |
+                <span className="hidden sm:inline">템포: </span>{song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
               </p>
               
               {/* 테마 태그 */}
