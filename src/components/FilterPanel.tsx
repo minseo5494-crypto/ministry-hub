@@ -263,16 +263,16 @@ export default function FilterPanel({
             placeholder="최소"
             value={filters.bpmMin}
             onChange={(e) => onFilterChange('bpmMin', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             min="0"
           />
-          <span className="text-gray-500">~</span>
+          <span className="text-gray-500 flex-shrink-0">~</span>
           <input
             type="number"
             placeholder="최대"
             value={filters.bpmMax}
             onChange={(e) => onFilterChange('bpmMax', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             min="0"
           />
         </div>

@@ -504,21 +504,21 @@ export default function UserSongsPage() {
 
         {/* 검색 및 필터 */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px] relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <div className="flex gap-2 md:gap-4 flex-wrap">
+            <div className="flex-1 min-w-[150px] md:min-w-[200px] relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="곡명 또는 아티스트 검색..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm md:text-base"
               />
             </div>
             <select
               value={visibilityFilter}
               onChange={(e) => setVisibilityFilter(e.target.value as any)}
-              className="px-4 py-2 border rounded-lg"
+              className="px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base flex-shrink-0"
             >
               <option value="all">모든 공유 상태</option>
               <option value="public">전체 공유</option>
@@ -530,15 +530,16 @@ export default function UserSongsPage() {
             <button
               onClick={normalizeAllSongs}
               disabled={normalizing}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-2 disabled:bg-orange-300 disabled:cursor-not-allowed"
+              className="px-3 md:px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-1.5 md:gap-2 disabled:bg-orange-300 disabled:cursor-not-allowed text-sm md:text-base flex-shrink-0 whitespace-nowrap"
               title="검색 호환성 개선을 위해 모든 곡의 유니코드를 정규화합니다"
             >
-              <RefreshCw size={18} className={normalizing ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={`flex-shrink-0 ${normalizing ? 'animate-spin' : ''}`} />
               {normalizing ? (
-                <span>정규화 중... ({normalizeProgress.current}/{normalizeProgress.total})</span>
+                <span className="hidden sm:inline">정규화 중... ({normalizeProgress.current}/{normalizeProgress.total})</span>
               ) : (
-                <span>데이터 정규화</span>
+                <span className="hidden sm:inline">데이터 정규화</span>
               )}
+              {normalizing && <span className="sm:hidden">{normalizeProgress.current}/{normalizeProgress.total}</span>}
             </button>
           </div>
         </div>
@@ -562,16 +563,16 @@ export default function UserSongsPage() {
           ) : (
             <div className="divide-y">
               {filteredSongs.map((song) => (
-                <div key={song.id} className="p-4 hover:bg-gray-50">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                        {song.team_name && <span>{song.team_name}</span>}
+                <div key={song.id} className="p-3 md:p-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-base md:text-lg text-gray-900 truncate">{song.song_name}</h3>
+                      <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-xs md:text-sm text-gray-600">
+                        {song.team_name && <span className="truncate max-w-[120px] md:max-w-none">{song.team_name}</span>}
                         {song.key && <span>Key: {song.key}</span>}
                         {song.bpm && <span>{song.bpm}BPM</span>}
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
                         {renderVisibilityBadge(song.visibility)}
                         <span className="text-xs text-gray-500">
                           {new Date(song.created_at).toLocaleDateString('ko-KR')}
@@ -579,30 +580,30 @@ export default function UserSongsPage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 ml-4">
+                    <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
                       {song.file_url && (
                         <button
                           onClick={() => setPreviewSong(song)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                          className="p-1.5 md:p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
                           title="미리보기"
                         >
-                          <Eye size={20} />
+                          <Eye size={18} className="md:w-5 md:h-5" />
                         </button>
                       )}
                       <button
                         onClick={() => openEditModal(song)}
-                        className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+                        className="p-1.5 md:p-2 text-green-600 hover:bg-green-100 rounded-lg"
                         title="수정"
                       >
-                        <Edit size={20} />
+                        <Edit size={18} className="md:w-5 md:h-5" />
                       </button>
                       <button
                         onClick={() => handleDelete(song)}
                         disabled={deleting === song.id}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-1.5 md:p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         title="삭제"
                       >
-                        <Trash2 size={20} />
+                        <Trash2 size={18} className="md:w-5 md:h-5" />
                       </button>
                     </div>
                   </div>

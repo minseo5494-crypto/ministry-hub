@@ -936,47 +936,49 @@ setNewSong({ ...newSong, tempo: tempoValue })
         </div>
 
         {/* 검색 및 필터 */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
+        <div className="bg-white rounded-lg shadow p-3 md:p-4 mb-6">
+          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   placeholder="곡명 또는 아티스트 검색..."
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm md:text-base"
                 />
               </div>
             </div>
 
-            <select
-              value={visibilityFilter}
-              onChange={(e) => setVisibilityFilter(e.target.value as any)}
-              className="px-4 py-2 border rounded-lg"
-            >
-              <option value="all">모든 공유 상태</option>
-              <option value="public">전체 공유</option>
-              <option value="teams">팀 공유</option>
-              <option value="private">나만 보기</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={visibilityFilter}
+                onChange={(e) => setVisibilityFilter(e.target.value as any)}
+                className="flex-1 md:flex-none px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base"
+              >
+                <option value="all">모든 공유 상태</option>
+                <option value="public">전체 공유</option>
+                <option value="teams">팀 공유</option>
+                <option value="private">나만 보기</option>
+              </select>
 
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-4 py-2 border rounded-lg"
-            >
-              <option value="recent">최근순</option>
-              <option value="name">이름순</option>
-              <option value="usage">사용빈도순</option>
-            </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="flex-1 md:flex-none px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base"
+              >
+                <option value="recent">최근순</option>
+                <option value="name">이름순</option>
+                <option value="usage">사용빈도순</option>
+              </select>
+            </div>
 
             <button
               onClick={() => setShowAddSongModal(true)}
-              className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center whitespace-nowrap"
+              className="px-4 md:px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center whitespace-nowrap text-sm md:text-base"
             >
-              <Plus className="mr-2" size={18} />
+              <Plus className="mr-1 md:mr-2" size={16} />
               곡 추가
             </button>
           </div>
@@ -986,36 +988,36 @@ setNewSong({ ...newSong, tempo: tempoValue })
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
             {/* 🎵 탭 전환 */}
-            <div className="flex gap-4 overflow-x-auto">
+            <div className="flex gap-2 md:gap-4 overflow-x-auto pb-1 -mb-1">
               <button
                 onClick={() => setActiveTab('uploaded')}
-                className={`text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap ${
+                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'uploaded'
                     ? 'text-gray-900 border-blue-500'
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                내가 추가한 곡 ({filteredSongs.length})
+                내가 추가한 곡 <span className="text-xs md:text-base">({filteredSongs.length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('liked')}
-                className={`text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap ${
+                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'liked'
                     ? 'text-gray-900 border-red-500'
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                ❤️ 좋아요한 곡 ({likedSongs.length})
+                <span className="hidden sm:inline">❤️ </span>좋아요 <span className="text-xs md:text-base">({likedSongs.length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('notes')}
-                className={`text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap ${
+                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'notes'
                     ? 'text-gray-900 border-green-500'
                     : 'text-gray-400 border-transparent hover:text-gray-600'
                 }`}
               >
-                📝 내 필기 노트 ({sheetMusicNotes.length})
+                <span className="hidden sm:inline">📝 </span>필기 <span className="text-xs md:text-base">({sheetMusicNotes.length})</span>
               </button>
             </div>
           </div>
@@ -1044,15 +1046,15 @@ setNewSong({ ...newSong, tempo: tempoValue })
               ) : (
                 <div className="divide-y">
                   {filteredSongs.map((song) => (
-                    <div key={song.id} className="p-4 hover:bg-gray-50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                            {song.team_name && <span>{song.team_name}</span>}
+                    <div key={song.id} className="p-3 md:p-4 hover:bg-gray-50">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-base md:text-lg text-gray-900 truncate">{song.song_name}</h3>
+                          <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-xs md:text-sm text-gray-600">
+                            {song.team_name && <span className="truncate max-w-[100px] md:max-w-none">{song.team_name}</span>}
                             {song.key && <span>Key: {song.key}</span>}
                             {song.time_signature && <span>{song.time_signature}</span>}
-                            {song.tempo && <span>{song.tempo}</span>}
+                            {song.tempo && <span className="hidden md:inline">{song.tempo}</span>}
                             {song.bpm && <span>{song.bpm}BPM</span>}
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
@@ -1078,38 +1080,38 @@ setNewSong({ ...newSong, tempo: tempoValue })
                           )}
                         </div>
 
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
                           {/* 미리보기 토글 버튼 */}
                           {song.file_url && (
                             <button
                               onClick={() => togglePreview(song.id)}
-                              className={`p-2 rounded-lg ${
+                              className={`p-1.5 md:p-2 rounded-lg ${
                                 previewStates[song.id]
                                   ? 'text-blue-600 bg-blue-100'
                                   : 'text-blue-600 hover:bg-blue-100'
                               }`}
                               title={previewStates[song.id] ? '접기' : '미리보기'}
                             >
-                              {previewStates[song.id] ? <EyeOff size={20} /> : <Eye size={20} />}
+                              {previewStates[song.id] ? <EyeOff size={18} className="md:w-5 md:h-5" /> : <Eye size={18} className="md:w-5 md:h-5" />}
                             </button>
                           )}
                           <button
                             onClick={() => openEditModal(song)}
-                            className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+                            className="p-1.5 md:p-2 text-green-600 hover:bg-green-100 rounded-lg"
                             title="수정"
                           >
-                            <Edit size={20} />
+                            <Edit size={18} className="md:w-5 md:h-5" />
                           </button>
                           <button
                             onClick={() => handleDeleteSong(song)}
                             disabled={deleting === song.id}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
+                            className="p-1.5 md:p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
                             title="삭제"
                           >
                             {deleting === song.id ? (
-                              <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                              <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <Trash2 size={20} />
+                              <Trash2 size={18} className="md:w-5 md:h-5" />
                             )}
                           </button>
                         </div>

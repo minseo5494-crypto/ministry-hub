@@ -2054,38 +2054,38 @@ const hasMore = displayCount < filteredSongs.length
         </select>
     </div>
 
-    <div className="flex items-center gap-2 md:gap-3">
+    <div className="flex items-center gap-1.5 md:gap-3">
         {/* 🛡️ 공식/사용자 악보 토글 */}
         <button
           onClick={() => setShowUserUploaded(!showUserUploaded)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center gap-1 md:gap-1.5 px-2 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
             showUserUploaded
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
           }`}
           title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
         >
-          <Shield size={16} className="flex-shrink-0" />
+          <Shield size={14} className="flex-shrink-0 md:w-4 md:h-4" />
           <span className="hidden sm:inline">{showUserUploaded ? '전체' : '공식만'}</span>
         </button>
 
-        <div className="w-px h-6 bg-gray-200 hidden md:block"></div>
+        <div className="w-px h-5 md:h-6 bg-gray-200 hidden md:block"></div>
 
         <button
           onClick={() => setViewMode('grid')}
-          className={`p-2 rounded-lg transition ${
+          className={`p-1.5 md:p-2 rounded-lg transition ${
             viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <Grid size={20} />
+          <Grid size={18} className="md:w-5 md:h-5" />
         </button>
         <button
           onClick={() => setViewMode('list')}
-          className={`p-2 rounded-lg transition ${
+          className={`p-1.5 md:p-2 rounded-lg transition ${
             viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <List size={20} />
+          <List size={18} className="md:w-5 md:h-5" />
         </button>
       </div>
     </div>
@@ -2318,7 +2318,7 @@ const hasMore = displayCount < filteredSongs.length
         </div>
 
         {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
-        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
+        <div className="flex gap-0.5 md:gap-2 ml-1 md:ml-4 flex-shrink-0">
           {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
@@ -2326,7 +2326,7 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openFormModal(song)
               }}
-              className="px-2 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs md:text-sm rounded hover:bg-[#B0A8D8] whitespace-nowrap"
+              className="px-1.5 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs rounded hover:bg-[#B0A8D8] whitespace-nowrap"
             >
               송폼
             </button>
@@ -2339,14 +2339,14 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 togglePreview(song.id)
               }}
-              className={`p-2 rounded-lg ${
+              className={`p-1.5 md:p-2 rounded-lg ${
                 previewStates[song.id]
                   ? 'text-blue-600 bg-blue-100'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
               title={previewStates[song.id] ? '접기' : '펼치기'}
             >
-              {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
+              {previewStates[song.id] ? <EyeOff size={16} className="md:w-[18px] md:h-[18px]" /> : <Eye size={16} className="md:w-[18px] md:h-[18px]" />}
             </button>
           )}
 
@@ -2357,10 +2357,10 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openSheetViewer(song)
               }}
-              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+              className="p-1.5 md:p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
               title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 뷰어` : '악보 보기/필기 모드'}
             >
-              <Presentation size={18} />
+              <Presentation size={16} className="md:w-[18px] md:h-[18px]" />
             </button>
           )}
 
@@ -2373,11 +2373,11 @@ const hasMore = displayCount < filteredSongs.length
               }
             }}
             disabled={!song.youtube_url}
-            className="p-2 rounded-lg"
+            className="p-1.5 md:p-2 rounded-lg"
             style={{
-              color: !song.youtube_url 
-                ? '#d1d5db' 
-                : youtubeStates[song.id] 
+              color: !song.youtube_url
+                ? '#d1d5db'
+                : youtubeStates[song.id]
                 ? '#dc2626'
                 : '#dc2626',
               backgroundColor: !song.youtube_url
@@ -2396,22 +2396,22 @@ const hasMore = displayCount < filteredSongs.length
                 : '유튜브 열기'
             }
           >
-            <Youtube size={18} />
+            <Youtube size={16} className="md:w-[18px] md:h-[18px]" />
           </button>
 
           {/* 🎵 좋아요 버튼 */}
           <button
             onClick={(e) => toggleLike(e, song.id)}
-            className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
+            className={`p-1.5 md:p-2 rounded-lg transition-colors flex items-center gap-0.5 md:gap-1 ${
               likedSongs.has(song.id)
                 ? 'text-red-500 bg-red-50'
                 : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
             }`}
             title={likedSongs.has(song.id) ? '좋아요 취소' : '좋아요'}
           >
-            <Heart size={18} fill={likedSongs.has(song.id) ? 'currentColor' : 'none'} />
+            <Heart size={16} className="md:w-[18px] md:h-[18px]" fill={likedSongs.has(song.id) ? 'currentColor' : 'none'} />
             {((song as any).like_count || 0) > 0 && (
-              <span className="text-xs">{(song as any).like_count}</span>
+              <span className="text-[10px] md:text-xs">{(song as any).like_count}</span>
             )}
           </button>
         </div>
