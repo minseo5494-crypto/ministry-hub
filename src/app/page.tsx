@@ -2266,7 +2266,7 @@ const hasMore = displayCount < filteredSongs.length
         }}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             <input
               type="checkbox"
               checked={!!selectedSongs.find(s => s.id === song.id)}
@@ -2275,7 +2275,8 @@ const hasMore = displayCount < filteredSongs.length
                 setFocusedSongIndex(index)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="mr-2 md:mr-3 flex-shrink-0 w-4 h-4 min-w-[16px] min-h-[16px] aspect-square cursor-pointer"
+              className="mr-2 md:mr-3 cursor-pointer mt-1"
+              style={{ width: '16px', height: '16px', minWidth: '16px', minHeight: '16px', maxHeight: '16px' }}
             />
             <div className="min-w-0">
               <div className="flex items-center gap-1 md:gap-2 flex-wrap">
