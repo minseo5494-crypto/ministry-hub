@@ -1064,15 +1064,16 @@ const openSelectedFixedSongsViewer = () => {
                         : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                    <div className="flex items-start gap-3 sm:gap-4 flex-1">
                       {/* 선택 체크박스 */}
                       <button
                         onClick={() => toggleFixedSongSelection(fixedSong)}
-                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded border-2 flex items-center justify-center transition flex-shrink-0 ${
+                        className={`rounded border-2 flex items-center justify-center transition flex-shrink-0 ${
                           selectedFixedSongs.find(s => s.id === fixedSong.id)
                             ? 'border-orange-500 bg-[#C5D7F2] text-white'
                             : 'border-gray-300 hover:border-orange-400'
                         }`}
+                        style={{ width: '20px', height: '20px', minWidth: '20px', minHeight: '20px', maxWidth: '20px', maxHeight: '20px' }}
                       >
                         {selectedFixedSongs.find(s => s.id === fixedSong.id) && (
                           <Check size={12} />
