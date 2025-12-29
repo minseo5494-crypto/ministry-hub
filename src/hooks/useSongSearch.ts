@@ -95,13 +95,15 @@ export function useSongSearch() {
   const filteredSongs = useMemo(() => {
     let result = [...songs]
 
-    // 검색어 필터
+    // 검색어 필터 (유니코드 정규화 적용)
     if (filters.searchText) {
-      const searchLower = filters.searchText.toLowerCase()
-      result = result.filter(song =>
-        song.song_name.toLowerCase().includes(searchLower) ||
-        song.team_name?.toLowerCase().includes(searchLower)
-      )
+      const normalizedSearch = filters.searchText.normalize('NFC').toLowerCase()
+      result = result.filter(song => {
+        const normalizedName = (song.song_name || '').normalize('NFC').toLowerCase()
+        const normalizedTeam = (song.team_name || '').normalize('NFC').toLowerCase()
+        return normalizedName.includes(normalizedSearch) ||
+               normalizedTeam.includes(normalizedSearch)
+      })
     }
 
     // 절기 필터

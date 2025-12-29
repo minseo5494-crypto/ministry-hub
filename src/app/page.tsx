@@ -447,16 +447,6 @@ const fetchSongs = async () => {
 
     // 🆕 공유 범위에 따른 필터링
     const filteredData = allData.filter(song => {
-      // 🔍 디버깅: 특정 곡 체크
-      if (song.id === '3149' || song.id === '3150' || song.id === '3151') {
-        console.log(`🔍 곡 ${song.id} - "${song.song_name}" 필터링 체크:`, {
-          song_name: song.song_name,
-          name_length: song.song_name?.length,
-          visibility: song.visibility,
-          will_pass: song.song_name && song.song_name.trim() !== '' && song.song_name.length > 1
-        })
-      }
-        
       // 기본 유효성 검사
       if (!song.song_name || song.song_name.trim() === '' || song.song_name.length <= 1) {
         return false
@@ -694,6 +684,7 @@ const handleBPMChange = (bpmValue: string) => {
 // 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
 const normalizeText = (text: string): string => {
   return text
+    .normalize('NFC')  // 유니코드 정규화 (한글 자모 조합 통일)
     .toLowerCase()
     .replace(/\([a-g][#b]?m?\)/gi, '')  // 키 표시 제거 (C), (D#), (Am), (Bb) 등
     .replace(/\s+/g, '')  // 모든 공백 제거
@@ -902,8 +893,8 @@ const handleTempoChange = (tempoValue: string) => {
 const { error: insertError } = await supabase
   .from('songs')
   .insert({
-    song_name: newSong.song_name.trim(),
-    team_name: newSong.team_name.trim() || null,
+    song_name: newSong.song_name.trim().normalize('NFC'),
+    team_name: newSong.team_name.trim().normalize('NFC') || null,
     key: newSong.key || null,
     time_signature: newSong.time_signature || null,
     tempo: newSong.tempo || null,

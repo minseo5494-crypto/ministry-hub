@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, parseThemes } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save, Upload, FileText } from 'lucide-react'
+import { Trash2, Eye, Search, Filter, X, Globe, Users, Lock, Edit, Save, Upload, FileText, RefreshCw } from 'lucide-react'
 import { SEASONS, THEMES, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
@@ -57,6 +57,10 @@ export default function UserSongsPage() {
     shared_with_teams: [] as string[]
   })
   const [updating, setUpdating] = useState(false)
+
+  // 데이터 정규화 상태
+  const [normalizing, setNormalizing] = useState(false)
+  const [normalizeProgress, setNormalizeProgress] = useState({ current: 0, total: 0 })
 
   // 파일 수정 관련 상태
   const [editFile, setEditFile] = useState<File | null>(null)
@@ -124,15 +128,97 @@ export default function UserSongsPage() {
     }
   }
 
+  // 🆕 전체 곡 데이터 정규화 (유니코드 NFC 변환)
+  const normalizeAllSongs = async () => {
+    if (!confirm('모든 곡의 제목과 아티스트명을 유니코드 정규화(NFC)하시겠습니까?\n\n이 작업은 검색 호환성을 개선합니다.')) {
+      return
+    }
+
+    setNormalizing(true)
+
+    try {
+      // 1. 모든 곡 가져오기 (사용자 곡만 아니라 전체)
+      let allSongs: any[] = []
+      let from = 0
+      const pageSize = 1000
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('songs')
+          .select('id, song_name, team_name')
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        if (!data || data.length === 0) break
+
+        allSongs = [...allSongs, ...data]
+        if (data.length < pageSize) break
+        from += pageSize
+      }
+
+      // 2. 정규화 필요한 곡만 필터링
+      const songsToUpdate = allSongs.filter(song => {
+        const nameNormalized = song.song_name?.normalize('NFC') || ''
+        const teamNormalized = song.team_name?.normalize('NFC') || ''
+        return song.song_name !== nameNormalized || song.team_name !== teamNormalized
+      })
+
+      setNormalizeProgress({ current: 0, total: songsToUpdate.length })
+
+      if (songsToUpdate.length === 0) {
+        alert('✅ 모든 곡이 이미 정규화되어 있습니다.')
+        setNormalizing(false)
+        return
+      }
+
+      // 3. 배치로 업데이트 (10개씩)
+      const batchSize = 10
+      let updated = 0
+
+      for (let i = 0; i < songsToUpdate.length; i += batchSize) {
+        const batch = songsToUpdate.slice(i, i + batchSize)
+
+        await Promise.all(batch.map(async (song) => {
+          const { error } = await supabase
+            .from('songs')
+            .update({
+              song_name: song.song_name?.normalize('NFC') || song.song_name,
+              team_name: song.team_name?.normalize('NFC') || song.team_name
+            })
+            .eq('id', song.id)
+
+          if (error) {
+            console.error(`Failed to update song ${song.id}:`, error)
+          }
+        }))
+
+        updated += batch.length
+        setNormalizeProgress({ current: updated, total: songsToUpdate.length })
+      }
+
+      alert(`✅ ${songsToUpdate.length}곡의 데이터가 정규화되었습니다!`)
+      fetchUserSongs() // 목록 새로고침
+    } catch (error: any) {
+      console.error('Normalization error:', error)
+      alert(`정규화 실패: ${error.message}`)
+    } finally {
+      setNormalizing(false)
+      setNormalizeProgress({ current: 0, total: 0 })
+    }
+  }
+
   const filterSongs = () => {
     let result = [...songs]
 
-    // 검색어 필터
+    // 검색어 필터 (유니코드 정규화 적용)
     if (searchText) {
-      result = result.filter(song =>
-        song.song_name.toLowerCase().includes(searchText.toLowerCase()) ||
-        song.team_name?.toLowerCase().includes(searchText.toLowerCase())
-      )
+      const normalizedSearch = searchText.normalize('NFC').toLowerCase()
+      result = result.filter(song => {
+        const normalizedName = (song.song_name || '').normalize('NFC').toLowerCase()
+        const normalizedTeam = (song.team_name || '').normalize('NFC').toLowerCase()
+        return normalizedName.includes(normalizedSearch) ||
+               normalizedTeam.includes(normalizedSearch)
+      })
     }
 
     // 공유 범위 필터
@@ -418,8 +504,8 @@ export default function UserSongsPage() {
 
         {/* 검색 및 필터 */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px] relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
@@ -439,6 +525,21 @@ export default function UserSongsPage() {
               <option value="teams">팀 공유</option>
               <option value="private">나만 보기</option>
             </select>
+
+            {/* 데이터 정규화 버튼 */}
+            <button
+              onClick={normalizeAllSongs}
+              disabled={normalizing}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex items-center gap-2 disabled:bg-orange-300 disabled:cursor-not-allowed"
+              title="검색 호환성 개선을 위해 모든 곡의 유니코드를 정규화합니다"
+            >
+              <RefreshCw size={18} className={normalizing ? 'animate-spin' : ''} />
+              {normalizing ? (
+                <span>정규화 중... ({normalizeProgress.current}/{normalizeProgress.total})</span>
+              ) : (
+                <span>데이터 정규화</span>
+              )}
+            </button>
           </div>
         </div>
 

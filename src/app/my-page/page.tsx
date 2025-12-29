@@ -744,8 +744,8 @@ setNewSong({ ...newSong, tempo: tempoValue })
     const { error: insertError } = await supabase
       .from('songs')
       .insert({
-        song_name: newSong.song_name.trim(),
-        team_name: newSong.team_name.trim() || null,
+        song_name: newSong.song_name.trim().normalize('NFC'),
+        team_name: newSong.team_name.trim().normalize('NFC') || null,
         key: newSong.key || null,
         time_signature: newSong.time_signature || null,
         tempo: newSong.tempo || null,
