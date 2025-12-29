@@ -153,17 +153,23 @@ export default function DrumScoreEditor({
     setDragSelection(null)
   }
 
-  // 8분 하이햇 기본 패턴 추가
+  // 8분 하이햇 기본 패턴 추가 (beam 연결)
   const addHiHatPattern = () => {
     if (!editingState) return
 
     const measureWidth = 100 / editingState.measureCount
     const newNotes: DrumNote[] = []
+    const startMargin = 5 // 마디 시작 여백
+    const endMargin = 5   // 마디 끝 여백
+    const usableWidth = measureWidth - startMargin - endMargin
 
     for (let m = 0; m < editingState.measureCount; m++) {
-      // 각 마디에 8분음표 8개
+      const beamGroup1 = `hh-beam-${Date.now()}-${m}-1`
+      const beamGroup2 = `hh-beam-${Date.now()}-${m}-2`
+
+      // 각 마디에 8분음표 8개 (4개씩 2그룹으로 beam 연결)
       for (let i = 0; i < 8; i++) {
-        const position = m * measureWidth + (i / 8) * measureWidth
+        const position = m * measureWidth + startMargin + (i / 7) * usableWidth
         // 이미 해당 위치에 하이햇이 있는지 확인
         const exists = editingState.notes.some(n =>
           n.part === 'HH' && Math.abs(n.position - position) < 1
@@ -173,7 +179,8 @@ export default function DrumScoreEditor({
             part: 'HH',
             position,
             duration: 8,
-            noteType: 'x'
+            noteType: 'x',
+            beamGroup: i < 4 ? beamGroup1 : beamGroup2  // 4개씩 beam 연결
           })
         }
       }
@@ -186,34 +193,36 @@ export default function DrumScoreEditor({
     }
   }
 
-  // 기본 킥+스네어 패턴 (4분음표 기준)
+  // 기본 킥+스네어 패턴 (4분음표 기준, 악보 크기에 맞춤)
   const addBasicPattern = () => {
     if (!editingState) return
 
     const measureWidth = 100 / editingState.measureCount
     const newNotes: DrumNote[] = []
+    const startMargin = 5 // 마디 시작 여백
+    const endMargin = 5   // 마디 끝 여백
+    const usableWidth = measureWidth - startMargin - endMargin
 
     for (let m = 0; m < editingState.measureCount; m++) {
-      // 킥: 1박, 3박
-      const kick1Pos = m * measureWidth + 0
-      const kick3Pos = m * measureWidth + measureWidth * 0.5
-      // 스네어: 2박, 4박
-      const snare2Pos = m * measureWidth + measureWidth * 0.25
-      const snare4Pos = m * measureWidth + measureWidth * 0.75
+      // 4분음표 4개 위치 (1박, 2박, 3박, 4박)
+      const beat1Pos = m * measureWidth + startMargin
+      const beat2Pos = m * measureWidth + startMargin + usableWidth * (2/7)  // 하이햇 패턴과 일치
+      const beat3Pos = m * measureWidth + startMargin + usableWidth * (4/7)
+      const beat4Pos = m * measureWidth + startMargin + usableWidth * (6/7)
 
-      // 킥 추가 (없으면)
-      if (!editingState.notes.some(n => n.part === 'KK' && Math.abs(n.position - kick1Pos) < 1)) {
-        newNotes.push({ part: 'KK', position: kick1Pos, duration: 4, noteType: 'normal' })
+      // 킥: 1박, 3박
+      if (!editingState.notes.some(n => n.part === 'KK' && Math.abs(n.position - beat1Pos) < 1)) {
+        newNotes.push({ part: 'KK', position: beat1Pos, duration: 4, noteType: 'normal' })
       }
-      if (!editingState.notes.some(n => n.part === 'KK' && Math.abs(n.position - kick3Pos) < 1)) {
-        newNotes.push({ part: 'KK', position: kick3Pos, duration: 4, noteType: 'normal' })
+      if (!editingState.notes.some(n => n.part === 'KK' && Math.abs(n.position - beat3Pos) < 1)) {
+        newNotes.push({ part: 'KK', position: beat3Pos, duration: 4, noteType: 'normal' })
       }
-      // 스네어 추가 (없으면)
-      if (!editingState.notes.some(n => n.part === 'SN' && Math.abs(n.position - snare2Pos) < 1)) {
-        newNotes.push({ part: 'SN', position: snare2Pos, duration: 4, noteType: 'normal' })
+      // 스네어: 2박, 4박
+      if (!editingState.notes.some(n => n.part === 'SN' && Math.abs(n.position - beat2Pos) < 1)) {
+        newNotes.push({ part: 'SN', position: beat2Pos, duration: 4, noteType: 'normal' })
       }
-      if (!editingState.notes.some(n => n.part === 'SN' && Math.abs(n.position - snare4Pos) < 1)) {
-        newNotes.push({ part: 'SN', position: snare4Pos, duration: 4, noteType: 'normal' })
+      if (!editingState.notes.some(n => n.part === 'SN' && Math.abs(n.position - beat4Pos) < 1)) {
+        newNotes.push({ part: 'SN', position: beat4Pos, duration: 4, noteType: 'normal' })
       }
     }
 
@@ -709,6 +718,42 @@ export default function DrumScoreEditor({
                                     strokeWidth="1.2"
                                   />
                                 )}
+
+                                {/* 8분음표 깃발 (beam 연결 안 된 경우만) */}
+                                {(note.duration || 8) >= 8 && (() => {
+                                  const stemUp = isCymbal || isHH || DRUM_STEM_UP[note.part]
+                                  const stemX = stemUp ? x + 5 : x - 5
+                                  const stemEndY = stemUp ? y - 25 : y + 25
+                                  return (
+                                    <path
+                                      d={stemUp
+                                        ? `M${stemX},${stemEndY} Q${stemX + 8},${stemEndY + 6} ${stemX + 3},${stemEndY + 12}`
+                                        : `M${stemX},${stemEndY} Q${stemX - 8},${stemEndY - 6} ${stemX - 3},${stemEndY - 12}`
+                                      }
+                                      stroke={strokeColor}
+                                      strokeWidth="1.5"
+                                      fill="none"
+                                    />
+                                  )
+                                })()}
+
+                                {/* 16분음표 두 번째 깃발 */}
+                                {(note.duration || 8) >= 16 && (() => {
+                                  const stemUp = isCymbal || isHH || DRUM_STEM_UP[note.part]
+                                  const stemX = stemUp ? x + 5 : x - 5
+                                  const stemEndY = stemUp ? y - 25 : y + 25
+                                  return (
+                                    <path
+                                      d={stemUp
+                                        ? `M${stemX},${stemEndY + 5} Q${stemX + 8},${stemEndY + 11} ${stemX + 3},${stemEndY + 17}`
+                                        : `M${stemX},${stemEndY - 5} Q${stemX - 8},${stemEndY - 11} ${stemX - 3},${stemEndY - 17}`
+                                      }
+                                      stroke={strokeColor}
+                                      strokeWidth="1.5"
+                                      fill="none"
+                                    />
+                                  )
+                                })()}
                               </>
                             )}
                           </g>

@@ -2634,7 +2634,11 @@ autoComplete="off"
                   공유 범위 <span className="text-red-500">*</span>
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    newSong.visibility === 'public'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
                     <input
                       type="radio"
                       name="visibility"
@@ -2642,45 +2646,60 @@ autoComplete="off"
                       checked={newSong.visibility === 'public'}
                       onChange={(e) => {
                         setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })
-                        // ✨ 경고문 추가
-                        //alert('⚠️ 전체 공개로 선택하시면 관리자 승인 후 공개됩니다.\n\n바로 사용하시려면 "팀 공유" 또는 "나만 보기"를 선택해주세요.')
                       }}
-                      className="mr-3"
+                      className="mr-3 accent-blue-500"
                     />
-                    <div>
-                      <div className="font-medium text-gray-900">전체 공개</div>
+                    <div className="flex-1">
+                      <div className={`font-medium ${newSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
                       <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
+                    {newSong.visibility === 'public' && (
+                      <span className="text-blue-500 text-xl">✓</span>
+                    )}
                   </label>
 
-                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    newSong.visibility === 'teams'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
                     <input
                       type="radio"
                       name="visibility"
                       value="teams"
                       checked={newSong.visibility === 'teams'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'teams' })}
-                      className="mr-3"
+                      className="mr-3 accent-blue-500"
                     />
-                    <div>
-                      <div className="font-medium text-gray-900">팀 공개</div>
+                    <div className="flex-1">
+                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-blue-700' : 'text-gray-900'}`}>팀 공개</div>
                       <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
+                    {newSong.visibility === 'teams' && (
+                      <span className="text-blue-500 text-xl">✓</span>
+                    )}
                   </label>
 
-                  <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    newSong.visibility === 'private'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
                     <input
                       type="radio"
                       name="visibility"
                       value="private"
                       checked={newSong.visibility === 'private'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'private', shared_with_teams: [] })}
-                      className="mr-3"
+                      className="mr-3 accent-blue-500"
                     />
-                    <div>
-                      <div className="font-medium text-gray-900">비공개</div>
+                    <div className="flex-1">
+                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-blue-700' : 'text-gray-900'}`}>비공개</div>
                       <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
+                    {newSong.visibility === 'private' && (
+                      <span className="text-blue-500 text-xl">✓</span>
+                    )}
                   </label>
                 </div>
 
