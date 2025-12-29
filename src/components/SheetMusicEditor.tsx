@@ -2744,9 +2744,9 @@ export default function SheetMusicEditor({
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`rounded-full border-2 ${
+                  className={`rounded-full border-2 aspect-square flex-shrink-0 ${
                     color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
-                  } ${isMobile ? 'w-6 h-6' : 'w-7 h-7'}`}
+                  } ${isMobile ? 'w-6 h-6 min-w-[24px]' : 'w-7 h-7 min-w-[28px]'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -3299,8 +3299,8 @@ export default function SheetMusicEditor({
                   <button
                     key={c.value}
                     onClick={() => setSongFormStyle(prev => ({ ...prev, color: c.value }))}
-                    className={`rounded-full border-2 ${
-                      isMobile ? 'w-9 h-9' : 'w-6 h-6'
+                    className={`rounded-full border-2 aspect-square flex-shrink-0 ${
+                      isMobile ? 'w-9 h-9 min-w-[36px]' : 'w-6 h-6 min-w-[24px]'
                     } ${
                       songFormStyle.color === c.value ? 'border-gray-800 scale-110' : 'border-gray-300'
                     }`}
