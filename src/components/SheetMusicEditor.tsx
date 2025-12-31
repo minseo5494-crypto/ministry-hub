@@ -129,6 +129,7 @@ interface EditorProps {
   // 다중 곡 모드 (콘티 필기용)
   songs?: EditorSong[]
   setlistTitle?: string
+  initialSongIndex?: number  // 초기 곡 인덱스 (다중 곡 모드에서 사용)
   onSaveAll?: (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] } }[]) => void
   // 보기/편집 모드 통합
   initialMode?: 'view' | 'edit'  // 초기 모드 (기본: edit)
@@ -267,6 +268,7 @@ export default function SheetMusicEditor({
   // 다중 곡 모드
   songs = [],
   setlistTitle,
+  initialSongIndex = 0,
   onSaveAll,
   // 보기/편집 모드
   initialMode = 'edit',
@@ -288,7 +290,7 @@ export default function SheetMusicEditor({
 
   // ===== 다중 곡 모드 지원 =====
   const isMultiSongMode = songs.length > 0
-  const [currentSongIndex, setCurrentSongIndex] = useState(0)
+  const [currentSongIndex, setCurrentSongIndex] = useState(initialSongIndex)
 
   // 다중 곡 모드에서의 현재 곡 정보
   const currentSong = isMultiSongMode ? songs[currentSongIndex] : null
@@ -1097,25 +1099,19 @@ export default function SheetMusicEditor({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
+      e.stopPropagation()
 
-      // 이전 드로잉 상태가 남아있으면 강제 정리 (연속 필기 시 끊김 방지)
-      if (isDrawingRef.current) {
-        isDrawingRef.current = false
-        currentStrokeRef.current = []
-        drawingToolRef.current = null
-        needsRenderRef.current = false
+      // 대기 중인 렌더링 취소 (이전 획 잔여 작업 정리)
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
       }
 
-      // 포인터 캡처 설정 - 연속 필기 시 끊김 방지
-      // 포인터가 캔버스 밖으로 나가도 계속 이벤트를 받을 수 있음
-      const target = e.currentTarget as HTMLElement
-      if (target && typeof target.setPointerCapture === 'function') {
-        try {
-          target.setPointerCapture(e.pointerId)
-        } catch (err) {
-          // 일부 브라우저에서 실패할 수 있음 - 무시
-        }
-      }
+      // 이전 드로잉 상태 강제 정리 (연속 필기 시 끊김 방지)
+      isDrawingRef.current = false
+      currentStrokeRef.current = []
+      drawingToolRef.current = null
+      needsRenderRef.current = false
 
       const pos = getPointerPosition(e)
       const pointerType = e.pointerType // 'pen', 'touch', 'mouse'
@@ -1455,10 +1451,10 @@ export default function SheetMusicEditor({
       }
     })
 
-    // 히스토리는 다음 프레임에 저장 (다음 획 시작을 막지 않도록)
-    requestAnimationFrame(() => {
+    // 히스토리는 나중에 저장 (다음 획 시작을 막지 않도록)
+    setTimeout(() => {
       saveToHistory()
-    })
+    }, 100)
   }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection, isDraggingText, saveToHistory])
 
   // ===== 텍스트 추가 =====
@@ -2371,6 +2367,259 @@ export default function SheetMusicEditor({
                     ctx.quadraticCurveTo(
                       offsetX + (stemX - 8) * scaleFactor, offsetY + (lowestY + stemLength - 11) * scaleFactor,
                       offsetX + (stemX - 3) * scaleFactor, offsetY + (lowestY + stemLength - 17) * scaleFactor
+                    )
+                  }
+                  ctx.stroke()
+                }
+              }
+            })
+          })
+
+          // 3.6. 드럼 악보 렌더링 (해당 페이지의 악보만)
+          const pageDrumScores = drumScores.filter(score => score.pageIndex === pageNum - 1)
+          pageDrumScores.forEach(score => {
+            const defaultWidth = 100
+            const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
+            const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0)
+            const scoreHeight = 85
+            const baseScaleFactor = baseHeight * 0.001
+            const userScale = score.scale || 1.0
+            const scaleFactor = baseScaleFactor * userScale
+
+            const scoreX = (score.x / 100) * baseWidth
+            const scoreY = (score.y / 100) * baseHeight
+
+            // 배경
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+            const bgWidth = scoreWidth * scaleFactor + 8
+            const bgHeight = scoreHeight * scaleFactor + 8
+            ctx.fillRect(scoreX - bgWidth / 2, scoreY - bgHeight / 2, bgWidth, bgHeight)
+
+            // 오프셋 계산 (중앙 정렬)
+            const offsetX = scoreX - (scoreWidth * scaleFactor) / 2
+            const offsetY = scoreY - (scoreHeight * scaleFactor) / 2
+
+            // 5선 (오선)
+            ctx.strokeStyle = '#333333'
+            ctx.lineWidth = 0.8 * scaleFactor
+            for (let i = 0; i < 5; i++) {
+              const lineY = offsetY + (22 + i * 10) * scaleFactor
+              ctx.beginPath()
+              ctx.moveTo(offsetX + 3 * scaleFactor, lineY)
+              ctx.lineTo(offsetX + (scoreWidth - 3) * scaleFactor, lineY)
+              ctx.stroke()
+            }
+
+            // 세로줄 (마디 구분)
+            ctx.beginPath()
+            ctx.moveTo(offsetX + 3 * scaleFactor, offsetY + 22 * scaleFactor)
+            ctx.lineTo(offsetX + 3 * scaleFactor, offsetY + 62 * scaleFactor)
+            ctx.stroke()
+
+            // 중간 마디선
+            if (score.measureCount > 1) {
+              let accumulatedWidth = 0
+              for (let i = 0; i < score.measureCount - 1; i++) {
+                accumulatedWidth += measureWidths[i] * 0.7
+                const barX = offsetX + accumulatedWidth * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(barX, offsetY + 22 * scaleFactor)
+                ctx.lineTo(barX, offsetY + 62 * scaleFactor)
+                ctx.stroke()
+              }
+            }
+
+            ctx.lineWidth = 1.5 * scaleFactor
+            ctx.beginPath()
+            ctx.moveTo(offsetX + (scoreWidth - 3) * scaleFactor, offsetY + 22 * scaleFactor)
+            ctx.lineTo(offsetX + (scoreWidth - 3) * scaleFactor, offsetY + 62 * scaleFactor)
+            ctx.stroke()
+
+            // 드럼 파트별 Y 위치
+            const DRUM_PART_Y: Record<string, number> = {
+              'CY': 7, 'RD': 12, 'HH': 17, 'TH': 22, 'TM': 37, 'SN': 42, 'TL': 47, 'KK': 67
+            }
+            const DRUM_STEM_UP: Record<string, boolean> = {
+              'CY': true, 'RD': true, 'HH': true, 'TH': true, 'TM': true, 'SN': true, 'TL': true, 'KK': false
+            }
+            const stemLength = 20
+
+            // Beam 그룹 처리
+            const beamGroups: { [key: string]: DrumNote[] } = {}
+            score.notes.forEach(note => {
+              if (note.beamGroup && ['HH', 'SN'].includes(note.part)) {
+                if (!beamGroups[note.beamGroup]) beamGroups[note.beamGroup] = []
+                beamGroups[note.beamGroup].push(note)
+              }
+            })
+
+            // Beam 렌더링
+            Object.values(beamGroups).forEach(notesInGroup => {
+              if (notesInGroup.length < 2) return
+              notesInGroup.sort((a, b) => a.position - b.position)
+
+              const firstNote = notesInGroup[0]
+              const lastNote = notesInGroup[notesInGroup.length - 1]
+              const allY = notesInGroup.map(n => DRUM_PART_Y[n.part] || 42)
+              const beamBaseY = Math.min(...allY) - 22
+
+              const firstX = (firstNote.position / 100) * scoreWidth
+              const lastX = (lastNote.position / 100) * scoreWidth
+
+              // 각 음표의 기둥
+              notesInGroup.forEach(note => {
+                const x = (note.position / 100) * scoreWidth
+                const y = DRUM_PART_Y[note.part] || 42
+                ctx.strokeStyle = '#000000'
+                ctx.lineWidth = 1 * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x + 4) * scaleFactor, offsetY + y * scaleFactor)
+                ctx.lineTo(offsetX + (x + 4) * scaleFactor, offsetY + beamBaseY * scaleFactor)
+                ctx.stroke()
+              })
+
+              const hasEighth = notesInGroup.some(n => (n.duration || 8) >= 8)
+              const hasSixteenth = notesInGroup.some(n => (n.duration || 8) >= 16)
+
+              ctx.strokeStyle = '#000000'
+              ctx.lineWidth = 3 * scaleFactor
+
+              if (hasEighth) {
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (firstX + 4) * scaleFactor, offsetY + beamBaseY * scaleFactor)
+                ctx.lineTo(offsetX + (lastX + 4) * scaleFactor, offsetY + beamBaseY * scaleFactor)
+                ctx.stroke()
+              }
+              if (hasSixteenth) {
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (firstX + 4) * scaleFactor, offsetY + (beamBaseY + 4) * scaleFactor)
+                ctx.lineTo(offsetX + (lastX + 4) * scaleFactor, offsetY + (beamBaseY + 4) * scaleFactor)
+                ctx.stroke()
+              }
+            })
+
+            // 각 드럼 음표 렌더링
+            score.notes.forEach(note => {
+              const x = (note.position / 100) * scoreWidth
+              const y = DRUM_PART_Y[note.part] || 42
+              const duration = note.duration || 8
+              const stemUp = DRUM_STEM_UP[note.part]
+              const isXType = ['HH', 'CY', 'RD'].includes(note.part)
+              const isBeamed = note.beamGroup && ['HH', 'SN'].includes(note.part)
+
+              // 보조선 (오선 밖 - 심벌류는 제외)
+              ctx.strokeStyle = '#333333'
+              ctx.lineWidth = 0.8 * scaleFactor
+              if (!isXType && y <= 17) {
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x - 6) * scaleFactor, offsetY + 12 * scaleFactor)
+                ctx.lineTo(offsetX + (x + 6) * scaleFactor, offsetY + 12 * scaleFactor)
+                ctx.stroke()
+              }
+              if (y >= 67) {
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x - 6) * scaleFactor, offsetY + 67 * scaleFactor)
+                ctx.lineTo(offsetX + (x + 6) * scaleFactor, offsetY + 67 * scaleFactor)
+                ctx.stroke()
+              }
+
+              // 음표 머리 렌더링
+              ctx.fillStyle = '#000000'
+              ctx.strokeStyle = '#000000'
+              ctx.lineWidth = 1.5 * scaleFactor
+
+              if (note.part === 'HH') {
+                // 하이햇: X
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x - 3.5) * scaleFactor, offsetY + (y - 3.5) * scaleFactor)
+                ctx.lineTo(offsetX + (x + 3.5) * scaleFactor, offsetY + (y + 3.5) * scaleFactor)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x + 3.5) * scaleFactor, offsetY + (y - 3.5) * scaleFactor)
+                ctx.lineTo(offsetX + (x - 3.5) * scaleFactor, offsetY + (y + 3.5) * scaleFactor)
+                ctx.stroke()
+              } else if (note.part === 'CY') {
+                // 심벌: X + 동그라미
+                ctx.beginPath()
+                ctx.arc(offsetX + x * scaleFactor, offsetY + y * scaleFactor, 5 * scaleFactor, 0, Math.PI * 2)
+                ctx.stroke()
+                ctx.lineWidth = 1.2 * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x - 3) * scaleFactor, offsetY + (y - 3) * scaleFactor)
+                ctx.lineTo(offsetX + (x + 3) * scaleFactor, offsetY + (y + 3) * scaleFactor)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x + 3) * scaleFactor, offsetY + (y - 3) * scaleFactor)
+                ctx.lineTo(offsetX + (x - 3) * scaleFactor, offsetY + (y + 3) * scaleFactor)
+                ctx.stroke()
+              } else if (note.part === 'RD') {
+                // 라이드: 다이아몬드 + X
+                ctx.lineWidth = 1.2 * scaleFactor
+                ctx.beginPath()
+                ctx.moveTo(offsetX + x * scaleFactor, offsetY + (y - 4) * scaleFactor)
+                ctx.lineTo(offsetX + (x + 4) * scaleFactor, offsetY + y * scaleFactor)
+                ctx.lineTo(offsetX + x * scaleFactor, offsetY + (y + 4) * scaleFactor)
+                ctx.lineTo(offsetX + (x - 4) * scaleFactor, offsetY + y * scaleFactor)
+                ctx.closePath()
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x - 2.5) * scaleFactor, offsetY + (y - 2.5) * scaleFactor)
+                ctx.lineTo(offsetX + (x + 2.5) * scaleFactor, offsetY + (y + 2.5) * scaleFactor)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(offsetX + (x + 2.5) * scaleFactor, offsetY + (y - 2.5) * scaleFactor)
+                ctx.lineTo(offsetX + (x - 2.5) * scaleFactor, offsetY + (y + 2.5) * scaleFactor)
+                ctx.stroke()
+              } else {
+                // 일반 음표 (채워진 타원)
+                ctx.beginPath()
+                ctx.ellipse(offsetX + x * scaleFactor, offsetY + y * scaleFactor, 4 * scaleFactor, 3 * scaleFactor, 0, 0, Math.PI * 2)
+                ctx.fill()
+              }
+
+              // 기둥 렌더링 (beam이 없는 경우만)
+              if (duration >= 4 && !isBeamed) {
+                ctx.strokeStyle = '#000000'
+                ctx.lineWidth = 1 * scaleFactor
+                const stemX = stemUp ? x + 4 : x - 4
+                const stemEndY = stemUp ? y - stemLength : y + stemLength
+                ctx.beginPath()
+                ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + y * scaleFactor)
+                ctx.lineTo(offsetX + stemX * scaleFactor, offsetY + stemEndY * scaleFactor)
+                ctx.stroke()
+
+                // 깃발 (8분음표 이상, beam 없을 때)
+                if (duration >= 8) {
+                  ctx.lineWidth = 1.5 * scaleFactor
+                  ctx.beginPath()
+                  if (stemUp) {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + stemEndY * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX + 8) * scaleFactor, offsetY + (stemEndY + 6) * scaleFactor,
+                      offsetX + (stemX + 3) * scaleFactor, offsetY + (stemEndY + 12) * scaleFactor
+                    )
+                  } else {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + stemEndY * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX - 8) * scaleFactor, offsetY + (stemEndY - 6) * scaleFactor,
+                      offsetX + (stemX - 3) * scaleFactor, offsetY + (stemEndY - 12) * scaleFactor
+                    )
+                  }
+                  ctx.stroke()
+                }
+                if (duration >= 16) {
+                  ctx.beginPath()
+                  if (stemUp) {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (stemEndY + 5) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX + 8) * scaleFactor, offsetY + (stemEndY + 11) * scaleFactor,
+                      offsetX + (stemX + 3) * scaleFactor, offsetY + (stemEndY + 17) * scaleFactor
+                    )
+                  } else {
+                    ctx.moveTo(offsetX + stemX * scaleFactor, offsetY + (stemEndY - 5) * scaleFactor)
+                    ctx.quadraticCurveTo(
+                      offsetX + (stemX - 8) * scaleFactor, offsetY + (stemEndY - 11) * scaleFactor,
+                      offsetX + (stemX - 3) * scaleFactor, offsetY + (stemEndY - 17) * scaleFactor
                     )
                   }
                   ctx.stroke()
@@ -3314,11 +3563,12 @@ export default function SheetMusicEditor({
           style={{
             transform: `scale(${scale}) translate(${offset.x}px, ${offset.y}px)`,
             transformOrigin: 'center center',
+            touchAction: 'none',
           }}
           className="relative"
         >
           {/* 내보내기용 영역 (캔버스 + 오버레이 포함) */}
-          <div ref={exportAreaRef} className="relative">
+          <div ref={exportAreaRef} className="relative" style={{ touchAction: 'none' }}>
           {/* PDF/이미지 캔버스 */}
           <canvas
             ref={pdfCanvasRef}

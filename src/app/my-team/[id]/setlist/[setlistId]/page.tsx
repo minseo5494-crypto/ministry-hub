@@ -34,6 +34,9 @@ import {
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
+import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
+import { usePersonalSetlistView } from '@/hooks/usePersonalSetlistView'
+import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
 import ImagePreviewModal from '@/components/ImagePreviewModal'
 
@@ -78,6 +81,10 @@ interface SortableSongItemProps {
   onOpenNoteModal: (song: SetlistSong) => void  // ✅ 추가
   isPreviewOpen: boolean
   totalSongs: number
+  // 개인화 관련 props
+  personalNote?: LocalSheetMusicNote  // 이 곡에 적용된 개인 필기 노트
+  userNotes?: LocalSheetMusicNote[]   // 이 곡에 대한 사용자의 모든 필기 노트
+  onSelectPersonalNote?: (songId: string, noteId: string | null) => void
 }
 
 function SortableSongItem({
@@ -94,6 +101,9 @@ function SortableSongItem({
   onOpenNoteModal,  // ✅ 추가
   isPreviewOpen,
   totalSongs,
+  personalNote,
+  userNotes,
+  onSelectPersonalNote,
 }: SortableSongItemProps) {
   // 🆕 여기서 useSortable 호출 (컴포넌트 최상위)
   const {
@@ -148,6 +158,34 @@ function SortableSongItem({
               <p className="text-sm text-purple-600 mb-2">
                 송폼: {song.selected_form.join(' - ')}
               </p>
+            )}
+            {/* 내 버전 선택 UI */}
+            {userNotes && userNotes.length > 0 && (
+              <div className="mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">내 버전:</span>
+                  <select
+                    value={personalNote?.id || ''}
+                    onChange={(e) => {
+                      const noteId = e.target.value || null
+                      onSelectPersonalNote?.(song.songs.id, noteId)
+                    }}
+                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                  >
+                    <option value="">원본 사용</option>
+                    {userNotes.map(note => (
+                      <option key={note.id} value={note.id}>
+                        {note.title || note.song_name} ({new Date(note.updated_at).toLocaleDateString()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {personalNote && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ 내 필기 노트 적용됨
+                  </p>
+                )}
+              </div>
             )}
             {/* 메모 표시 */}
             {song.notes ? (
@@ -362,20 +400,17 @@ export default function TeamSetlistDetailPage() {
   // PPT 다운로드 상태 (자체 PPT 생성 함수용)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
 
-  // 🎵 악보보기 모드 전용 상태 추가
-  const [showSheetViewer, setShowSheetViewer] = useState(false)
-  const [currentSheetSong, setCurrentSheetSong] = useState<Song | null>(null)
-  const [currentPDFPage, setCurrentPDFPage] = useState(1)
-  const [totalPDFPages, setTotalPDFPages] = useState(0)
-  const [pdfDoc, setPdfDoc] = useState<any>(null)
-  const [isLoadingPDF, setIsLoadingPDF] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  
-// 🔍 확대/축소 상태
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const MIN_ZOOM = 0.5
-  const MAX_ZOOM = 3
-  const ZOOM_STEP = 0.25
+  // 🎵 SheetMusicEditor 상태 (다중 곡 악보 뷰어)
+  const [showSheetMusicEditor, setShowSheetMusicEditor] = useState(false)
+  const [sheetEditorSongs, setSheetEditorSongs] = useState<{
+    song_id: string
+    song_name: string
+    team_name?: string
+    file_url: string
+    file_type: 'pdf' | 'image'
+    selected_form?: string[]
+  }[]>([])
+  const [startingSongIndex, setStartingSongIndex] = useState(0)
 
   // 🎵 유튜브 모달 상태 추가
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
@@ -448,6 +483,39 @@ const {
 // 모바일 감지
 const isMobile = useMobile()
 
+// 개인화 훅
+const { notes: userSheetNotes, fetchNotes: fetchUserNotes, saveNote: saveSheetNote } = useSheetMusicNotes()
+const {
+  personalView,
+  fetchPersonalView,
+  replaceSongWithNote,
+  removeCustomization
+} = usePersonalSetlistView()
+
+// 각 곡에 대한 사용자 노트 맵
+const [songNotesMap, setSongNotesMap] = useState<{ [songId: string]: LocalSheetMusicNote[] }>({})
+
+// 개인화된 곡 선택 핸들러
+const handleSelectPersonalNote = async (songId: string, noteId: string | null) => {
+  if (!user?.id || !setlistId) return
+
+  if (noteId) {
+    // 내 버전 선택
+    await replaceSongWithNote(user.id, setlistId, songId, noteId)
+  } else {
+    // 원본 선택 - 해당 곡의 커스터마이징 제거
+    // 현재 해당 곡에 적용된 노트 ID 찾기
+    const existingCustomization = personalView?.customizations.find(
+      c => c.type === 'replace' && c.originalSongId === songId
+    )
+    if (existingCustomization) {
+      await removeCustomization(user.id, setlistId, existingCustomization.noteId)
+    }
+  }
+  // 개인 뷰 다시 로드
+  await fetchPersonalView(user.id, setlistId)
+}
+
 useEffect(() => {
   checkUser()
 }, [])
@@ -455,8 +523,23 @@ useEffect(() => {
   useEffect(() => {
     if (user && teamId && setlistId) {
       fetchSetlistDetail()
+      // 개인 뷰와 필기 노트 로드
+      fetchPersonalView(user.id, setlistId)
+      fetchUserNotes(user.id)
     }
   }, [user, teamId, setlistId])
+
+  // 곡 목록이 로드되면 각 곡에 대한 필기 노트 맵 생성
+  useEffect(() => {
+    if (songs.length > 0 && userSheetNotes.length > 0) {
+      const map: { [songId: string]: LocalSheetMusicNote[] } = {}
+      songs.forEach(song => {
+        const songId = song.songs.id
+        map[songId] = userSheetNotes.filter(note => note.song_id === songId)
+      })
+      setSongNotesMap(map)
+    }
+  }, [songs, userSheetNotes])
 
   // ✅ 편집 권한 확인 (생성자 체크 추가)
 useEffect(() => {
@@ -1033,38 +1116,110 @@ const removeSongForm = (index: number) => {
 
   
 
-  // 🎵 악보보기 모드 열기
+  // 🎵 악보 뷰어 열기 (SheetMusicEditor 사용)
   const openSheetViewerForSong = (setlistSong: SetlistSong) => {
-    console.log('🎵 악보보기 모드 열기:', setlistSong.songs.song_name);
-    setCurrentSheetSong(setlistSong.songs);
-    setCurrentPDFPage(1);
-    setPdfDoc(null);
-    setZoomLevel(1);  // 🔍 줌 리셋 추가
-    setShowSheetViewer(true);
+    console.log('🎵 악보보기 모드 열기:', setlistSong.songs.song_name)
+
+    // 악보가 있는 곡만 필터링하고, 개인화된 노트가 있으면 적용
+    const songsWithSheets = songs
+      .filter(s => s.songs.file_url)
+      .map(s => {
+        // 개인화된 노트 확인
+        const customization = personalView?.customizations.find(
+          c => c.type === 'replace' && c.originalSongId === s.songs.id
+        )
+        const personalNote = customization
+          ? userSheetNotes.find(n => n.id === customization.noteId)
+          : undefined
+
+        if (personalNote) {
+          // 개인 노트로 대체
+          return {
+            song_id: personalNote.song_id,
+            song_name: personalNote.song_name,
+            team_name: personalNote.team_name,
+            file_url: personalNote.file_url,
+            file_type: (personalNote.file_type || 'image') as 'pdf' | 'image',
+            selected_form: s.selected_form,
+            annotations: personalNote.annotations,
+            songForms: personalNote.songForms,
+            songFormEnabled: personalNote.songFormEnabled,
+            songFormStyle: personalNote.songFormStyle,
+            partTags: personalNote.partTags,
+            pianoScores: personalNote.pianoScores,
+          }
+        }
+
+        // 원본 사용
+        return {
+          song_id: s.songs.id,
+          song_name: s.songs.song_name,
+          team_name: s.songs.team_name,
+          file_url: s.songs.file_url!,
+          file_type: (s.songs.file_type || 'image') as 'pdf' | 'image',
+          selected_form: s.selected_form,
+        }
+      })
+
+    // 클릭한 곡의 인덱스 찾기
+    const clickedIndex = songsWithSheets.findIndex(
+      s => s.song_id === setlistSong.songs.id ||
+           (personalView?.customizations.find(c => c.originalSongId === setlistSong.songs.id)?.noteId &&
+            userSheetNotes.find(n => n.id === personalView?.customizations.find(c => c.originalSongId === setlistSong.songs.id)?.noteId)?.song_id === s.song_id)
+    )
+
+    setSheetEditorSongs(songsWithSheets)
+    setStartingSongIndex(clickedIndex >= 0 ? clickedIndex : 0)
+    setShowSheetMusicEditor(true)
   }
 
-  // 🎵 악보보기 모드 닫기
-  const closeSheetViewer = () => {
-    setShowSheetViewer(false);
-    setCurrentSheetSong(null);
-    setPdfDoc(null);
-    setCurrentPDFPage(1);
-    setTotalPDFPages(0);
+  // 🎵 악보 뷰어 닫기
+  const closeSheetMusicEditor = () => {
+    if (sheetEditorSongs.length > 0) {
+      if (!confirm('필기 내용이 저장되지 않을 수 있습니다. 정말 닫으시겠습니까?')) {
+        return
+      }
+    }
+    setShowSheetMusicEditor(false)
+    setSheetEditorSongs([])
   }
 
-  // 🔍 확대
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
-  }
+  // 📝 악보 뷰어에서 저장 핸들러 (다중 곡 모드)
+  const handleSaveSheetNotes = async (dataList: Array<{
+    song: EditorSong
+    annotations: any[]
+    extra?: {
+      songFormEnabled: boolean
+      songFormStyle: any
+      partTags: any[]
+      pianoScores?: any[]
+      drumScores?: any[]
+    }
+  }>) => {
+    if (!user?.id) return
 
-  // 🔍 축소
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
-  }
+    for (const data of dataList) {
+      await saveSheetNote({
+        user_id: user.id,
+        song_id: data.song.song_id,
+        song_name: data.song.song_name,
+        team_name: data.song.team_name,
+        file_url: data.song.file_url,
+        file_type: data.song.file_type,
+        title: data.song.song_name,
+        annotations: data.annotations,
+        songForms: data.song.songForms,
+        songFormEnabled: data.extra?.songFormEnabled,
+        songFormStyle: data.extra?.songFormStyle,
+        partTags: data.extra?.partTags,
+        pianoScores: data.extra?.pianoScores,
+        drumScores: data.extra?.drumScores,
+      })
+    }
 
-  // 🔍 줌 리셋
-  const handleZoomReset = () => {
-    setZoomLevel(1);
+    alert('필기 노트가 저장되었습니다!')
+    // 필기 노트 다시 로드
+    fetchUserNotes(user.id)
   }
   // 📝 메모 모달 열기
 const openNoteModal = (song: SetlistSong) => {
@@ -1102,171 +1257,6 @@ const saveNote = async () => {
     setSavingNote(false)
   }
 }
-
-  // 🎵 다음/이전 곡으로 이동 (콘티 내의 곡들만)
-  const goToAdjacentSong = (direction: 'prev' | 'next') => {
-    if (!currentSheetSong) return;
-
-    const currentIndex = songs.findIndex(s => s.songs.id === currentSheetSong.id);
-    let targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
-
-    // 악보가 있는 곡 찾기
-    while (targetIndex >= 0 && targetIndex < songs.length) {
-      if (songs[targetIndex].songs.file_url) {
-        setCurrentSheetSong(songs[targetIndex].songs);
-        setCurrentPDFPage(1);
-        setPdfDoc(null);
-        console.log(`🎵 ${direction === 'prev' ? '이전' : '다음'} 곡으로 이동:`,
-          songs[targetIndex].songs.song_name);
-        break;
-      }
-      targetIndex = direction === 'prev' ? targetIndex - 1 : targetIndex + 1;
-    }
-  }
-
-  // 🎵 악보보기 모드 키보드 단축키
-  useEffect(() => {
-    if (!showSheetViewer) return;
-
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeSheetViewer();
-      } else if (e.key === 'ArrowLeft') {
-        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage > 1) {
-          setCurrentPDFPage(p => p - 1);
-        } else {
-          goToAdjacentSong('prev');
-        }
-      } else if (e.key === 'ArrowRight') {
-        if (currentSheetSong?.file_type === 'pdf' && currentPDFPage < totalPDFPages) {
-          setCurrentPDFPage(p => p + 1);
-        } else {
-          goToAdjacentSong('next');
-        }
-      } else if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        handleZoomIn();
-      } else if (e.key === '-') {
-        e.preventDefault();
-        handleZoomOut();
-      } else if (e.key === '0') {
-        e.preventDefault();
-        handleZoomReset();
-      }
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-          handleZoomIn();
-        } else {
-          handleZoomOut();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-      window.removeEventListener('wheel', handleWheel);
-    };
-  }, [showSheetViewer, currentSheetSong, currentPDFPage, totalPDFPages, zoomLevel]);
-
-  // 🎵 PDF 렌더링 useEffect
-  useEffect(() => {
-    if (!showSheetViewer || !currentSheetSong?.file_url || currentSheetSong.file_type !== 'pdf') return;
-
-    const loadPDF = async () => {
-      setIsLoadingPDF(true);
-      try {
-        // @ts-ignore
-        const pdfjsLib = window.pdfjsLib;
-        if (!pdfjsLib) {
-          console.error('PDF.js not loaded');
-          return;
-        }
-
-        const loadingTask = pdfjsLib.getDocument(currentSheetSong.file_url);
-        const pdf = await loadingTask.promise;
-        setPdfDoc(pdf);
-        setTotalPDFPages(pdf.numPages);
-      } catch (error) {
-        console.error('Error loading PDF:', error);
-      } finally {
-        setIsLoadingPDF(false);
-      }
-    };
-
-    loadPDF();
-  }, [showSheetViewer, currentSheetSong]);
-
-  // 📄 PDF 페이지 렌더링 - 고화질 + 확대/축소 지원
-  useEffect(() => {
-    if (!pdfDoc || !canvasRef.current) return;
-
-    let renderTask: any = null;
-    let isCancelled = false;
-
-    const renderPage = async () => {
-      console.log(`📄 페이지 ${currentPDFPage} 렌더링 시작 (zoom: ${zoomLevel * 100}%)`);
-
-      try {
-        const page = await pdfDoc.getPage(currentPDFPage);
-        
-        if (isCancelled) return;
-
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const context = canvas.getContext('2d');
-        if (!context) return;
-
-        const viewport = page.getViewport({ scale: 1 });
-        const baseScale = (window.innerHeight * 0.75) / viewport.height;
-        const finalScale = baseScale * zoomLevel;
-        const scaledViewport = page.getViewport({ scale: finalScale });
-
-        const pixelRatio = window.devicePixelRatio || 1;
-        
-        canvas.width = scaledViewport.width * pixelRatio;
-        canvas.height = scaledViewport.height * pixelRatio;
-        canvas.style.width = `${scaledViewport.width}px`;
-        canvas.style.height = `${scaledViewport.height}px`;
-
-        context.setTransform(1, 0, 0, 1, 0, 0);
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.scale(pixelRatio, pixelRatio);
-
-        const renderContext = {
-          canvasContext: context,
-          viewport: scaledViewport
-        };
-
-        renderTask = page.render(renderContext);
-        await renderTask.promise;
-        
-        console.log('✅ 페이지 렌더링 완료');
-      } catch (error: any) {
-        if (error?.name === 'RenderingCancelledException' || isCancelled) {
-          console.log('⏹️ 렌더링 취소됨');
-          return;
-        }
-        console.error('❌ 페이지 렌더링 실패:', error);
-      }
-    };
-
-    renderPage();
-
-    return () => {
-      isCancelled = true;
-      if (renderTask) {
-        renderTask.cancel();
-      }
-    };
-  }, [pdfDoc, currentPDFPage, zoomLevel]);
 
   if (loading) {
     return (
@@ -1355,23 +1345,6 @@ const saveNote = async () => {
                   <Youtube size={16} />
                   <span className="ml-1.5 hidden sm:inline">플레이리스트</span>
                 </button>
-
-                {/* 악보 뷰어 */}
-                {songs.some(s => s.songs.file_url) && (
-                  <button
-                    onClick={() => {
-                      const firstSongWithSheet = songs.find(s => s.songs.file_url)
-                      if (firstSongWithSheet) {
-                        openSheetViewerForSong(firstSongWithSheet)
-                      }
-                    }}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center text-sm whitespace-nowrap"
-                    title="악보 뷰어"
-                  >
-                    <Presentation size={16} />
-                    <span className="ml-1.5 hidden sm:inline">악보 뷰어</span>
-                  </button>
-                )}
 
                 {/* 악보 다운로드 */}
                 <button
@@ -1490,6 +1463,18 @@ const saveNote = async () => {
     onOpenNoteModal={openNoteModal}  // ✅ 추가
     isPreviewOpen={previewStates[song.id] || false}
     totalSongs={songs.length}
+    // 개인화 관련 props
+    userNotes={songNotesMap[song.songs.id] || []}
+    personalNote={
+      personalView?.customizations.find(
+        c => c.type === 'replace' && c.originalSongId === song.songs.id
+      )?.noteId
+        ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
+            c => c.type === 'replace' && c.originalSongId === song.songs.id
+          )?.noteId)
+        : undefined
+    }
+    onSelectPersonalNote={handleSelectPersonalNote}
   />
 ))}
       </div>
@@ -1761,193 +1746,19 @@ const saveNote = async () => {
     </div>
   </div>
 )}
-      
-      {/* 🎵 악보보기 모드 (전체화면) - 확대/축소 기능 추가 */}
-      {showSheetViewer && currentSheetSong && (
-        <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
-          {/* 상단 바 */}
-          <div className="bg-white text-gray-900 p-2 md:p-4 flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-              <span className="text-sm md:text-lg font-bold truncate">
-                {currentSheetSong.song_name}
-              </span>
-              {currentSheetSong.team_name && (
-                <span className="hidden md:inline text-sm text-gray-600">
-                  {currentSheetSong.team_name}
-                </span>
-              )}
-              {currentSheetSong.key && (
-                <span className="hidden md:inline text-sm text-gray-600">
-                  Key: {currentSheetSong.key}
-                </span>
-              )}
-            </div>
 
-            {/* 🔍 확대/축소 컨트롤 */}
-            <div className="flex items-center gap-1 md:gap-2 mr-2 md:mr-4">
-              <button
-                onClick={handleZoomOut}
-                disabled={zoomLevel <= MIN_ZOOM}
-                className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="축소 (-)"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                  <line x1="8" y1="11" x2="14" y2="11"/>
-                </svg>
-              </button>
-              
-              <button
-                onClick={handleZoomReset}
-                className="px-2 py-1 md:px-3 md:py-1.5 bg-gray-200 hover:bg-gray-300 rounded-lg text-xs md:text-sm font-medium min-w-[50px] md:min-w-[60px]"
-                title="100%로 리셋 (0)"
-              >
-                {Math.round(zoomLevel * 100)}%
-              </button>
-              
-              <button
-                onClick={handleZoomIn}
-                disabled={zoomLevel >= MAX_ZOOM}
-                className="p-1.5 md:p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="확대 (+)"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                  <line x1="11" y1="8" x2="11" y2="14"/>
-                  <line x1="8" y1="11" x2="14" y2="11"/>
-                </svg>
-              </button>
-            </div>
-
-            {/* 닫기 버튼 */}
-            <button
-              onClick={closeSheetViewer}
-              className="px-2 py-1 md:px-4 md:py-2 bg-[#E26559] hover:bg-[#D14E42] text-white rounded-lg transition-colors flex items-center gap-1 md:gap-2 flex-shrink-0"
-              title="닫기 (ESC)"
-            >
-              <X size={20} />
-              <span className="font-medium text-sm md:text-base">닫기</span>
-            </button>
-          </div>
-
-          {/* 악보 표시 영역 */}
-          <div className="flex-1 overflow-auto bg-gray-200 p-2 md:p-4">
-            <div className="min-h-full flex items-center justify-center">
-              {!currentSheetSong.file_url ? (
-                <div className="text-gray-500 text-center">
-                  <Music size={80} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-2xl">악보가 없습니다</p>
-                </div>
-              ) : currentSheetSong.file_type === 'pdf' ? (
-                <>
-                  {isLoadingPDF ? (
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                      <p className="text-gray-700">PDF 로딩 중...</p>
-                    </div>
-                  ) : (
-                    <canvas
-                      ref={canvasRef}
-                      className="shadow-2xl bg-white"
-                    />
-                  )}
-
-                  {/* PDF 페이지 네비게이션 버튼 */}
-                  {!isLoadingPDF && totalPDFPages > 1 && (
-                    <>
-                      {currentPDFPage > 1 && (
-                        <button
-                          onClick={() => setCurrentPDFPage(p => p - 1)}
-                          className="fixed left-2 md:left-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
-                        >
-                          <ChevronLeft size={32} />
-                        </button>
-                      )}
-
-                      {currentPDFPage < totalPDFPages && (
-                        <button
-                          onClick={() => setCurrentPDFPage(p => p + 1)}
-                          className="fixed right-2 md:right-8 top-1/2 -translate-y-1/2 bg-white hover:bg-gray-100 text-gray-700 p-2 md:p-4 rounded-full shadow-lg transition-all border border-gray-300 z-10"
-                        >
-                          <ChevronRight size={32} />
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {/* 페이지 번호 표시 */}
-                  {!isLoadingPDF && totalPDFPages > 0 && (
-                    <div className="fixed bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 bg-white text-gray-700 px-3 py-1 md:px-4 md:py-2 rounded-full shadow-lg border border-gray-300 text-sm md:text-base z-10">
-                      페이지 {currentPDFPage} / {totalPDFPages}
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* 🖼️ 이미지 표시 - 확대/축소 적용 */
-                <img
-                  src={currentSheetSong.file_url}
-                  alt={currentSheetSong.song_name}
-                  className="shadow-2xl bg-white transition-transform duration-200"
-                  style={{
-                    transform: `scale(${zoomLevel})`,
-                    transformOrigin: 'center center',
-                    maxWidth: zoomLevel <= 1 ? '95%' : 'none',
-                    maxHeight: zoomLevel <= 1 ? '85vh' : 'none',
-                  }}
-                  draggable={false}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* 하단 정보 바 */}
-          <div className="bg-white text-gray-900 p-2 md:p-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-300 shadow-md gap-2 md:gap-0">
-            {/* BPM, 박자 정보 */}
-            <div className="hidden md:flex gap-4 text-sm">
-              {currentSheetSong.bpm && (
-                <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-                  BPM: {currentSheetSong.bpm}
-                </span>
-              )}
-              {currentSheetSong.time_signature && (
-                <span className="px-3 py-1 bg-gray-200 text-gray-700 rounded">
-                  박자: {currentSheetSong.time_signature}
-                </span>
-              )}
-            </div>
-
-            {/* 곡 네비게이션 */}
-            <div className="flex items-center gap-2 md:gap-3">
-              <button
-                onClick={() => goToAdjacentSong('prev')}
-                className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
-              >
-                <ChevronLeft size={20} />
-                <span className="hidden md:inline">이전 곡</span>
-              </button>
-
-              {/* 현재 위치 */}
-              <span className="px-3 py-1 md:px-4 md:py-2 bg-[#C5D7F2] text-white rounded-lg font-bold text-sm md:text-base">
-                {songs.findIndex(s => s.songs.id === currentSheetSong?.id) + 1} / {songs.filter(s => s.songs.file_url).length}
-              </span>
-
-              <button
-                onClick={() => goToAdjacentSong('next')}
-                className="px-2 py-1 md:px-4 md:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium flex items-center gap-1 text-sm md:text-base"
-              >
-                <span className="hidden md:inline">다음 곡</span>
-                <ChevronRight size={20} />
-              </button>
-            </div>
-
-            {/* 모바일용 줌 힌트 */}
-            <div className="md:hidden text-xs text-gray-500">
-              + / - 키로 확대/축소
-            </div>
-          </div>
-        </div>
+      {/* 🎵 SheetMusicEditor - 다중 곡 악보 뷰어/편집기 */}
+      {showSheetMusicEditor && sheetEditorSongs.length > 0 && (
+        <SheetMusicEditor
+          fileUrl=""
+          fileType="image"
+          songName=""
+          songs={sheetEditorSongs}
+          initialSongIndex={startingSongIndex}
+          setlistTitle={setlist?.title}
+          onClose={closeSheetMusicEditor}
+          onSaveAll={handleSaveSheetNotes}
+        />
       )}
 
       {/* 다운로드 로딩 모달 */}

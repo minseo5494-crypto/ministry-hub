@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { PageAnnotation } from '@/lib/supabase'
+import { PageAnnotation, supabase } from '@/lib/supabase'
 
 // 로컬 스토리지 키
 const STORAGE_KEY = 'ministry_hub_sheet_music_notes'
@@ -31,8 +31,8 @@ export interface SavedPartTagStyle {
 export interface SavedPianoNote {
   pitch: string
   position: number
-  duration?: 1 | 2 | 4 | 8 | 16  // 음표 길이 (1=온음표, 2=2분음표, 4=4분음표, 8=8분음표, 16=16분음표)
-  beamGroup?: string  // 잇단음표 그룹 ID (같은 ID를 가진 음표끼리 연결)
+  duration?: 1 | 2 | 4 | 8 | 16
+  beamGroup?: string
 }
 
 export interface SavedPianoChord {
@@ -46,11 +46,29 @@ export interface SavedPianoScoreElement {
   y: number
   pageIndex: number
   measureCount: 1 | 2 | 3 | 4
-  measureWidths?: number[]  // 각 마디 너비 (없으면 균등 분배)
-  chordName?: string  // 호환성용, deprecated
-  chords?: SavedPianoChord[]  // 코드 배열 (마디당 최대 3개)
+  measureWidths?: number[]
+  chordName?: string
+  chords?: SavedPianoChord[]
   notes: SavedPianoNote[]
-  scale?: number  // 크기 조절 (0.5-2.0)
+  scale?: number
+}
+
+// 드럼 악보 타입
+export interface SavedDrumNote {
+  instrument: string
+  position: number
+  duration?: 1 | 2 | 4 | 8 | 16
+}
+
+export interface SavedDrumScoreElement {
+  id: string
+  x: number
+  y: number
+  pageIndex: number
+  measureCount: 1 | 2 | 3 | 4
+  measureWidths?: number[]
+  notes: SavedDrumNote[]
+  scale?: number
 }
 
 // 노트 타입 정의
@@ -58,9 +76,9 @@ export interface LocalSheetMusicNote {
   id: string
   user_id: string
   song_id: string
-  song_name: string  // 곡 이름 저장
-  team_name?: string // 아티스트 이름
-  file_url: string   // 원본 파일 URL
+  song_name: string
+  team_name?: string
+  file_url: string
   file_type: 'pdf' | 'image'
   title: string
   annotations: PageAnnotation[]
@@ -68,12 +86,13 @@ export interface LocalSheetMusicNote {
   created_at: string
   updated_at: string
   // 송폼 관련 필드
-  songForms?: string[]  // 송폼 배열 (예: ['I', 'V', 'C', 'B'])
+  songForms?: string[]
   songFormEnabled?: boolean
   songFormStyle?: SavedSongFormStyle
   partTags?: SavedPartTagStyle[]
-  // 피아노 악보 필드
+  // 피아노/드럼 악보 필드
   pianoScores?: SavedPianoScoreElement[]
+  drumScores?: SavedDrumScoreElement[]
 }
 
 interface UseSheetMusicNotesReturn {
@@ -85,10 +104,17 @@ interface UseSheetMusicNotesReturn {
   fetchNotes: (userId: string) => Promise<void>
   fetchNotesBySong: (userId: string, songId: string) => Promise<LocalSheetMusicNote[]>
   saveNote: (note: Omit<LocalSheetMusicNote, 'id' | 'created_at' | 'updated_at'>) => Promise<LocalSheetMusicNote | null>
-  updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[] }) => Promise<boolean>
+  updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[], drumScores?: SavedDrumScoreElement[] }) => Promise<boolean>
   updateNoteTitle: (id: string, title: string) => Promise<boolean>
   deleteNote: (id: string) => Promise<boolean>
   getNoteById: (id: string) => LocalSheetMusicNote | undefined
+
+  // 검색 기능 (새로 추가)
+  searchNotes: (userId: string, searchText: string) => Promise<LocalSheetMusicNote[]>
+
+  // Supabase 동기화
+  syncToSupabase: (userId: string) => Promise<void>
+  syncFromSupabase: (userId: string) => Promise<void>
 }
 
 // 로컬 스토리지에서 노트 가져오기
@@ -112,6 +138,48 @@ const setStoredNotes = (notes: LocalSheetMusicNote[]) => {
     console.error('로컬 스토리지 저장 오류:', e)
   }
 }
+
+// Supabase 데이터를 LocalSheetMusicNote 형식으로 변환
+const convertFromSupabase = (data: Record<string, unknown>): LocalSheetMusicNote => ({
+  id: data.id as string,
+  user_id: data.user_id as string,
+  song_id: data.song_id as string,
+  song_name: (data.song_name as string) || '',
+  team_name: data.team_name as string | undefined,
+  file_url: (data.file_url as string) || '',
+  file_type: (data.file_type as 'pdf' | 'image') || 'image',
+  title: (data.title as string) || '',
+  annotations: (data.annotations as PageAnnotation[]) || [],
+  thumbnail_url: data.thumbnail_url as string | undefined,
+  created_at: data.created_at as string,
+  updated_at: data.updated_at as string,
+  songForms: (data.song_forms as string[]) || undefined,
+  songFormEnabled: data.song_form_enabled as boolean | undefined,
+  songFormStyle: data.song_form_style as SavedSongFormStyle | undefined,
+  partTags: (data.part_tags as SavedPartTagStyle[]) || undefined,
+  pianoScores: (data.piano_scores as SavedPianoScoreElement[]) || undefined,
+  drumScores: (data.drum_scores as SavedDrumScoreElement[]) || undefined,
+})
+
+// LocalSheetMusicNote를 Supabase 형식으로 변환
+const convertToSupabase = (note: LocalSheetMusicNote) => ({
+  id: note.id,
+  user_id: note.user_id,
+  song_id: note.song_id,
+  song_name: note.song_name,
+  team_name: note.team_name,
+  file_url: note.file_url,
+  file_type: note.file_type,
+  title: note.title,
+  annotations: note.annotations,
+  thumbnail_url: note.thumbnail_url,
+  song_forms: note.songForms,
+  song_form_enabled: note.songFormEnabled,
+  song_form_style: note.songFormStyle,
+  part_tags: note.partTags,
+  piano_scores: note.pianoScores,
+  drum_scores: note.drumScores,
+})
 
 export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
   const [notes, setNotes] = useState<LocalSheetMusicNote[]>([])
@@ -185,26 +253,24 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
         updated_at: now,
       }
 
-      console.log('🟡 저장할 newNote:', {
-        id: newNote.id,
-        song_name: newNote.song_name,
-        annotationsLength: newNote.annotations?.length
-      })
-
+      // 로컬 스토리지에 저장
       const allNotes = getStoredNotes()
-      console.log('🟡 기존 노트 수:', allNotes.length)
-
       const updatedNotes = [newNote, ...allNotes]
       setStoredNotes(updatedNotes)
-      console.log('🟡 로컬 스토리지에 저장 완료, 총 노트 수:', updatedNotes.length)
 
-      // 현재 사용자의 노트만 상태에 반영
+      // 상태 업데이트
       const userNotes = updatedNotes
         .filter(n => n.user_id === noteData.user_id)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       setNotes(userNotes)
 
-      console.log('🟡 saveNote 성공, 반환할 newNote:', newNote)
+      // Supabase에도 저장 (비동기, 실패해도 로컬은 유지)
+      try {
+        await supabase.from('sheet_music_notes').upsert(convertToSupabase(newNote))
+      } catch (supabaseErr) {
+        console.warn('Supabase 저장 실패 (로컬은 저장됨):', supabaseErr)
+      }
+
       return newNote
     } catch (err) {
       console.error('❌ 노트 저장 오류:', err)
@@ -220,7 +286,13 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     id: string,
     annotations: PageAnnotation[],
     title?: string,
-    extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[] }
+    extra?: {
+      songFormEnabled?: boolean,
+      songFormStyle?: SavedSongFormStyle,
+      partTags?: SavedPartTagStyle[],
+      pianoScores?: SavedPianoScoreElement[],
+      drumScores?: SavedDrumScoreElement[]
+    }
   ): Promise<boolean> => {
     setLoading(true)
     setError(null)
@@ -242,15 +314,19 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
         ...(extra?.songFormStyle && { songFormStyle: extra.songFormStyle }),
         ...(extra?.partTags && { partTags: extra.partTags }),
         ...(extra?.pianoScores && { pianoScores: extra.pianoScores }),
+        ...(extra?.drumScores && { drumScores: extra.drumScores }),
         updated_at: now,
       }
 
       setStoredNotes(allNotes)
+      setNotes(prev => prev.map(n => n.id === id ? allNotes[noteIndex] : n))
 
-      // 상태 업데이트
-      setNotes(prev =>
-        prev.map(n => n.id === id ? allNotes[noteIndex] : n)
-      )
+      // Supabase에도 업데이트
+      try {
+        await supabase.from('sheet_music_notes').upsert(convertToSupabase(allNotes[noteIndex]))
+      } catch (supabaseErr) {
+        console.warn('Supabase 업데이트 실패 (로컬은 저장됨):', supabaseErr)
+      }
 
       return true
     } catch (err) {
@@ -283,11 +359,16 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
       }
 
       setStoredNotes(allNotes)
+      setNotes(prev => prev.map(n => n.id === id ? allNotes[noteIndex] : n))
 
-      // 상태 업데이트
-      setNotes(prev =>
-        prev.map(n => n.id === id ? allNotes[noteIndex] : n)
-      )
+      // Supabase에도 업데이트
+      try {
+        await supabase.from('sheet_music_notes')
+          .update({ title, updated_at: now })
+          .eq('id', id)
+      } catch (supabaseErr) {
+        console.warn('Supabase 업데이트 실패:', supabaseErr)
+      }
 
       return true
     } catch (err) {
@@ -310,11 +391,115 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
       setStoredNotes(updatedNotes)
 
       setNotes(prev => prev.filter(n => n.id !== id))
+
+      // Supabase에서도 삭제
+      try {
+        await supabase.from('sheet_music_notes').delete().eq('id', id)
+      } catch (supabaseErr) {
+        console.warn('Supabase 삭제 실패:', supabaseErr)
+      }
+
       return true
     } catch (err) {
       console.error('노트 삭제 오류:', err)
       setError('노트 삭제에 실패했습니다.')
       return false
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // 검색 기능 (새로 추가)
+  const searchNotes = useCallback(async (userId: string, searchText: string): Promise<LocalSheetMusicNote[]> => {
+    try {
+      const allNotes = getStoredNotes()
+      const normalizedSearch = searchText.toLowerCase().replace(/\s+/g, '')
+
+      return allNotes
+        .filter(note => {
+          if (note.user_id !== userId) return false
+
+          const normalizedSongName = (note.song_name || '').toLowerCase().replace(/\s+/g, '')
+          const normalizedTeamName = (note.team_name || '').toLowerCase().replace(/\s+/g, '')
+          const normalizedTitle = (note.title || '').toLowerCase().replace(/\s+/g, '')
+
+          return normalizedSongName.includes(normalizedSearch) ||
+                 normalizedTeamName.includes(normalizedSearch) ||
+                 normalizedTitle.includes(normalizedSearch)
+        })
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    } catch (err) {
+      console.error('노트 검색 오류:', err)
+      return []
+    }
+  }, [])
+
+  // Supabase로 동기화 (로컬 → Supabase)
+  const syncToSupabase = useCallback(async (userId: string) => {
+    setLoading(true)
+    try {
+      const allNotes = getStoredNotes()
+      const userNotes = allNotes.filter(n => n.user_id === userId)
+
+      for (const note of userNotes) {
+        await supabase.from('sheet_music_notes').upsert(convertToSupabase(note))
+      }
+
+      console.log(`✅ ${userNotes.length}개 노트를 Supabase에 동기화했습니다.`)
+    } catch (err) {
+      console.error('Supabase 동기화 오류:', err)
+      setError('Supabase 동기화에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Supabase에서 동기화 (Supabase → 로컬)
+  const syncFromSupabase = useCallback(async (userId: string) => {
+    setLoading(true)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('sheet_music_notes')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+
+      if (fetchError) throw fetchError
+
+      if (data && data.length > 0) {
+        const supabaseNotes = data.map(convertFromSupabase)
+
+        // 로컬 노트와 병합 (Supabase가 더 최신이면 덮어쓰기)
+        const localNotes = getStoredNotes()
+        const otherUserNotes = localNotes.filter(n => n.user_id !== userId)
+
+        const mergedNotes = [...otherUserNotes]
+
+        for (const supabaseNote of supabaseNotes) {
+          const localNote = localNotes.find(n => n.id === supabaseNote.id)
+
+          if (!localNote || new Date(supabaseNote.updated_at) > new Date(localNote.updated_at)) {
+            mergedNotes.push(supabaseNote)
+          } else {
+            mergedNotes.push(localNote)
+          }
+        }
+
+        // 로컬에만 있는 노트도 유지
+        for (const localNote of localNotes.filter(n => n.user_id === userId)) {
+          if (!supabaseNotes.find(s => s.id === localNote.id)) {
+            mergedNotes.push(localNote)
+          }
+        }
+
+        setStoredNotes(mergedNotes)
+        setNotes(mergedNotes.filter(n => n.user_id === userId))
+
+        console.log(`✅ Supabase에서 ${supabaseNotes.length}개 노트를 동기화했습니다.`)
+      }
+    } catch (err) {
+      console.error('Supabase에서 동기화 오류:', err)
+      setError('Supabase에서 동기화에 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -331,5 +516,8 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     updateNoteTitle,
     deleteNote,
     getNoteById,
+    searchNotes,
+    syncToSupabase,
+    syncFromSupabase,
   }
 }

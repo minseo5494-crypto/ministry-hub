@@ -26,6 +26,7 @@ import ImagePreviewModal from '@/components/ImagePreviewModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
+import AnnotatedPreview from '@/components/AnnotatedPreview'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
@@ -65,6 +66,10 @@ const [songs, setSongs] = useState<Song[]>([])
 const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
 const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
 const [loading, setLoading] = useState(true)
+
+// 📝 내 필기 노트 검색 결과
+const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])  // 검색어에 매칭되는 내 노트
+const [notePreviewStates, setNotePreviewStates] = useState<{ [noteId: string]: boolean }>({})  // 노트 미리보기 상태
 
 // 🎵 좋아요 관련 상태
 const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
@@ -136,7 +141,8 @@ const {
   // 📝 필기 에디터 상태
   const [showNoteEditor, setShowNoteEditor] = useState(false)
   const [editingSong, setEditingSong] = useState<Song | null>(null)
-  const { saveNote } = useSheetMusicNotes()
+  const [editingNote, setEditingNote] = useState<typeof mySheetNotes[0] | null>(null)  // 내 필기 노트 편집용
+  const { saveNote, notes: mySheetNotes, fetchNotes: fetchMyNotes, searchNotes } = useSheetMusicNotes()
 
   // 📝 다중 곡 악보 뷰어 상태
   const [multiSongEditorSongs, setMultiSongEditorSongs] = useState<{
@@ -216,6 +222,7 @@ const {
     searchText: string;
     bpmMin: string;
     bpmMax: string;
+    includeMyNotes: boolean;  // 내 필기 노트 검색 포함
   }>({
     season: '전체',
     themes: [] as string[],
@@ -227,7 +234,8 @@ const {
     searchText: '',
     // 👇 BPM 필터 추가
     bpmMin: '',
-    bpmMax: ''
+    bpmMax: '',
+    includeMyNotes: false,  // 기본값: 미포함
   })
 
   const songListRef = useRef<HTMLDivElement>(null)
@@ -331,6 +339,13 @@ useEffect(() => {
       fetchSongs()
     }
   }, [user, userTeams])
+
+  // 📝 내 필기 노트 로드
+  useEffect(() => {
+    if (user?.id) {
+      fetchMyNotes(user.id)
+    }
+  }, [user?.id])
 
   // 키보드 이벤트 핸들러
   useEffect(() => {
@@ -1093,6 +1108,25 @@ if (newSong.visibility === 'public') {
                song.song_name.toLowerCase().includes(searchLower) ||
                song.team_name?.toLowerCase().includes(searchLower)
       })
+
+      // 📝 내 필기 노트 검색 (필터가 켜져 있을 때만)
+      if (filters.includeMyNotes && mySheetNotes.length > 0) {
+        const searchLower = filters.searchText.toLowerCase()
+        const matchedNotes = mySheetNotes.filter(note => {
+          const normalizedNoteName = normalizeText(note.song_name)
+          const normalizedNoteTeam = normalizeText(note.team_name || '')
+          return normalizedNoteName.includes(normalizedSearch) ||
+                 normalizedNoteTeam.includes(normalizedSearch) ||
+                 note.song_name.toLowerCase().includes(searchLower) ||
+                 note.team_name?.toLowerCase().includes(searchLower) ||
+                 note.title?.toLowerCase().includes(searchLower)
+        })
+        setMatchingNotes(matchedNotes)
+      } else {
+        setMatchingNotes([])
+      }
+    } else {
+      setMatchingNotes([])
     }
 
     // 절기 필터
@@ -1209,7 +1243,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy, showUserUploaded])
+  }, [songs, filters, user, sortBy, showUserUploaded, mySheetNotes])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1287,6 +1321,7 @@ const hasMore = displayCount < filteredSongs.length
     } else {
       // 단일 곡 모드
       setEditingSong(clickedSong)
+      setEditingNote(null)  // 일반 곡 클릭 시 기존 노트 정보 초기화
       setShowNoteEditor(true)
     }
   }
@@ -1368,7 +1403,8 @@ const hasMore = displayCount < filteredSongs.length
       tempo: '',
       searchText: filters.searchText,  // 검색어는 유지
       bpmMin: '',
-      bpmMax: ''
+      bpmMax: '',
+      includeMyNotes: filters.includeMyNotes,  // 필기 노트 포함 필터도 유지
     })
   }
 
@@ -1880,6 +1916,7 @@ const hasMore = displayCount < filteredSongs.length
                 style={{ backgroundColor: 'white' }}
               />
             </div>
+
           </div>
 
 
@@ -2053,6 +2090,27 @@ const hasMore = displayCount < filteredSongs.length
           <option value="likes">좋아요순</option>
           <option value="name">이름순</option>
         </select>
+
+        {/* 📝 내 필기 노트 포함 토글 */}
+        {user && mySheetNotes.length > 0 && (
+          <button
+            onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
+            className={`flex items-center gap-1 p-1.5 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
+              filters.includeMyNotes
+                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={filters.includeMyNotes ? '내 필기 노트 포함됨' : '내 필기 노트 미포함'}
+          >
+            <Pencil size={14} className="flex-shrink-0" />
+            <span className="hidden md:inline">
+              {filters.includeMyNotes ? '내 필기' : '내 필기'}
+            </span>
+            {filters.includeMyNotes && (
+              <span className="hidden md:inline text-purple-500">✓</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* 오른쪽: 공식/전체 토글 + 뷰 모드 */}
@@ -2093,6 +2151,94 @@ const hasMore = displayCount < filteredSongs.length
     </div>
   </div>
 
+  {/* 📝 내 필기 노트 검색 결과 */}
+  {matchingNotes.length > 0 && filters.includeMyNotes && (
+    <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow-md mb-4 border border-purple-200">
+      <div className="p-4 border-b border-purple-200 bg-purple-100/50">
+        <h3 className="text-sm font-bold text-purple-800 flex items-center gap-2">
+          <Pencil size={16} />
+          내 필기 노트 검색 결과 ({matchingNotes.length}개)
+        </h3>
+        <p className="text-xs text-purple-600 mt-1">내가 수정하고 필기한 악보들입니다.</p>
+      </div>
+      <div className="divide-y divide-purple-100">
+        {matchingNotes.map(note => (
+          <div key={note.id} className="hover:bg-purple-50/50 transition">
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-gray-900">{note.song_name}</h4>
+                    <span className="px-2 py-0.5 bg-purple-200 text-purple-700 text-xs rounded-full">
+                      내 필기
+                    </span>
+                  </div>
+                  {note.team_name && (
+                    <p className="text-sm text-gray-600">{note.team_name}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    마지막 수정: {new Date(note.updated_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {note.file_type === 'pdf' && (
+                    <span className="px-2 py-1 bg-red-100 text-red-600 text-xs rounded">PDF</span>
+                  )}
+                  {/* 미리보기 버튼 */}
+                  <button
+                    onClick={() => setNotePreviewStates(prev => ({
+                      ...prev,
+                      [note.id]: !prev[note.id]
+                    }))}
+                    className={`p-1.5 rounded transition ${
+                      notePreviewStates[note.id]
+                        ? 'bg-purple-100 text-purple-600'
+                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                    }`}
+                    title="미리보기"
+                  >
+                    {notePreviewStates[note.id] ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                  {/* 악보 뷰어/편집 버튼 */}
+                  <button
+                    onClick={() => {
+                      setEditingSong({
+                        id: note.song_id,
+                        song_name: note.song_name,
+                        team_name: note.team_name,
+                        file_url: note.file_url,
+                        file_type: note.file_type,
+                      } as Song)
+                      setEditingNote(note)
+                      setShowNoteEditor(true)
+                    }}
+                    className="p-1.5 text-purple-600 hover:bg-purple-100 rounded transition"
+                    title="악보 뷰어에서 열기"
+                  >
+                    <Presentation size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* 미리보기 영역 (필기 포함) */}
+            {notePreviewStates[note.id] && note.file_url && (
+              <div className="px-4 pb-4">
+                <div className="bg-white rounded-lg border border-purple-200 overflow-hidden">
+                  <AnnotatedPreview
+                    fileUrl={note.file_url}
+                    fileType={note.file_type === 'pdf' ? 'pdf' : 'image'}
+                    annotations={note.annotations || []}
+                    maxHeight={1000}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+
   {/* 곡 목록 */}
   <div className="bg-white rounded-lg shadow-md">
     {loading ? (
@@ -2100,10 +2246,15 @@ const hasMore = displayCount < filteredSongs.length
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         <p className="mt-4 text-gray-600">불러오는 중...</p>
       </div>
-    ) : filteredSongs.length === 0 ? (
+    ) : filteredSongs.length === 0 && matchingNotes.length === 0 ? (
       <div className="text-center py-12 text-gray-500">
         <Music size={48} className="mx-auto mb-4 text-gray-300" />
         <p>검색 결과가 없습니다.</p>
+      </div>
+    ) : filteredSongs.length === 0 ? (
+      <div className="text-center py-8 text-gray-500">
+        <Music size={32} className="mx-auto mb-2 text-gray-300" />
+        <p className="text-sm">곡 검색 결과가 없습니다. (내 필기 노트만 검색됨)</p>
       </div>
     ) : viewMode === 'grid' ? (
   
@@ -2154,6 +2305,7 @@ const hasMore = displayCount < filteredSongs.length
                   onClick={(e) => {
                     e.stopPropagation()
                     setEditingSong(song)
+                    setEditingNote(null)  // 일반 곡 클릭 시 기존 노트 정보 초기화
                     setShowNoteEditor(true)
                   }}
                   className="p-1 text-gray-700 hover:bg-gray-100 rounded"
@@ -3396,7 +3548,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     fileUrl={editingSong.file_url}
     fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
     songName={editingSong.song_name}
-    songForms={songForms[editingSong.id]}
+    songForms={editingNote?.songForms || songForms[editingSong.id]}
+    initialAnnotations={editingNote?.annotations || []}
+    initialSongFormEnabled={editingNote?.songFormEnabled || false}
+    initialSongFormStyle={editingNote?.songFormStyle}
+    initialPartTags={editingNote?.partTags || []}
+    initialPianoScores={editingNote?.pianoScores || []}
+    initialDrumScores={editingNote?.drumScores || []}
     initialMode="view"
     onSave={async (annotations, extra) => {
       console.log('🟢 메인페이지 onSave 호출됨:', {
@@ -3427,9 +3585,12 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
       })
       console.log('📝 saveNote 결과:', result)
       if (result) {
-        alert('필기가 my-page에 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.')
+        alert('필기가 저장되었습니다!')
+        // 필기 노트 목록 새로고침
+        if (user?.id) fetchMyNotes(user.id)
         setShowNoteEditor(false)
         setEditingSong(null)
+        setEditingNote(null)
       } else {
         console.error('❌ saveNote 실패')
         alert('저장에 실패했습니다.')
@@ -3438,6 +3599,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     onClose={() => {
       setShowNoteEditor(false)
       setEditingSong(null)
+      setEditingNote(null)
     }}
   />
 )}
