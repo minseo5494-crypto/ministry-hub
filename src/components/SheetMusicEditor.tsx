@@ -1098,6 +1098,14 @@ export default function SheetMusicEditor({
     (e: React.PointerEvent) => {
       e.preventDefault()
 
+      // 이전 드로잉 상태가 남아있으면 강제 정리 (연속 필기 시 끊김 방지)
+      if (isDrawingRef.current) {
+        isDrawingRef.current = false
+        currentStrokeRef.current = []
+        drawingToolRef.current = null
+        needsRenderRef.current = false
+      }
+
       // 포인터 캡처 설정 - 연속 필기 시 끊김 방지
       // 포인터가 캔버스 밖으로 나가도 계속 이벤트를 받을 수 있음
       const target = e.currentTarget as HTMLElement
@@ -1316,18 +1324,20 @@ export default function SheetMusicEditor({
     [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
   )
 
-  const handlePointerUp = useCallback((e?: React.PointerEvent) => {
-    // 포인터 캡처 해제
-    if (e) {
-      const target = e.currentTarget as HTMLElement
-      if (target && typeof target.releasePointerCapture === 'function') {
-        try {
-          target.releasePointerCapture(e.pointerId)
-        } catch (err) {
-          // 무시
-        }
-      }
-    }
+  // ===== 히스토리 관리 (handlePointerUp보다 먼저 정의) =====
+  const saveToHistory = useCallback(() => {
+    setHistory((prev) => {
+      const newHistory = prev.slice(0, historyIndex + 1)
+      newHistory.push([...annotations])
+      return newHistory
+    })
+    setHistoryIndex((prev) => prev + 1)
+  }, [annotations, historyIndex])
+
+  const handlePointerUp = useCallback((_e?: React.PointerEvent) => {
+    // 포인터 캡처는 브라우저가 자동으로 해제함 - 명시적 해제 제거
+    // (명시적 해제가 다음 pointerdown을 방해할 수 있음)
+    void _e // unused
 
     // 손가락 터치 팬 모드 종료 (도구에 관계없이)
     if (isPanningRef.current) {
@@ -1387,25 +1397,43 @@ export default function SheetMusicEditor({
       return
     }
 
-    // ref를 사용해서 동기적으로 체크
-    if (!isDrawingRef.current || currentStrokeRef.current.length === 0) {
-      isDrawingRef.current = false
-      currentStrokeRef.current = []
+    // ref를 사용해서 동기적으로 체크 - 먼저 데이터 복사!
+    const wasDrawing = isDrawingRef.current
+    const strokePoints = [...currentStrokeRef.current] // 먼저 복사
+    const savedTool = usedTool
+
+    // refs 즉시 리셋 (동기적) - 다음 획 시작을 위해 가장 먼저!
+    isDrawingRef.current = false
+    currentStrokeRef.current = []
+    drawingToolRef.current = null
+    needsRenderRef.current = false
+
+    // 대기 중인 렌더링 취소
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+
+    // 드로잉이 없었거나 포인트가 없으면 여기서 종료
+    if (!wasDrawing || strokePoints.length === 0) {
       setIsDrawing(false)
       setCurrentStroke([])
-      drawingToolRef.current = null
       return
     }
 
     // 스트로크 저장 - 드로잉 시작 시점의 도구 사용
     const newStroke: Stroke = {
       id: `stroke-${Date.now()}`,
-      tool: usedTool === 'highlighter' ? 'highlighter' : 'pen',
+      tool: savedTool === 'highlighter' ? 'highlighter' : 'pen',
       color,
       size: strokeSize,
-      opacity: usedTool === 'highlighter' ? 0.4 : 1,
-      points: currentStrokeRef.current, // ref 사용
+      opacity: savedTool === 'highlighter' ? 0.4 : 1,
+      points: strokePoints, // 복사된 데이터 사용
     }
+
+    // state 업데이트 (비동기)
+    setCurrentStroke([])
+    setIsDrawing(false)
 
     setAnnotations((prev) => {
       const existing = prev.find((a) => a.pageNumber === currentPage)
@@ -1427,25 +1455,11 @@ export default function SheetMusicEditor({
       }
     })
 
-    // 대기 중인 렌더링 취소
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current)
-      rafIdRef.current = null
-    }
-    needsRenderRef.current = false
-
-    // refs 먼저 리셋 (동기적)
-    isDrawingRef.current = false
-    currentStrokeRef.current = []
-    drawingToolRef.current = null
-
-    // state도 업데이트 (비동기)
-    setCurrentStroke([])
-    setIsDrawing(false)
-
-    // 히스토리에 추가
-    saveToHistory()
-  }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection, isDraggingText])
+    // 히스토리는 다음 프레임에 저장 (다음 획 시작을 막지 않도록)
+    requestAnimationFrame(() => {
+      saveToHistory()
+    })
+  }, [tool, color, strokeSize, currentPage, isMovingSelection, finishLassoSelection, isDraggingText, saveToHistory])
 
   // ===== 텍스트 추가 =====
   const addTextElement = useCallback(() => {
@@ -1486,7 +1500,7 @@ export default function SheetMusicEditor({
     setTextInput('')
     setIsAddingText(false)
     saveToHistory()
-  }, [textInput, textPosition, color, currentPage])
+  }, [textInput, textPosition, color, currentPage, saveToHistory])
 
   const handleTextDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!isDraggingText || !selectedTextId || !textDragStartRef.current) return
@@ -1517,7 +1531,7 @@ export default function SheetMusicEditor({
       textDragStartRef.current = null
       saveToHistory()
     }
-  }, [isDraggingText])
+  }, [isDraggingText, saveToHistory])
 
   // 편집 완료 시 텍스트 업데이트
   const updateTextElement = useCallback(() => {
@@ -1541,17 +1555,7 @@ export default function SheetMusicEditor({
     setEditingTextId(null)
     setTextInput('')
     saveToHistory()
-  }, [editingTextId, textInput, currentPage])
-
-  // ===== 히스토리 관리 =====
-  const saveToHistory = useCallback(() => {
-    setHistory((prev) => {
-      const newHistory = prev.slice(0, historyIndex + 1)
-      newHistory.push([...annotations])
-      return newHistory
-    })
-    setHistoryIndex((prev) => prev + 1)
-  }, [annotations, historyIndex])
+  }, [editingTextId, textInput, currentPage, saveToHistory])
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
@@ -2382,8 +2386,8 @@ export default function SheetMusicEditor({
               if (stroke.points.length < 2) return
 
               const strokeOutline = getStroke(stroke.points, {
-                size: stroke.size,
-                thinning: 0.5,
+                size: stroke.size * (stroke.tool === 'highlighter' ? 8 : 1),
+                thinning: stroke.tool === 'highlighter' ? 0 : 0.5,
                 smoothing: 0.5,
                 streamline: 0.5,
               })
