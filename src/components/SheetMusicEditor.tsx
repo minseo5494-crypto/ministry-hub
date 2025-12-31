@@ -142,7 +142,7 @@ interface LassoSelection {
   selectedTextIds: string[]
 }
 
-// 색상 프리셋
+// 색상 프리셋 (확장됨)
 const COLORS = [
   '#000000', // 검정
   '#FF0000', // 빨강
@@ -150,6 +150,10 @@ const COLORS = [
   '#00AA00', // 초록
   '#FF6600', // 주황
   '#9900FF', // 보라
+  '#666666', // 회색
+  '#8B4513', // 갈색
+  '#FF1493', // 핫핑크
+  '#00CED1', // 다크터콰이즈
 ]
 
 const HIGHLIGHTER_COLORS = [
@@ -158,6 +162,9 @@ const HIGHLIGHTER_COLORS = [
   '#00FFFF', // 하늘
   '#FF00FF', // 분홍
   '#FFA500', // 주황
+  '#90EE90', // 연초록
+  '#FFB6C1', // 연분홍
+  '#87CEEB', // 하늘색
 ]
 
 // 파트 태그 색상
@@ -275,6 +282,10 @@ export default function SheetMusicEditor({
   // ===== 보기 모드 전용: 툴바 숨기기 =====
   const [hideToolbar, setHideToolbar] = useState(false)
 
+  // ===== 모드 전환 토스트 =====
+  const [modeToast, setModeToast] = useState<{ show: boolean, mode: 'view' | 'edit' }>({ show: false, mode: 'view' })
+  const modeToastTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // ===== 다중 곡 모드 지원 =====
   const isMultiSongMode = songs.length > 0
   const [currentSongIndex, setCurrentSongIndex] = useState(0)
@@ -316,6 +327,7 @@ export default function SheetMusicEditor({
   // ===== 상태 관리 =====
   const [tool, setTool] = useState<Tool>('pan') // 기본: 손 모드 (화면 이동)
   const [color, setColor] = useState('#000000')
+  const [showColorPicker, setShowColorPicker] = useState(false) // 색상 선택 팝업
   const [strokeSize, setStrokeSize] = useState(3)
   const [eraserSize, setEraserSize] = useState(20) // 지우개 크기
   const [currentPage, setCurrentPage] = useState(1)
@@ -349,6 +361,8 @@ export default function SheetMusicEditor({
   }, [isMobile])
 
   // view 모드에서는 pan 도구로 자동 전환, edit 모드로 돌아오면 이전 도구 복원
+  // + 모드 전환 토스트 표시
+  const prevModeRef = useRef<'view' | 'edit'>(initialMode)
   useEffect(() => {
     if (isViewMode) {
       prevToolRef.current = tool
@@ -357,7 +371,29 @@ export default function SheetMusicEditor({
       // edit 모드로 전환 시 이전 도구 복원 (pan이 아닌 경우에만)
       setTool(prevToolRef.current)
     }
-  }, [isViewMode])
+
+    // 모드 전환 토스트 표시 (첫 렌더링 제외)
+    if (prevModeRef.current !== editorMode) {
+      prevModeRef.current = editorMode
+      setModeToast({ show: true, mode: editorMode })
+
+      // 이전 타이머 정리
+      if (modeToastTimeoutRef.current) {
+        clearTimeout(modeToastTimeoutRef.current)
+      }
+
+      // 1.5초 후 토스트 숨김
+      modeToastTimeoutRef.current = setTimeout(() => {
+        setModeToast(prev => ({ ...prev, show: false }))
+      }, 1500)
+    }
+
+    return () => {
+      if (modeToastTimeoutRef.current) {
+        clearTimeout(modeToastTimeoutRef.current)
+      }
+    }
+  }, [isViewMode, editorMode])
 
   // 지우개 커서 위치
   const [eraserPosition, setEraserPosition] = useState<{ x: number; y: number } | null>(null)
@@ -376,6 +412,7 @@ export default function SheetMusicEditor({
   const [isAddingText, setIsAddingText] = useState(false)
   const [textPosition, setTextPosition] = useState({ x: 0, y: 0 })
   const [textInput, setTextInput] = useState('')
+  const [textFontSize, setTextFontSize] = useState(24) // 텍스트 크기
   const textInputRef = useRef<HTMLInputElement>(null)
 
   // 텍스트 선택 및 드래그 (텍스트 모드에서)
@@ -1060,6 +1097,18 @@ export default function SheetMusicEditor({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
+
+      // 포인터 캡처 설정 - 연속 필기 시 끊김 방지
+      // 포인터가 캔버스 밖으로 나가도 계속 이벤트를 받을 수 있음
+      const target = e.currentTarget as HTMLElement
+      if (target && typeof target.setPointerCapture === 'function') {
+        try {
+          target.setPointerCapture(e.pointerId)
+        } catch (err) {
+          // 일부 브라우저에서 실패할 수 있음 - 무시
+        }
+      }
+
       const pos = getPointerPosition(e)
       const pointerType = e.pointerType // 'pen', 'touch', 'mouse'
 
@@ -1267,7 +1316,19 @@ export default function SheetMusicEditor({
     [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
   )
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e?: React.PointerEvent) => {
+    // 포인터 캡처 해제
+    if (e) {
+      const target = e.currentTarget as HTMLElement
+      if (target && typeof target.releasePointerCapture === 'function') {
+        try {
+          target.releasePointerCapture(e.pointerId)
+        } catch (err) {
+          // 무시
+        }
+      }
+    }
+
     // 손가락 터치 팬 모드 종료 (도구에 관계없이)
     if (isPanningRef.current) {
       isPanningRef.current = false
@@ -1398,7 +1459,7 @@ export default function SheetMusicEditor({
       x: textPosition.x,
       y: textPosition.y,
       text: textInput,
-      fontSize: 24,
+      fontSize: textFontSize,
       color,
     }
 
@@ -1518,6 +1579,23 @@ export default function SheetMusicEditor({
     }
   }, [canvasSize, fitToScreen])
 
+  // 너비에 맞추기
+  const handleFitToWidth = useCallback(() => {
+    if (!containerRef.current || canvasSize.width === 0) return
+
+    const containerWidth = containerRef.current.clientWidth
+    const padding = 20
+    const fitScale = (containerWidth - padding * 2) / canvasSize.width
+    setScale(fitScale)
+    setOffset({ x: 0, y: 0 })
+  }, [canvasSize.width])
+
+  // 100%로 리셋
+  const handleResetZoom = useCallback(() => {
+    setScale(1)
+    setOffset({ x: 0, y: 0 })
+  }, [])
+
   // 보기 모드에서 화면 클릭 핸들러 (페이지 넘기기 + 상단바 토글)
   // 터치 디바이스에서는 handleTouchEnd에서 처리하므로 여기서는 마우스만 처리
   const handleViewModeClick = useCallback((e: React.MouseEvent) => {
@@ -1576,8 +1654,16 @@ export default function SheetMusicEditor({
   const lastTouchDistance = useRef<number | null>(null)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
+  const swipeStartTime = useRef<number>(0) // 스와이프 시작 시간 (속도 계산용)
   const isSwiping = useRef<boolean>(false)
   const touchTapHandled = useRef<boolean>(false) // 터치 탭 처리 후 클릭 이벤트 방지용
+
+  // 더블탭 줌 감지용
+  const lastTapTime = useRef<number>(0)
+  const lastTapX = useRef<number>(0)
+  const lastTapY = useRef<number>(0)
+  const DOUBLE_TAP_DELAY = 300 // ms
+  const DOUBLE_TAP_DISTANCE = 50 // px
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
@@ -1590,6 +1676,7 @@ export default function SheetMusicEditor({
       // 스와이프 시작 (보기 모드에서만)
       swipeStartX.current = e.touches[0].clientX
       swipeStartY.current = e.touches[0].clientY
+      swipeStartTime.current = Date.now()
       isSwiping.current = true
     }
   }, [isViewMode])
@@ -1617,9 +1704,14 @@ export default function SheetMusicEditor({
       const endY = e.changedTouches[0].clientY
       const deltaX = endX - swipeStartX.current
       const deltaY = endY - swipeStartY.current
+      const swipeDuration = Date.now() - swipeStartTime.current
+      const velocity = Math.abs(deltaX) / swipeDuration // px/ms
 
-      // 수평 스와이프가 수직보다 크고, 최소 50px 이상 이동했을 때
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+      // 스와이프 감지: 거리 30px 이상 또는 빠른 스와이프 (속도 0.3px/ms 이상)
+      const isSwipe = Math.abs(deltaX) > Math.abs(deltaY) &&
+                      (Math.abs(deltaX) > 30 || (velocity > 0.3 && Math.abs(deltaX) > 15))
+
+      if (isSwipe) {
         if (deltaX > 0) {
           // 오른쪽 스와이프 -> 이전 페이지/이전 곡
           if (totalPages > 1 && currentPage > 1) {
@@ -1635,38 +1727,62 @@ export default function SheetMusicEditor({
             setCurrentSongIndex(i => i + 1)
           }
         }
-      } else if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-        // 탭 감지 (거의 움직이지 않음) - 영역별 동작
-        const container = containerRef.current
-        if (container) {
-          const rect = container.getBoundingClientRect()
-          const tapX = endX - rect.left
-          const containerWidth = rect.width
+      } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
+        // 탭 감지 (거의 움직이지 않음)
+        const now = Date.now()
+        const tapDistance = Math.sqrt(
+          Math.pow(endX - lastTapX.current, 2) +
+          Math.pow(endY - lastTapY.current, 2)
+        )
 
-          // 화면을 3등분: 왼쪽 30% / 중앙 40% / 오른쪽 30%
-          const leftZone = containerWidth * 0.3
-          const rightZone = containerWidth * 0.7
-
-          // 터치 탭 처리 플래그 설정 (onClick 중복 방지)
-          touchTapHandled.current = true
-
-          if (tapX < leftZone) {
-            // 왼쪽 탭: 이전 페이지/이전 곡
-            if (totalPages > 1 && currentPage > 1) {
-              setCurrentPage(p => p - 1)
-            } else if (isMultiSongMode && currentSongIndex > 0) {
-              setCurrentSongIndex(i => i - 1)
-            }
-          } else if (tapX > rightZone) {
-            // 오른쪽 탭: 다음 페이지/다음 곡
-            if (totalPages > 1 && currentPage < totalPages) {
-              setCurrentPage(p => p + 1)
-            } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
-              setCurrentSongIndex(i => i + 1)
-            }
+        // 더블탭 감지: 300ms 이내, 50px 이내 위치
+        if (now - lastTapTime.current < DOUBLE_TAP_DELAY && tapDistance < DOUBLE_TAP_DISTANCE) {
+          // 더블탭 줌 토글 (100% <-> 화면 맞춤)
+          if (scale > 1.2) {
+            // 줌인 상태면 화면에 맞추기
+            fitToScreen(canvasSize.width, canvasSize.height)
           } else {
-            // 중앙 탭: 상단바 토글
-            setHideToolbar(prev => !prev)
+            // 줌아웃 상태면 200%로 확대 (탭 위치 기준)
+            setScale(2.0)
+          }
+          lastTapTime.current = 0 // 더블탭 처리 후 초기화
+        } else {
+          // 싱글탭: 영역별 동작
+          lastTapTime.current = now
+          lastTapX.current = endX
+          lastTapY.current = endY
+
+          const container = containerRef.current
+          if (container) {
+            const rect = container.getBoundingClientRect()
+            const tapX = endX - rect.left
+            const containerWidth = rect.width
+
+            // 화면을 3등분: 왼쪽 25% / 중앙 50% / 오른쪽 25%
+            const leftZone = containerWidth * 0.25
+            const rightZone = containerWidth * 0.75
+
+            // 터치 탭 처리 플래그 설정 (onClick 중복 방지)
+            touchTapHandled.current = true
+
+            if (tapX < leftZone) {
+              // 왼쪽 탭: 이전 페이지/이전 곡
+              if (totalPages > 1 && currentPage > 1) {
+                setCurrentPage(p => p - 1)
+              } else if (isMultiSongMode && currentSongIndex > 0) {
+                setCurrentSongIndex(i => i - 1)
+              }
+            } else if (tapX > rightZone) {
+              // 오른쪽 탭: 다음 페이지/다음 곡
+              if (totalPages > 1 && currentPage < totalPages) {
+                setCurrentPage(p => p + 1)
+              } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
+                setCurrentSongIndex(i => i + 1)
+              }
+            } else {
+              // 중앙 탭: 상단바 토글
+              setHideToolbar(prev => !prev)
+            }
           }
         }
       }
@@ -1676,7 +1792,7 @@ export default function SheetMusicEditor({
     swipeStartX.current = null
     swipeStartY.current = null
     isSwiping.current = false
-  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length])
+  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
   // hideToolbar 변경 시에도 화면에 맞추기 (상단바 숨김/표시 시 레이아웃 변경)
@@ -2449,6 +2565,98 @@ export default function SheetMusicEditor({
     }
   }, [isDrawing, currentStroke, color, strokeSize, currentPage, clearLassoSelection])
 
+  // ===== 키보드 단축키 =====
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 텍스트 입력 중에는 무시
+      if (isAddingText || editingTextId) return
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return
+
+      const isCmd = e.metaKey || e.ctrlKey
+
+      // Cmd/Ctrl + Z: 실행 취소
+      if (isCmd && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
+
+      // Cmd/Ctrl + Shift + Z 또는 Cmd/Ctrl + Y: 다시 실행
+      if ((isCmd && e.shiftKey && e.key === 'z') || (isCmd && e.key === 'y')) {
+        e.preventDefault()
+        redo()
+        return
+      }
+
+      // 편집 모드에서만 도구 단축키 적용
+      if (!isViewMode) {
+        switch (e.key.toLowerCase()) {
+          case 'p':
+            switchTool('pen')
+            break
+          case 'h':
+            switchTool('highlighter')
+            break
+          case 'e':
+            switchTool('eraser')
+            break
+          case 't':
+            if (!isMobile) switchTool('text')
+            break
+          case 'v':
+          case ' ':  // 스페이스바도 이동 모드로
+            e.preventDefault()
+            switchTool('pan')
+            break
+        }
+      }
+
+      // 페이지 네비게이션 (화살표 키)
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (currentPage > 1) {
+          setCurrentPage(prev => prev - 1)
+        } else if (isMultiSongMode && currentSongIndex > 0) {
+          setCurrentSongIndex(prev => prev - 1)
+        }
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (currentPage < totalPages) {
+          setCurrentPage(prev => prev + 1)
+        } else if (isMultiSongMode && currentSongIndex < songs.length - 1) {
+          setCurrentSongIndex(prev => prev + 1)
+        }
+      }
+
+      // 모드 전환 (Escape)
+      if (e.key === 'Escape') {
+        if (isViewMode) {
+          setEditorMode('edit')
+        } else {
+          setEditorMode('view')
+        }
+      }
+
+      // 줌 단축키
+      if (isCmd && (e.key === '+' || e.key === '=')) {
+        e.preventDefault()
+        handleZoom(0.1)
+      }
+      if (isCmd && e.key === '-') {
+        e.preventDefault()
+        handleZoom(-0.1)
+      }
+      if (isCmd && e.key === '0') {
+        e.preventDefault()
+        handleFitToScreen()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isViewMode, isAddingText, editingTextId, currentPage, totalPages, isMultiSongMode, currentSongIndex, songs.length, isMobile, undo, redo, switchTool, handleZoom, handleFitToScreen])
+
   // 커서 스타일 결정
   const getCursorStyle = () => {
     switch (tool) {
@@ -2559,27 +2767,29 @@ export default function SheetMusicEditor({
               </span>
             )}
 
-            {/* 모드 전환 버튼 */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+            {/* 모드 전환 버튼 - 더 명확한 시각적 구분 */}
+            <div className={`flex items-center rounded-lg p-0.5 transition-colors ${
+              isViewMode ? 'bg-blue-100' : 'bg-orange-100'
+            }`}>
               <button
                 onClick={() => setEditorMode('view')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
                   isViewMode
-                    ? 'bg-white shadow text-gray-800'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'text-blue-600 hover:bg-blue-200'
                 }`}
-                title="악보 보기"
+                title="악보 보기 (스와이프로 페이지 넘기기)"
               >
                 {isMobile ? '👁' : '👁 보기'}
               </button>
               <button
                 onClick={() => setEditorMode('edit')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
                   !isViewMode
-                    ? 'bg-white shadow text-gray-800'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'text-orange-600 hover:bg-orange-200'
                 }`}
-                title="필기 모드"
+                title="필기 모드 (Apple Pencil/펜으로 필기)"
               >
                 {isMobile ? '✏️' : '✏️ 필기'}
               </button>
@@ -2587,25 +2797,50 @@ export default function SheetMusicEditor({
 
             {/* 줌 컨트롤 - 뷰 모드에서 표시 */}
             {isViewMode && (
-              <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1'} bg-gray-100 rounded-lg px-2 py-1`}>
+              <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'} bg-gray-100 rounded-lg px-2 py-1`}>
                 <button
                   onClick={() => handleZoom(-0.1)}
                   className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
-                  title="축소"
+                  title="축소 (Cmd+-)"
                 >
                   ➖
                 </button>
-                <button
-                  onClick={handleFitToScreen}
-                  className={`hover:bg-gray-200 rounded text-xs font-medium ${isMobile ? 'px-1.5 py-1' : 'px-2 py-1'}`}
-                  title="화면에 맞추기"
-                >
-                  {Math.round(scale * 100)}%
-                </button>
+                <div className="relative group">
+                  <button
+                    onClick={handleFitToScreen}
+                    className={`hover:bg-gray-200 rounded text-xs font-medium ${isMobile ? 'px-1 py-1' : 'px-2 py-1'}`}
+                    title="화면에 맞추기 (Cmd+0)"
+                  >
+                    {Math.round(scale * 100)}%
+                  </button>
+                  {/* 줌 옵션 드롭다운 (데스크탑 호버시) */}
+                  {!isMobile && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 py-1 min-w-[100px]">
+                      <button
+                        onClick={() => { handleResetZoom(); }}
+                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
+                      >
+                        100%
+                      </button>
+                      <button
+                        onClick={() => { handleFitToWidth(); }}
+                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
+                      >
+                        너비에 맞추기
+                      </button>
+                      <button
+                        onClick={() => { handleFitToScreen(); }}
+                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
+                      >
+                        화면에 맞추기
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => handleZoom(0.1)}
                   className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
-                  title="확대"
+                  title="확대 (Cmd++)"
                 >
                   ➕
                 </button>
@@ -2739,17 +2974,78 @@ export default function SheetMusicEditor({
         {/* 색상 선택 */}
         {(tool === 'pen' || tool === 'highlighter' || tool === 'text') && (
           <>
-            <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1'}`}>
+            <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1'} relative`}>
+              {/* 모바일: 4개 색상 + 더보기 버튼, 데스크탑: 모든 색상 */}
               {(tool === 'highlighter' ? HIGHLIGHTER_COLORS : COLORS).slice(0, isMobile ? 4 : undefined).map((c) => (
                 <button
                   key={c}
-                  onClick={() => setColor(c)}
+                  onClick={() => { setColor(c); setShowColorPicker(false) }}
                   className={`rounded-full border-2 aspect-square flex-shrink-0 ${
                     color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
                   } ${isMobile ? 'w-6 h-6 min-w-[24px]' : 'w-7 h-7 min-w-[28px]'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
+              {/* 모바일에서 더보기 버튼 */}
+              {isMobile && (
+                <button
+                  onClick={() => setShowColorPicker(!showColorPicker)}
+                  className={`rounded-full border-2 aspect-square flex-shrink-0 w-6 h-6 min-w-[24px] flex items-center justify-center text-xs ${
+                    showColorPicker ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-gray-100'
+                  }`}
+                  title="더 많은 색상"
+                >
+                  +
+                </button>
+              )}
+              {/* 색상 선택 팝업 (모바일) */}
+              {isMobile && showColorPicker && (
+                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-50">
+                  <div className="grid grid-cols-5 gap-2">
+                    {(tool === 'highlighter' ? HIGHLIGHTER_COLORS : COLORS).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setColor(c); setShowColorPicker(false) }}
+                        className={`rounded-full border-2 aspect-square w-8 h-8 ${
+                          color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
+          </>
+        )}
+
+        {/* 텍스트 크기 조절 */}
+        {tool === 'text' && (
+          <>
+            <div className="flex items-center gap-1.5">
+              {/* 텍스트 크기 미리보기 */}
+              <span
+                className="font-bold text-gray-700"
+                style={{ fontSize: Math.min(textFontSize / 2, 16) + 'px' }}
+              >
+                A
+              </span>
+              <select
+                value={textFontSize}
+                onChange={(e) => setTextFontSize(Number(e.target.value))}
+                className="text-sm border border-gray-300 rounded px-1 py-0.5 bg-white"
+              >
+                <option value={12}>12</option>
+                <option value={16}>16</option>
+                <option value={20}>20</option>
+                <option value={24}>24</option>
+                <option value={32}>32</option>
+                <option value={40}>40</option>
+                <option value={48}>48</option>
+                <option value={64}>64</option>
+              </select>
+              <span className="text-xs text-gray-500">pt</span>
             </div>
             <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
           </>
@@ -2777,8 +3073,25 @@ export default function SheetMusicEditor({
         {/* 굵기 조절 */}
         {(tool === 'pen' || tool === 'highlighter') && (
           <>
-            <div className="flex items-center gap-1">
-              {!isMobile && <span className="text-sm text-gray-600">굵기:</span>}
+            <div className="flex items-center gap-1.5">
+              {/* 굵기 미리보기 */}
+              <div
+                className="flex items-center justify-center"
+                style={{ width: isMobile ? 20 : 24, height: isMobile ? 20 : 24 }}
+              >
+                <div
+                  className="rounded-full"
+                  style={{
+                    width: tool === 'highlighter' ? strokeSize * 3 : strokeSize + 2,
+                    height: tool === 'highlighter' ? strokeSize * 1.5 : strokeSize + 2,
+                    backgroundColor: color,
+                    opacity: tool === 'highlighter' ? 0.4 : 1,
+                    borderRadius: tool === 'highlighter' ? '20%' : '50%',
+                    maxWidth: isMobile ? 18 : 22,
+                    maxHeight: isMobile ? 16 : 20,
+                  }}
+                />
+              </div>
               <input
                 type="range"
                 min="1"
@@ -2821,17 +3134,46 @@ export default function SheetMusicEditor({
           <button
             onClick={() => handleZoom(-0.1)}
             className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="축소"
+            title="축소 (Cmd+-)"
           >
             ➖
           </button>
-          <span className={`text-center text-gray-700 ${isMobile ? 'text-xs w-10' : 'text-sm w-12'}`}>
-            {Math.round(scale * 100)}%
-          </span>
+          <div className="relative group">
+            <button
+              onClick={handleFitToScreen}
+              className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'text-xs w-10 py-1' : 'text-sm w-12 py-1'}`}
+              title="화면에 맞추기 (Cmd+0)"
+            >
+              {Math.round(scale * 100)}%
+            </button>
+            {/* 줌 옵션 드롭다운 */}
+            {!isMobile && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 py-1 min-w-[100px]">
+                <button
+                  onClick={() => { handleResetZoom(); }}
+                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
+                >
+                  100%
+                </button>
+                <button
+                  onClick={() => { handleFitToWidth(); }}
+                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
+                >
+                  너비에 맞추기
+                </button>
+                <button
+                  onClick={() => { handleFitToScreen(); }}
+                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
+                >
+                  화면에 맞추기
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => handleZoom(0.1)}
             className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="확대"
+            title="확대 (Cmd++)"
           >
             ➕
           </button>
@@ -2946,6 +3288,24 @@ export default function SheetMusicEditor({
         }}
         onClick={handleViewModeClick}
       >
+        {/* 모드 전환 토스트 */}
+        {modeToast.show && (
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl text-white font-medium text-lg transition-all duration-300 ${
+            modeToast.mode === 'view'
+              ? 'bg-blue-500'
+              : 'bg-orange-500'
+          }`}
+          style={{
+            animation: 'fadeInScale 0.2s ease-out',
+          }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{modeToast.mode === 'view' ? '👁' : '✏️'}</span>
+              <span>{modeToast.mode === 'view' ? '보기 모드' : '필기 모드'}</span>
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             transform: `scale(${scale}) translate(${offset.x}px, ${offset.y}px)`,
@@ -2975,7 +3335,13 @@ export default function SheetMusicEditor({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={(e) => {
+              // 포인터 캡처 중에는 leave 이벤트 무시 (연속 필기 보호)
+              if (!isDrawingRef.current) {
+                handlePointerUp(e)
+              }
+            }}
           />
 
           {/* 텍스트 입력 모달 */}

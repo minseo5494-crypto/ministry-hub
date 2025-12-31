@@ -315,14 +315,22 @@ export function useDownload({
             
             {/* 표지 포함 */}
             <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition">
-              <input
-                type="checkbox"
-                checked={downloadOptions.includeCover}
-                onChange={(e) => setDownloadOptions(prev => ({
-                  ...prev, includeCover: e.target.checked
+              <div
+                onClick={() => setDownloadOptions(prev => ({
+                  ...prev, includeCover: !prev.includeCover
                 }))}
-                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
+                className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                  downloadOptions.includeCover
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'bg-white border-gray-300'
+                }`}
+              >
+                {downloadOptions.includeCover && (
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
               <div>
                 <span className="font-medium">📄 표지 포함</span>
                 <p className="text-xs text-gray-500">콘티 제목과 곡 목록이 포함된 표지</p>
@@ -332,14 +340,22 @@ export function useDownload({
             {/* 송폼 포함 - 송폼이 설정된 곡이 있을 때만 표시 */}
             {hasSongsWithForms() && (
               <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition">
-                <input
-                  type="checkbox"
-                  checked={downloadOptions.includeSongForm}
-                  onChange={(e) => setDownloadOptions(prev => ({
-                    ...prev, includeSongForm: e.target.checked
+                <div
+                  onClick={() => setDownloadOptions(prev => ({
+                    ...prev, includeSongForm: !prev.includeSongForm
                   }))}
-                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                  className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                    downloadOptions.includeSongForm
+                      ? 'bg-blue-500 border-blue-500'
+                      : 'bg-white border-gray-300'
+                  }`}
+                >
+                  {downloadOptions.includeSongForm && (
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
                 <div>
                   <span className="font-medium">🎵 송폼 표시</span>
                   <p className="text-xs text-gray-500">악보에 송폼(V1-C-B 등) 오버레이</p>
