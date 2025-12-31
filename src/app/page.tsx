@@ -9,7 +9,7 @@ import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2, Sparkles
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -28,6 +28,7 @@ import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
 import AnnotatedPreview from '@/components/AnnotatedPreview'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
+import { useAISearch } from '@/hooks/useAISearch'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
 import { SEASONS, TEMPO_RANGES, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
@@ -128,6 +129,17 @@ const {
   
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
+
+  // 가사 입력 모달 상태
+  const [showLyricsModal, setShowLyricsModal] = useState(false)
+  const [editingLyricsSong, setEditingLyricsSong] = useState<Song | null>(null)
+  const [lyricsText, setLyricsText] = useState('')
+  const [savingLyrics, setSavingLyrics] = useState(false)
+
+  // AI 검색 상태
+  const [aiSearchEnabled, setAiSearchEnabled] = useState(false)
+  const [aiSearchInput, setAiSearchInput] = useState('')
+  const { searchWithAI, isSearching: isAISearching, lastResult: aiSearchResult } = useAISearch()
 
   // 🆕 미리보기 토글 상태 (각 곡별로)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
@@ -1088,25 +1100,75 @@ if (newSong.visibility === 'public') {
     }
   }
 
-  
+  // 가사 저장 함수
+  const saveLyrics = async () => {
+    if (!editingLyricsSong) return
+
+    setSavingLyrics(true)
+    try {
+      const { error } = await supabase
+        .from('songs')
+        .update({ lyrics: lyricsText })
+        .eq('id', editingLyricsSong.id)
+
+      if (error) throw error
+
+      // 로컬 상태 업데이트
+      setSongs(prev => prev.map(s =>
+        s.id === editingLyricsSong.id ? { ...s, lyrics: lyricsText } : s
+      ))
+
+      // previewSong도 업데이트
+      if (previewSong?.id === editingLyricsSong.id) {
+        setPreviewSong({ ...previewSong, lyrics: lyricsText })
+      }
+
+      alert('가사가 저장되었습니다.')
+      setShowLyricsModal(false)
+      setEditingLyricsSong(null)
+      setLyricsText('')
+    } catch (error) {
+      console.error('가사 저장 오류:', error)
+      alert('가사 저장에 실패했습니다.')
+    } finally {
+      setSavingLyrics(false)
+    }
+  }
+
+  // 가사 편집 모달 열기
+  const openLyricsModal = (song: Song) => {
+    setEditingLyricsSong(song)
+    setLyricsText(song.lyrics || '')
+    setShowLyricsModal(true)
+  }
 
   // 개선된 필터링 로직
   useEffect(() => {
     let result = [...songs]
 
     if (filters.searchText) {
-      const normalizedSearch = normalizeText(filters.searchText)
+      // 검색어를 공백으로 분리하여 OR 검색 (AI 검색 키워드 지원)
+      const searchTerms = filters.searchText.trim().split(/\s+/).filter(t => t.length > 0)
+
       result = result.filter(song => {
-        // 띄어쓰기/특수문자 무시 검색
         const normalizedSongName = normalizeText(song.song_name)
         const normalizedTeamName = normalizeText(song.team_name || '')
+        const normalizedLyrics = normalizeText(song.lyrics || '')
+        const normalizedArtist = normalizeText(song.artist || '')
 
-        // 정규화된 검색과 일반 검색 둘 다 지원
-        const searchLower = filters.searchText.toLowerCase()
-        return normalizedSongName.includes(normalizedSearch) ||
-               normalizedTeamName.includes(normalizedSearch) ||
-               song.song_name.toLowerCase().includes(searchLower) ||
-               song.team_name?.toLowerCase().includes(searchLower)
+        // OR 검색: 하나라도 매칭되면 true
+        return searchTerms.some(term => {
+          const normalizedTerm = normalizeText(term)
+          const termLower = term.toLowerCase()
+          return normalizedSongName.includes(normalizedTerm) ||
+                 normalizedTeamName.includes(normalizedTerm) ||
+                 normalizedLyrics.includes(normalizedTerm) ||
+                 normalizedArtist.includes(normalizedTerm) ||
+                 song.song_name.toLowerCase().includes(termLower) ||
+                 song.team_name?.toLowerCase().includes(termLower) ||
+                 song.lyrics?.toLowerCase().includes(termLower) ||
+                 song.artist?.toLowerCase().includes(termLower)
+        })
       })
 
       // 📝 내 필기 노트 검색 (필터가 켜져 있을 때만)
@@ -1905,18 +1967,147 @@ const hasMore = displayCount < filteredSongs.length
 
           {/* 검색바 - 흰색 배경 */}
           <div className="max-w-3xl mx-auto mb-8">
-            <div className="relative">
-              <Search className="absolute left-4 top-4 text-gray-400" size={24} />
-              <input
-                type="text"
-                placeholder="찬양곡 제목, 아티스트, 가사로 검색..."
-                className="w-full pl-12 pr-4 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
-                value={filters.searchText}
-                onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
-                style={{ backgroundColor: 'white' }}
-              />
+            {/* AI 검색 토글 */}
+            <div className="flex justify-center mb-3">
+              <button
+                onClick={() => setAiSearchEnabled(!aiSearchEnabled)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  aiSearchEnabled
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30'
+                    : 'bg-white/20 text-white hover:bg-white/30'
+                }`}
+              >
+                <Sparkles size={16} />
+                AI 자연어 검색 {aiSearchEnabled ? 'ON' : 'OFF'}
+              </button>
             </div>
 
+            <div className="relative">
+              {aiSearchEnabled ? (
+                <Sparkles className="absolute left-4 top-4 text-purple-500" size={24} />
+              ) : (
+                <Search className="absolute left-4 top-4 text-gray-400" size={24} />
+              )}
+              <input
+                type="text"
+                placeholder={aiSearchEnabled
+                  ? "예: 빠른 템포의 감사 찬양, 크리스마스에 부를 곡..."
+                  : "찬양곡 제목, 아티스트, 가사로 검색..."}
+                className={`w-full pl-12 pr-24 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none border-2 ${
+                  aiSearchEnabled
+                    ? 'focus:ring-4 focus:ring-purple-500 border-purple-200'
+                    : 'focus:ring-4 focus:ring-blue-500 border-white/50'
+                }`}
+                value={aiSearchEnabled ? aiSearchInput : filters.searchText}
+                onChange={(e) => {
+                  if (aiSearchEnabled) {
+                    setAiSearchInput(e.target.value)
+                  } else {
+                    setFilters({ ...filters, searchText: e.target.value })
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (aiSearchEnabled && e.key === 'Enter' && aiSearchInput.trim()) {
+                    e.preventDefault()
+                    const result = await searchWithAI(aiSearchInput)
+                    if (result?.success && result.filters) {
+                      // AI 검색 결과를 필터에 적용
+                      const { keywords, themes, season, tempo, key: keyFilter } = result.filters
+                      setFilters(prev => ({
+                        ...prev,
+                        searchText: keywords.join(' '),
+                        theme: themes[0] || prev.theme,
+                        season: season || prev.season,
+                        tempo: tempo || prev.tempo,
+                        key: keyFilter || prev.key,
+                      }))
+                    }
+                  }
+                }}
+                style={{ backgroundColor: 'white' }}
+              />
+              {/* AI 검색 버튼 */}
+              {aiSearchEnabled && (
+                <button
+                  onClick={async () => {
+                    if (aiSearchInput.trim()) {
+                      const result = await searchWithAI(aiSearchInput)
+                      if (result?.success && result.filters) {
+                        const { keywords, themes, season, tempo, key: keyFilter, lyricsKeywords, mood } = result.filters
+
+                        // 모든 관련 키워드를 검색어에 포함 (테마, 가사 키워드, 분위기 등)
+                        const allKeywords = [
+                          ...keywords,
+                          ...themes,
+                          ...(lyricsKeywords || []),
+                          ...(mood ? [mood] : [])
+                        ].filter(k => k && k.length > 0)
+
+                        // 기존 필터 초기화 후 키워드 기반 검색
+                        setFilters(prev => ({
+                          ...prev,
+                          // 기존 필터 초기화
+                          season: season || '전체',
+                          themes: [],
+                          theme: '',
+                          // 키워드 기반 검색 (모든 관련 단어 포함)
+                          searchText: allKeywords.length > 0 ? allKeywords.join(' ') : aiSearchInput,
+                          // 템포, 키는 AI가 감지한 경우만 적용
+                          tempo: tempo || '',
+                          key: keyFilter || '',
+                        }))
+                      }
+                    }
+                  }}
+                  disabled={isAISearching || !aiSearchInput.trim()}
+                  className="absolute right-3 top-3 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isAISearching ? '분석중...' : '검색'}
+                </button>
+              )}
+            </div>
+
+            {/* AI 검색 결과 피드백 */}
+            {aiSearchEnabled && aiSearchResult && (
+              <div className="mt-3 p-3 bg-white/10 backdrop-blur rounded-lg text-white text-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles size={14} />
+                  <span className="font-medium">AI 분석 결과:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {aiSearchResult.filters.keywords.length > 0 && (
+                    <span className="px-2 py-1 bg-blue-500/30 rounded text-xs">
+                      키워드: {aiSearchResult.filters.keywords.join(', ')}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.themes.length > 0 && (
+                    <span className="px-2 py-1 bg-green-500/30 rounded text-xs">
+                      테마: {aiSearchResult.filters.themes.join(', ')}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.season && (
+                    <span className="px-2 py-1 bg-orange-500/30 rounded text-xs">
+                      시즌: {aiSearchResult.filters.season}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.tempo && (
+                    <span className="px-2 py-1 bg-purple-500/30 rounded text-xs">
+                      템포: {aiSearchResult.filters.tempo}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.key && (
+                    <span className="px-2 py-1 bg-pink-500/30 rounded text-xs">
+                      키: {aiSearchResult.filters.key}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.mood && (
+                    <span className="px-2 py-1 bg-yellow-500/30 rounded text-xs">
+                      분위기: {aiSearchResult.filters.mood}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
 
@@ -2518,6 +2709,22 @@ const hasMore = displayCount < filteredSongs.length
               <Presentation size={16} className="md:w-[18px] md:h-[18px]" />
             </button>
           )}
+
+          {/* 가사 추가/보기 버튼 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              openLyricsModal(song)
+            }}
+            className={`p-1.5 md:p-2 rounded-lg ${
+              song.lyrics
+                ? 'text-green-600 bg-green-100'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+            title={song.lyrics ? '가사 보기/수정' : '가사 추가'}
+          >
+            <FileText size={16} className="md:w-[18px] md:h-[18px]" />
+          </button>
 
           {/* 유튜브 영상 토글 버튼 */}
           <button
@@ -3242,13 +3449,27 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   {previewSong.team_name} | Key: {previewSong.key || '-'}
                 </p>
               </div>
-              <button
-                onClick={() => setPreviewSong(null)}
-                className="text-gray-500 hover:text-gray-700 p-2"
-                title="닫기 (ESC)"
-              >
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openLyricsModal(previewSong)}
+                  className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                    previewSong.lyrics
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                  title={previewSong.lyrics ? '가사 보기/수정' : '가사 추가'}
+                >
+                  <FileText size={18} />
+                  <span className="text-sm">{previewSong.lyrics ? '가사' : '가사 추가'}</span>
+                </button>
+                <button
+                  onClick={() => setPreviewSong(null)}
+                  className="text-gray-500 hover:text-gray-700 p-2"
+                  title="닫기 (ESC)"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-100">
@@ -3615,6 +3836,62 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     onSaveAll={handleSaveMultiSongNotes}
     onClose={handleCloseMultiSongEditor}
   />
+)}
+
+{/* 가사 입력/수정 모달 */}
+{showLyricsModal && editingLyricsSong && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+    <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="flex items-center justify-between p-4 border-b">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">가사 {editingLyricsSong.lyrics ? '수정' : '추가'}</h2>
+          <p className="text-sm text-gray-600">{editingLyricsSong.song_name} - {editingLyricsSong.team_name}</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowLyricsModal(false)
+            setEditingLyricsSong(null)
+            setLyricsText('')
+          }}
+          className="text-gray-500 hover:text-gray-700 p-2"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4">
+        <textarea
+          value={lyricsText}
+          onChange={(e) => setLyricsText(e.target.value)}
+          placeholder="가사를 입력하세요...&#10;&#10;예시:&#10;[Verse 1]&#10;주의 약속하신 말씀 위에 서&#10;&#10;[Chorus]&#10;주님만이 나의 반석..."
+          className="w-full h-[400px] p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+        />
+        <p className="mt-2 text-xs text-gray-500">
+          💡 팁: [Verse], [Chorus], [Bridge] 등으로 섹션을 구분하면 좋아요
+        </p>
+      </div>
+
+      <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
+        <button
+          onClick={() => {
+            setShowLyricsModal(false)
+            setEditingLyricsSong(null)
+            setLyricsText('')
+          }}
+          className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+        >
+          취소
+        </button>
+        <button
+          onClick={saveLyrics}
+          disabled={savingLyrics}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {savingLyrics ? '저장 중...' : '저장'}
+        </button>
+      </div>
+    </div>
+  </div>
 )}
 
     </div>
