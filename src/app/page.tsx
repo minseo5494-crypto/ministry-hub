@@ -63,6 +63,18 @@ export default function Home() {
   useEffect(() => {
     setShowFilterPanel(!isTabletOrBelow)
   }, [isTabletOrBelow])
+
+  // 필터 오버레이 열릴 때 body 스크롤 막기 (태블릿/모바일)
+  useEffect(() => {
+    if (isTabletOrBelow && showFilterPanel) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isTabletOrBelow, showFilterPanel])
   
   // 임시 사용자 ID
   const USER_ID = user?.id || '00000000-0000-0000-0000-000000000001'
@@ -2242,8 +2254,10 @@ const hasMore = displayCount < filteredSongs.length
           {/* 왼쪽: 필터 패널 - lg 이상에서만 사이드바, 그 외에는 오버레이 */}
           <div className={`
             ${showFilterPanel ? 'lg:w-80' : 'lg:w-0'}
-            transition-all duration-300 overflow-hidden
-            ${showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4 w-72 lg:relative lg:shadow-none lg:pt-0 lg:bg-transparent' : 'hidden lg:block'}
+            transition-all duration-300
+            ${showFilterPanel
+              ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4 w-72 overflow-y-auto overscroll-contain lg:relative lg:shadow-none lg:pt-0 lg:bg-transparent lg:overflow-visible'
+              : 'hidden lg:block overflow-hidden'}
           `}>
             <FilterPanel
               filters={filters}
