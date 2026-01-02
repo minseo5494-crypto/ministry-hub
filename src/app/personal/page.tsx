@@ -105,27 +105,27 @@ export default function PersonalPage() {
       {/* 헤더 */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Music className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold">내 악보</h1>
+              <Music className="w-8 h-8 text-blue-600 flex-shrink-0" />
+              <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">내 악보</h1>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">{user?.email}</span>
-              
-              <Link href="/teams">
-                <button className="px-4 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center">
-                  <Users className="mr-2" size={18} />
+
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+              <span className="text-xs sm:text-sm text-gray-600 truncate max-w-[150px] sm:max-w-none">{user?.email}</span>
+
+              <Link href="/my-team">
+                <button className="px-3 sm:px-4 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center whitespace-nowrap text-sm">
+                  <Users className="mr-1 sm:mr-2 flex-shrink-0" size={16} />
                   내 팀
                 </button>
               </Link>
-              
+
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center"
+                className="px-3 sm:px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center whitespace-nowrap text-sm"
               >
-                <LogOut className="mr-2" size={18} />
+                <LogOut className="mr-1 sm:mr-2 flex-shrink-0" size={16} />
                 로그아웃
               </button>
             </div>
@@ -136,35 +136,35 @@ export default function PersonalPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* 검색 및 필터 */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="곡명 또는 아티스트 검색..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg"
-                />
-              </div>
-            </div>
-            
+          {/* 검색창 */}
+          <div className="relative mb-3 sm:mb-0">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="곡명 또는 아티스트 검색..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border rounded-lg text-base"
+            />
+          </div>
+
+          {/* 필터 및 버튼 */}
+          <div className="flex flex-wrap gap-2 sm:gap-3 mt-3">
             <select
               value={selectedFilter.key}
               onChange={(e) => setSelectedFilter({...selectedFilter, key: e.target.value})}
-              className="px-4 py-2 border rounded-lg"
+              className="flex-1 min-w-[100px] sm:flex-none px-3 sm:px-4 py-2 border rounded-lg text-sm"
             >
               <option value="">모든 키</option>
               {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'].map(key => (
                 <option key={key} value={key}>{key}</option>
               ))}
             </select>
-            
+
             <select
               value={selectedFilter.tempo}
               onChange={(e) => setSelectedFilter({...selectedFilter, tempo: e.target.value})}
-              className="px-4 py-2 border rounded-lg"
+              className="flex-1 min-w-[100px] sm:flex-none px-3 sm:px-4 py-2 border rounded-lg text-sm"
             >
               <option value="">모든 템포</option>
               <option value="느림">느림</option>
@@ -172,9 +172,9 @@ export default function PersonalPage() {
               <option value="빠름">빠름</option>
             </select>
 
-            <Link href="/personal/upload">
-              <button className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center">
-                <Upload className="mr-2" size={18} />
+            <Link href="/personal/upload" className="flex-1 sm:flex-none">
+              <button className="w-full sm:w-auto px-4 sm:px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center whitespace-nowrap text-sm">
+                <Upload className="mr-2 flex-shrink-0" size={16} />
                 악보 추가
               </button>
             </Link>

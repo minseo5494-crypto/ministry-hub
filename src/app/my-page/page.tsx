@@ -868,30 +868,29 @@ setNewSong({ ...newSong, tempo: tempoValue })
       {/* 헤더 */}
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Music className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold">My Page</h1>
+              <Music className="w-8 h-8 text-blue-600 flex-shrink-0" />
+              <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">My Page</h1>
+              <span className="text-xs sm:text-sm text-gray-600 truncate max-w-[120px] sm:max-w-none">{user?.email}</span>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">{user?.email}</span>
-
-              {/* ✨ 이 부분이 추가됨 ✨ */}
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => router.push('/my-page/settings')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-            >
-                <Settings size={18} />
-                계정 설정
-            </button>
-  
-            <button
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition whitespace-nowrap text-sm"
+              >
+                <Settings size={16} className="flex-shrink-0" />
+                <span className="hidden sm:inline">계정 설정</span>
+                <span className="sm:hidden">설정</span>
+              </button>
+
+              <button
                 onClick={() => router.push('/')}
-                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] touch-manipulation"
-            >
+                className="px-3 sm:px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] touch-manipulation whitespace-nowrap text-sm"
+              >
                 메인으로
-            </button>
+              </button>
             </div>
           </div>
         </div>

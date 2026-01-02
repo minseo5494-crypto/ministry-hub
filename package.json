@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "screenshot:login": "node scripts/login.js",
+    "screenshot:capture": "node scripts/capture.js",
+    "screenshot": "npm run screenshot:login && npm run screenshot:capture"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
@@ -34,12 +37,14 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
+    "playwright": "^1.57.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5"

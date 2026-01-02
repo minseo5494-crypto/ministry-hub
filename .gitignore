@@ -40,6 +40,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# playwright auth session
+.auth/
+
+# screenshots (generated)
+screenshots/
+
 # PWA (빌드 시 생성되는 파일들)
 public/sw.js
 public/workbox-*.js
