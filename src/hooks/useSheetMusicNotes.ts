@@ -117,12 +117,38 @@ interface UseSheetMusicNotesReturn {
   syncFromSupabase: (userId: string) => Promise<void>
 }
 
-// 로컬 스토리지에서 노트 가져오기
+// UUID 형식인지 확인
+const isValidUUID = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(id)
+}
+
+// 로컬 스토리지에서 노트 가져오기 (오래된 id 형식 자동 마이그레이션)
 const getStoredNotes = (): LocalSheetMusicNote[] => {
   if (typeof window === 'undefined') return []
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
+    if (!stored) return []
+
+    const notes: LocalSheetMusicNote[] = JSON.parse(stored)
+    let needsMigration = false
+
+    // 오래된 id 형식이 있는지 확인하고 마이그레이션
+    const migratedNotes = notes.map(note => {
+      if (!isValidUUID(note.id)) {
+        needsMigration = true
+        return { ...note, id: crypto.randomUUID() }
+      }
+      return note
+    })
+
+    // 마이그레이션이 필요했다면 로컬 스토리지 업데이트
+    if (needsMigration) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedNotes))
+      console.log('✅ 로컬 노트 ID 형식 마이그레이션 완료')
+    }
+
+    return migratedNotes
   } catch (e) {
     console.error('로컬 스토리지 읽기 오류:', e)
     return []
@@ -192,12 +218,64 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     setNotes(stored)
   }, [])
 
-  // 사용자의 모든 노트 가져오기
+  // 사용자의 모든 노트 가져오기 (Supabase 동기화 포함)
   const fetchNotes = useCallback(async (userId: string) => {
     setLoading(true)
     setError(null)
 
     try {
+      // 1. 먼저 Supabase에서 최신 데이터 가져와서 로컬과 병합
+      try {
+        console.log('🔄 Supabase에서 노트 조회 중... userId:', userId)
+        const { data, error: fetchError } = await supabase
+          .from('sheet_music_notes')
+          .select('*')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+
+        console.log('📥 Supabase 조회 결과:', { count: data?.length || 0, error: fetchError?.message })
+
+        if (fetchError) {
+          console.error('❌ Supabase 조회 실패:', fetchError.message, fetchError.details, fetchError.hint)
+        }
+
+        if (!fetchError && data && data.length > 0) {
+          const supabaseNotes = data.map(convertFromSupabase)
+          const localNotes = getStoredNotes()
+          const otherUserNotes = localNotes.filter(n => n.user_id !== userId)
+
+          const mergedNotes = [...otherUserNotes]
+          const processedIds = new Set<string>()
+
+          // Supabase 노트와 로컬 노트 병합 (최신 버전 유지)
+          for (const supabaseNote of supabaseNotes) {
+            const localNote = localNotes.find(n => n.id === supabaseNote.id)
+
+            if (!localNote || new Date(supabaseNote.updated_at) >= new Date(localNote.updated_at)) {
+              mergedNotes.push(supabaseNote)
+            } else {
+              mergedNotes.push(localNote)
+            }
+            processedIds.add(supabaseNote.id)
+          }
+
+          // 로컬에만 있는 노트도 유지 (아직 동기화 안 된 것들)
+          for (const localNote of localNotes.filter(n => n.user_id === userId)) {
+            if (!processedIds.has(localNote.id)) {
+              mergedNotes.push(localNote)
+              // 로컬에만 있는 노트를 Supabase에 업로드 (fire and forget)
+              void supabase.from('sheet_music_notes').upsert(convertToSupabase(localNote))
+            }
+          }
+
+          setStoredNotes(mergedNotes)
+          console.log(`✅ Supabase에서 ${supabaseNotes.length}개 노트 동기화 완료`)
+        }
+      } catch (syncErr) {
+        console.warn('Supabase 동기화 실패, 로컬 데이터 사용:', syncErr)
+      }
+
+      // 2. 병합된 로컬 데이터에서 사용자 노트 반환
       const allNotes = getStoredNotes()
       const userNotes = allNotes
         .filter(note => note.user_id === userId)
@@ -248,7 +326,7 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
       const now = new Date().toISOString()
       const newNote: LocalSheetMusicNote = {
         ...noteData,
-        id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: crypto.randomUUID(),
         created_at: now,
         updated_at: now,
       }
@@ -264,11 +342,23 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       setNotes(userNotes)
 
-      // Supabase에도 저장 (비동기, 실패해도 로컬은 유지)
+      // Supabase에도 저장 (기기 간 동기화를 위해 필수)
       try {
-        await supabase.from('sheet_music_notes').upsert(convertToSupabase(newNote))
+        const supabaseData = convertToSupabase(newNote)
+        console.log('🔄 Supabase 저장 시도:', { id: supabaseData.id, user_id: supabaseData.user_id, song_id: supabaseData.song_id })
+
+        const { data: upsertData, error: upsertError } = await supabase
+          .from('sheet_music_notes')
+          .upsert(supabaseData)
+          .select()
+
+        if (upsertError) {
+          console.error('❌ Supabase 저장 실패:', upsertError.message, upsertError.details, upsertError.hint)
+        } else {
+          console.log('✅ Supabase에 노트 저장 완료:', upsertData)
+        }
       } catch (supabaseErr) {
-        console.warn('Supabase 저장 실패 (로컬은 저장됨):', supabaseErr)
+        console.error('❌ Supabase 저장 예외:', supabaseErr)
       }
 
       return newNote
@@ -323,9 +413,21 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
 
       // Supabase에도 업데이트
       try {
-        await supabase.from('sheet_music_notes').upsert(convertToSupabase(allNotes[noteIndex]))
+        const supabaseData = convertToSupabase(allNotes[noteIndex])
+        console.log('🔄 Supabase 업데이트 시도:', { id: supabaseData.id, user_id: supabaseData.user_id })
+
+        const { data: upsertData, error: upsertError } = await supabase
+          .from('sheet_music_notes')
+          .upsert(supabaseData)
+          .select()
+
+        if (upsertError) {
+          console.error('❌ Supabase 업데이트 실패:', upsertError.message, upsertError.details, upsertError.hint)
+        } else {
+          console.log('✅ Supabase에 노트 업데이트 완료:', upsertData)
+        }
       } catch (supabaseErr) {
-        console.warn('Supabase 업데이트 실패 (로컬은 저장됨):', supabaseErr)
+        console.error('❌ Supabase 업데이트 예외:', supabaseErr)
       }
 
       return true
