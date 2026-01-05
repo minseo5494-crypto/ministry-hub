@@ -14,6 +14,7 @@ function LoginForm() {
     email: '',
     password: ''
   })
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -166,9 +167,14 @@ function LoginForm() {
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center">
-              <input type="checkbox" className="mr-2" />
-              <span className="text-gray-600">로그인 상태 유지</span>
+            <label className="flex items-center cursor-pointer touch-manipulation">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 mr-2 accent-blue-600 cursor-pointer"
+              />
+              <span className="text-gray-600 select-none">로그인 상태 유지</span>
             </label>
             <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-700">
               비밀번호 찾기
