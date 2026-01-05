@@ -168,13 +168,22 @@ function LoginForm() {
 
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center cursor-pointer touch-manipulation">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 mr-2 accent-blue-600 cursor-pointer"
-              />
-              <span className="text-gray-600 select-none">로그인 상태 유지</span>
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-5 h-5 border-2 border-gray-300 rounded bg-white peer-checked:bg-blue-600 peer-checked:border-blue-600 flex items-center justify-center">
+                  {rememberMe && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <span className="text-gray-600 select-none ml-2">로그인 상태 유지</span>
             </label>
             <Link href="/auth/forgot-password" className="text-blue-600 hover:text-blue-700">
               비밀번호 찾기
