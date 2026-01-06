@@ -2370,18 +2370,18 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div>
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+            <div className="-mx-4 sm:mx-0">
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm px-4 sm:px-0">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                  className="w-full h-[600px] border rounded"
+                  className="w-full h-[600px] border-y sm:border sm:rounded"
                 />
               ) : (
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="w-full h-auto rounded shadow-sm"
+                  className="w-full h-auto sm:rounded shadow-sm"
                 />
               )}
             </div>
