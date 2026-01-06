@@ -11,7 +11,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'x-my-custom-header': 'ministry-hub'
+      'x-my-custom-header': 'worsheep'
     },
   },
 })

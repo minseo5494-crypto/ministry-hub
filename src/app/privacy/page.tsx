@@ -22,7 +22,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">1. 개인정보의 수집 및 이용 목적</h2>
               <p className="text-gray-700 leading-relaxed">
-                Ministry Hub(이하 "서비스")는 다음의 목적을 위해 개인정보를 수집 및 이용합니다:
+                WORSHEEP(이하 "서비스")은 다음의 목적을 위해 개인정보를 수집 및 이용합니다:
               </p>
               <ul className="list-disc list-inside text-gray-700 mt-2 space-y-1">
                 <li>회원 가입 및 관리: 회원제 서비스 이용에 따른 본인확인, 개인식별</li>
@@ -125,8 +125,8 @@ export default function PrivacyPage() {
               </p>
               <div className="bg-gray-50 rounded-lg p-4 mt-3">
                 <p className="text-gray-700">
-                  <strong>담당자:</strong> Ministry Hub 운영팀<br />
-                  <strong>이메일:</strong> support@ministryhub.com
+                  <strong>담당자:</strong> WORSHEEP 운영팀<br />
+                  <strong>이메일:</strong> support@worsheep.com
                 </p>
               </div>
             </section>

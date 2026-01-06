@@ -7,7 +7,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* 로고 및 설명 */}
           <div className="text-center md:text-left">
-            <h3 className="text-lg font-bold text-gray-900">Ministry Hub</h3>
+            <h3 className="text-lg font-bold text-gray-900">WORSHEEP</h3>
             <p className="text-sm text-gray-600 mt-1">예배팀을 위한 악보 관리 서비스</p>
           </div>
 
@@ -22,7 +22,7 @@ export default function Footer() {
             <Link href="/copyright" className="text-gray-600 hover:text-gray-900">
               저작권 정책
             </Link>
-            <a href="mailto:support@ministryhub.com" className="text-gray-600 hover:text-gray-900">
+            <a href="mailto:support@worsheep.com" className="text-gray-600 hover:text-gray-900">
               문의하기
             </a>
           </div>
@@ -31,7 +31,7 @@ export default function Footer() {
         {/* 저작권 */}
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} Ministry Hub. All rights reserved.
+            &copy; {new Date().getFullYear()} WORSHEEP. All rights reserved.
           </p>
         </div>
       </div>

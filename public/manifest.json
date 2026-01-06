@@ -1,6 +1,6 @@
 {
-  "name": "Ministry Hub - 예배 악보 관리",
-  "short_name": "Ministry Hub",
+  "name": "WORSHEEP - 예배 악보 관리",
+  "short_name": "WORSHEEP",
   "description": "예배팀을 위한 악보 관리 및 셋리스트 앱",
   "start_url": "/",
   "display": "standalone",

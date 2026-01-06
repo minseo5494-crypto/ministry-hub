@@ -26,7 +26,7 @@ export default function CopyrightPage() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">개요</h2>
               <p className="text-gray-700 leading-relaxed">
-                Ministry Hub(이하 "서비스")는 저작권을 존중하며, 저작권법 및 관련 법령을 준수합니다. 
+                WORSHEEP(이하 "서비스")은 저작권을 존중하며, 저작권법 및 관련 법령을 준수합니다.
                 본 정책은 서비스 내 악보 콘텐츠의 저작권 보호와 관련된 사항을 안내합니다.
               </p>
             </section>
@@ -101,8 +101,8 @@ export default function CopyrightPage() {
                 <Mail className="w-6 h-6 text-blue-600 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-blue-900">신고 접수처</p>
-                  <a href="mailto:copyright@ministryhub.com" className="text-blue-600 hover:underline">
-                    copyright@ministryhub.com
+                  <a href="mailto:copyright@worsheep.com" className="text-blue-600 hover:underline">
+                    copyright@worsheep.com
                   </a>
                 </div>
               </div>
@@ -189,8 +189,8 @@ export default function CopyrightPage() {
                 <Mail className="w-6 h-6 text-green-600 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-green-900">파트너십 문의</p>
-                  <a href="mailto:partnership@ministryhub.com" className="text-green-600 hover:underline">
-                    partnership@ministryhub.com
+                  <a href="mailto:partnership@worsheep.com" className="text-green-600 hover:underline">
+                    partnership@worsheep.com
                   </a>
                 </div>
               </div>

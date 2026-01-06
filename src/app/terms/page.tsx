@@ -22,8 +22,8 @@ export default function TermsPage() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">제1조 (목적)</h2>
               <p className="text-gray-700 leading-relaxed">
-                본 약관은 Ministry Hub(이하 "서비스")가 제공하는 악보 검색, 콘티 관리, 
-                팀 협업 등의 서비스 이용에 관한 조건 및 절차, 회사와 이용자의 권리와 의무, 
+                본 약관은 WORSHEEP(이하 "서비스")이 제공하는 악보 검색, 콘티 관리,
+                팀 협업 등의 서비스 이용에 관한 조건 및 절차, 회사와 이용자의 권리와 의무,
                 기타 필요한 사항을 규정하는 것을 목적으로 합니다.
               </p>
             </section>

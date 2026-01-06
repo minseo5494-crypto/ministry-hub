@@ -8,8 +8,8 @@ import { parseLyrics } from '@/lib/lyricParser'
 import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
-  Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2, Sparkles
+  Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -26,9 +26,7 @@ import ImagePreviewModal from '@/components/ImagePreviewModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
-import AnnotatedPreview from '@/components/AnnotatedPreview'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
-import { useAISearch } from '@/hooks/useAISearch'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
 import { SEASONS, TEMPO_RANGES, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
@@ -50,31 +48,14 @@ const isMobileDevice = () => {
 export default function Home() {
   const router = useRouter()
   const isMobile = useMobile()
-  const isTabletOrBelow = useMobile(1024)  // lg 브레이크포인트 미만
   const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showMenu, setShowMenu] = useState(false)
 
   // UI 상태 추가
-  const [showFilterPanel, setShowFilterPanel] = useState(!isTabletOrBelow)  // 넓은 화면에서는 열림, 좁은 화면에서는 닫힘
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
-
-  // 화면 크기 변경 시 필터 상태 자동 조정
-  useEffect(() => {
-    setShowFilterPanel(!isTabletOrBelow)
-  }, [isTabletOrBelow])
-
-  // 필터 오버레이 열릴 때 body 스크롤 막기 (태블릿/모바일)
-  useEffect(() => {
-    if (isTabletOrBelow && showFilterPanel) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [isTabletOrBelow, showFilterPanel])
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
+  const [showFilterPanel, setShowFilterPanel] = useState(true)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)  // ← 🆕 추가!
   
   // 임시 사용자 ID
   const USER_ID = user?.id || '00000000-0000-0000-0000-000000000001'
@@ -84,10 +65,6 @@ const [songs, setSongs] = useState<Song[]>([])
 const [filteredSongs, setFilteredSongs] = useState<Song[]>([])
 const [selectedSongs, setSelectedSongs] = useState<Song[]>([])
 const [loading, setLoading] = useState(true)
-
-// 📝 내 필기 노트 검색 결과
-const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])  // 검색어에 매칭되는 내 노트
-const [notePreviewStates, setNotePreviewStates] = useState<{ [noteId: string]: boolean }>({})  // 노트 미리보기 상태
 
 // 🎵 좋아요 관련 상태
 const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
@@ -147,17 +124,6 @@ const {
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
 
-  // 가사 입력 모달 상태
-  const [showLyricsModal, setShowLyricsModal] = useState(false)
-  const [editingLyricsSong, setEditingLyricsSong] = useState<Song | null>(null)
-  const [lyricsText, setLyricsText] = useState('')
-  const [savingLyrics, setSavingLyrics] = useState(false)
-
-  // AI 검색 상태
-  const [aiSearchEnabled, setAiSearchEnabled] = useState(false)
-  const [aiSearchInput, setAiSearchInput] = useState('')
-  const { searchWithAI, isSearching: isAISearching, lastResult: aiSearchResult } = useAISearch()
-
   // 🆕 미리보기 토글 상태 (각 곡별로)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
 
@@ -170,8 +136,7 @@ const {
   // 📝 필기 에디터 상태
   const [showNoteEditor, setShowNoteEditor] = useState(false)
   const [editingSong, setEditingSong] = useState<Song | null>(null)
-  const [editingNote, setEditingNote] = useState<typeof mySheetNotes[0] | null>(null)  // 내 필기 노트 편집용
-  const { saveNote, notes: mySheetNotes, fetchNotes: fetchMyNotes, searchNotes } = useSheetMusicNotes()
+  const { saveNote } = useSheetMusicNotes()
 
   // 📝 다중 곡 악보 뷰어 상태
   const [multiSongEditorSongs, setMultiSongEditorSongs] = useState<{
@@ -251,7 +216,6 @@ const {
     searchText: string;
     bpmMin: string;
     bpmMax: string;
-    includeMyNotes: boolean;  // 내 필기 노트 검색 포함
   }>({
     season: '전체',
     themes: [] as string[],
@@ -263,8 +227,7 @@ const {
     searchText: '',
     // 👇 BPM 필터 추가
     bpmMin: '',
-    bpmMax: '',
-    includeMyNotes: false,  // 기본값: 미포함
+    bpmMax: ''
   })
 
   const songListRef = useRef<HTMLDivElement>(null)
@@ -368,13 +331,6 @@ useEffect(() => {
       fetchSongs()
     }
   }, [user, userTeams])
-
-  // 📝 내 필기 노트 로드
-  useEffect(() => {
-    if (user?.id) {
-      fetchMyNotes(user.id)
-    }
-  }, [user?.id])
 
   // 키보드 이벤트 핸들러
   useEffect(() => {
@@ -491,6 +447,16 @@ const fetchSongs = async () => {
 
     // 🆕 공유 범위에 따른 필터링
     const filteredData = allData.filter(song => {
+      // 🔍 디버깅: 특정 곡 체크
+      if (song.id === '3149' || song.id === '3150' || song.id === '3151') {
+        console.log(`🔍 곡 ${song.id} - "${song.song_name}" 필터링 체크:`, {
+          song_name: song.song_name,
+          name_length: song.song_name?.length,
+          visibility: song.visibility,
+          will_pass: song.song_name && song.song_name.trim() !== '' && song.song_name.length > 1
+        })
+      }
+        
       // 기본 유효성 검사
       if (!song.song_name || song.song_name.trim() === '' || song.song_name.length <= 1) {
         return false
@@ -728,7 +694,6 @@ const handleBPMChange = (bpmValue: string) => {
 // 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
 const normalizeText = (text: string): string => {
   return text
-    .normalize('NFC')  // 유니코드 정규화 (한글 자모 조합 통일)
     .toLowerCase()
     .replace(/\([a-g][#b]?m?\)/gi, '')  // 키 표시 제거 (C), (D#), (Am), (Bb) 등
     .replace(/\s+/g, '')  // 모든 공백 제거
@@ -937,8 +902,8 @@ const handleTempoChange = (tempoValue: string) => {
 const { error: insertError } = await supabase
   .from('songs')
   .insert({
-    song_name: newSong.song_name.trim().normalize('NFC'),
-    team_name: newSong.team_name.trim().normalize('NFC') || null,
+    song_name: newSong.song_name.trim(),
+    team_name: newSong.team_name.trim() || null,
     key: newSong.key || null,
     time_signature: newSong.time_signature || null,
     tempo: newSong.tempo || null,
@@ -1117,95 +1082,26 @@ if (newSong.visibility === 'public') {
     }
   }
 
-  // 가사 저장 함수
-  const saveLyrics = async () => {
-    if (!editingLyricsSong) return
-
-    setSavingLyrics(true)
-    try {
-      const { error } = await supabase
-        .from('songs')
-        .update({ lyrics: lyricsText })
-        .eq('id', editingLyricsSong.id)
-
-      if (error) throw error
-
-      // 로컬 상태 업데이트
-      setSongs(prev => prev.map(s =>
-        s.id === editingLyricsSong.id ? { ...s, lyrics: lyricsText } : s
-      ))
-
-      // previewSong도 업데이트
-      if (previewSong?.id === editingLyricsSong.id) {
-        setPreviewSong({ ...previewSong, lyrics: lyricsText })
-      }
-
-      alert('가사가 저장되었습니다.')
-      setShowLyricsModal(false)
-      setEditingLyricsSong(null)
-      setLyricsText('')
-    } catch (error) {
-      console.error('가사 저장 오류:', error)
-      alert('가사 저장에 실패했습니다.')
-    } finally {
-      setSavingLyrics(false)
-    }
-  }
-
-  // 가사 편집 모달 열기
-  const openLyricsModal = (song: Song) => {
-    setEditingLyricsSong(song)
-    setLyricsText(song.lyrics || '')
-    setShowLyricsModal(true)
-  }
+  
 
   // 개선된 필터링 로직
   useEffect(() => {
     let result = [...songs]
 
     if (filters.searchText) {
-      // 검색어를 공백으로 분리하여 OR 검색 (AI 검색 키워드 지원)
-      const searchTerms = filters.searchText.trim().split(/\s+/).filter(t => t.length > 0)
-
+      const normalizedSearch = normalizeText(filters.searchText)
       result = result.filter(song => {
+        // 띄어쓰기/특수문자 무시 검색
         const normalizedSongName = normalizeText(song.song_name)
         const normalizedTeamName = normalizeText(song.team_name || '')
-        const normalizedLyrics = normalizeText(song.lyrics || '')
-        const normalizedArtist = normalizeText(song.artist || '')
 
-        // OR 검색: 하나라도 매칭되면 true
-        return searchTerms.some(term => {
-          const normalizedTerm = normalizeText(term)
-          const termLower = term.toLowerCase()
-          return normalizedSongName.includes(normalizedTerm) ||
-                 normalizedTeamName.includes(normalizedTerm) ||
-                 normalizedLyrics.includes(normalizedTerm) ||
-                 normalizedArtist.includes(normalizedTerm) ||
-                 song.song_name.toLowerCase().includes(termLower) ||
-                 song.team_name?.toLowerCase().includes(termLower) ||
-                 song.lyrics?.toLowerCase().includes(termLower) ||
-                 song.artist?.toLowerCase().includes(termLower)
-        })
-      })
-
-      // 📝 내 필기 노트 검색 (필터가 켜져 있을 때만)
-      if (filters.includeMyNotes && mySheetNotes.length > 0) {
+        // 정규화된 검색과 일반 검색 둘 다 지원
         const searchLower = filters.searchText.toLowerCase()
-        const matchedNotes = mySheetNotes.filter(note => {
-          const normalizedNoteName = normalizeText(note.song_name)
-          const normalizedNoteTeam = normalizeText(note.team_name || '')
-          return normalizedNoteName.includes(normalizedSearch) ||
-                 normalizedNoteTeam.includes(normalizedSearch) ||
-                 note.song_name.toLowerCase().includes(searchLower) ||
-                 note.team_name?.toLowerCase().includes(searchLower) ||
-                 note.title?.toLowerCase().includes(searchLower)
-        })
-        setMatchingNotes(matchedNotes)
-      } else {
-        setMatchingNotes([])
-      }
-    } else {
-      setMatchingNotes([])
+        return normalizedSongName.includes(normalizedSearch) ||
+               normalizedTeamName.includes(normalizedSearch) ||
+               song.song_name.toLowerCase().includes(searchLower) ||
+               song.team_name?.toLowerCase().includes(searchLower)
+      })
     }
 
     // 절기 필터
@@ -1322,7 +1218,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy, showUserUploaded, mySheetNotes])
+  }, [songs, filters, user, sortBy, showUserUploaded])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1400,7 +1296,6 @@ const hasMore = displayCount < filteredSongs.length
     } else {
       // 단일 곡 모드
       setEditingSong(clickedSong)
-      setEditingNote(null)  // 일반 곡 클릭 시 기존 노트 정보 초기화
       setShowNoteEditor(true)
     }
   }
@@ -1482,8 +1377,7 @@ const hasMore = displayCount < filteredSongs.length
       tempo: '',
       searchText: filters.searchText,  // 검색어는 유지
       bpmMin: '',
-      bpmMax: '',
-      includeMyNotes: filters.includeMyNotes,  // 필기 노트 포함 필터도 유지
+      bpmMax: ''
     })
   }
 
@@ -1507,7 +1401,7 @@ const hasMore = displayCount < filteredSongs.length
             {/* 로고 */}
             <div className="flex flex-wrap items-center gap-1 sm:gap-2">
               <Music className="w-8 h-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">Ministry Hub</h1>
+              <h1 className="text-2xl font-bold text-gray-900">WORSHEEP</h1>
             </div>
 
             {/* 네비게이션 */}
@@ -1601,70 +1495,30 @@ const hasMore = displayCount < filteredSongs.length
                   <div className="border-t my-1"></div>
                   <button
                     onClick={() => {
-                      router.push('/admin/song-approvals')
+                      router.push('/admin/content-management')
                       setShowMenu(false)
                     }}
                     className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
                   >
                     <Music className="mr-2" size={18} />
-                    곡 승인 관리
+                    콘텐츠 관리
                   </button>
                   <button
                     onClick={() => {
-                      router.push('/admin/user-songs')
+                      router.push('/admin/account-management')
                       setShowMenu(false)
                     }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                    className="w-full px-4 py-2 text-left text-violet-700 hover:bg-violet-50 flex items-center font-medium"
                   >
-                    <Trash2 className="mr-2" size={18} />
-                    사용자 곡 관리
-                  </button>
-                  <button
-                    onClick={() => {
-                      router.push('/admin/approvals')
-                      setShowMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                  >
-                    <Activity className="mr-2" size={18} />
-                    팀 승인 관리
-                  </button>
-                  <button
-                    onClick={() => {
-                      router.push('/admin/official-uploaders')
-                      setShowMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                  >
-                    <Shield className="mr-2" size={18} />
-                    공식 업로더 관리
-                  </button>
-                  <button
-                    onClick={() => {
-                      router.push('/admin/publishers')
-                      setShowMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                  >
-                    <Building2 className="mr-2" size={18} />
-                    공식 퍼블리셔 관리
-                  </button>
-                  <button
-                    onClick={() => {
-                      router.push('/admin/official-songs')
-                      setShowMenu(false)
-                    }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
-                  >
-                    <Music className="mr-2" size={18} />
-                    공식 악보 관리
+                    <Users className="mr-2" size={18} />
+                    계정 관리
                   </button>
                   <button
                     onClick={() => {
                       router.push('/admin/dashboard')
                       setShowMenu(false)
                     }}
-                    className="w-full px-4 py-2 text-left text-blue-700 hover:bg-blue-50 flex items-center font-medium"
+                    className="w-full px-4 py-2 text-left text-green-700 hover:bg-green-50 flex items-center font-medium"
                   >
                     <BarChart3 className="mr-2" size={18} />
                     통계 대시보드
@@ -1827,71 +1681,27 @@ const hasMore = displayCount < filteredSongs.length
               <>
                 <div className="border-t my-2"></div>
                 <p className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">관리자</p>
-                
+
                 <button
                   onClick={() => {
-                    router.push('/admin/song-approvals')
+                    router.push('/admin/content-management')
                     setShowMobileMenu(false)
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
                 >
                   <Music size={20} />
-                  <span>곡 승인 관리</span>
+                  <span>콘텐츠 관리</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    router.push('/admin/user-songs')
+                    router.push('/admin/account-management')
                     setShowMobileMenu(false)
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-violet-700 hover:bg-violet-50 rounded-lg transition"
                 >
-                  <Trash2 size={20} />
-                  <span>사용자 곡 관리</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    router.push('/admin/approvals')
-                    setShowMobileMenu(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                >
-                  <Activity size={20} />
-                  <span>팀 승인 관리</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    router.push('/admin/official-uploaders')
-                    setShowMobileMenu(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                >
-                  <Shield size={20} />
-                  <span>공식 업로더 관리</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    router.push('/admin/publishers')
-                    setShowMobileMenu(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                >
-                  <Building2 size={20} />
-                  <span>공식 퍼블리셔 관리</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    router.push('/admin/official-songs')
-                    setShowMobileMenu(false)
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                >
-                  <Music size={20} />
-                  <span>공식 악보 관리</span>
+                  <Users size={20} />
+                  <span>계정 관리</span>
                 </button>
 
                 <button
@@ -1899,7 +1709,7 @@ const hasMore = displayCount < filteredSongs.length
                     router.push('/admin/dashboard')
                     setShowMobileMenu(false)
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-green-700 hover:bg-green-50 rounded-lg transition"
                 >
                   <BarChart3 size={20} />
                   <span>통계 대시보드</span>
@@ -1978,153 +1788,23 @@ const hasMore = displayCount < filteredSongs.length
               opacity: 0.95,
               textShadow: '0 2px 8px rgba(0,0,0,0.8)'
             }}>
-              Ministry Hub와 함께 은혜로운 예배를 준비하세요
+              WORSHEEP과 함께 은혜로운 예배를 준비하세요
             </p>
           </div>
 
           {/* 검색바 - 흰색 배경 */}
           <div className="max-w-3xl mx-auto mb-8">
-            {/* AI 검색 토글 */}
-            <div className="flex justify-center mb-3">
-              <button
-                onClick={() => setAiSearchEnabled(!aiSearchEnabled)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  aiSearchEnabled
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                <Sparkles size={16} />
-                AI 자연어 검색 {aiSearchEnabled ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
             <div className="relative">
-              {aiSearchEnabled ? (
-                <Sparkles className="absolute left-4 top-4 text-purple-500" size={24} />
-              ) : (
-                <Search className="absolute left-4 top-4 text-gray-400" size={24} />
-              )}
+              <Search className="absolute left-4 top-4 text-gray-400" size={24} />
               <input
                 type="text"
-                placeholder={aiSearchEnabled
-                  ? "예: 빠른 템포의 감사 찬양, 크리스마스에 부를 곡..."
-                  : "찬양곡 제목, 아티스트, 가사로 검색..."}
-                className={`w-full pl-12 pr-24 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none border-2 ${
-                  aiSearchEnabled
-                    ? 'focus:ring-4 focus:ring-purple-500 border-purple-200'
-                    : 'focus:ring-4 focus:ring-blue-500 border-white/50'
-                }`}
-                value={aiSearchEnabled ? aiSearchInput : filters.searchText}
-                onChange={(e) => {
-                  if (aiSearchEnabled) {
-                    setAiSearchInput(e.target.value)
-                  } else {
-                    setFilters({ ...filters, searchText: e.target.value })
-                  }
-                }}
-                onKeyDown={async (e) => {
-                  if (aiSearchEnabled && e.key === 'Enter' && aiSearchInput.trim()) {
-                    e.preventDefault()
-                    const result = await searchWithAI(aiSearchInput)
-                    if (result?.success && result.filters) {
-                      // AI 검색 결과를 필터에 적용
-                      const { keywords, themes, season, tempo, key: keyFilter } = result.filters
-                      setFilters(prev => ({
-                        ...prev,
-                        searchText: keywords.join(' '),
-                        theme: themes[0] || prev.theme,
-                        season: season || prev.season,
-                        tempo: tempo || prev.tempo,
-                        key: keyFilter || prev.key,
-                      }))
-                    }
-                  }
-                }}
+                placeholder="찬양곡 제목, 아티스트, 가사로 검색..."
+                className="w-full pl-12 pr-4 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
+                value={filters.searchText}
+                onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
                 style={{ backgroundColor: 'white' }}
               />
-              {/* AI 검색 버튼 */}
-              {aiSearchEnabled && (
-                <button
-                  onClick={async () => {
-                    if (aiSearchInput.trim()) {
-                      const result = await searchWithAI(aiSearchInput)
-                      if (result?.success && result.filters) {
-                        const { keywords, themes, season, tempo, key: keyFilter, lyricsKeywords, mood } = result.filters
-
-                        // 모든 관련 키워드를 검색어에 포함 (테마, 가사 키워드, 분위기 등)
-                        const allKeywords = [
-                          ...keywords,
-                          ...themes,
-                          ...(lyricsKeywords || []),
-                          ...(mood ? [mood] : [])
-                        ].filter(k => k && k.length > 0)
-
-                        // 기존 필터 초기화 후 키워드 기반 검색
-                        setFilters(prev => ({
-                          ...prev,
-                          // 기존 필터 초기화
-                          season: season || '전체',
-                          themes: [],
-                          theme: '',
-                          // 키워드 기반 검색 (모든 관련 단어 포함)
-                          searchText: allKeywords.length > 0 ? allKeywords.join(' ') : aiSearchInput,
-                          // 템포, 키는 AI가 감지한 경우만 적용
-                          tempo: tempo || '',
-                          key: keyFilter || '',
-                        }))
-                      }
-                    }
-                  }}
-                  disabled={isAISearching || !aiSearchInput.trim()}
-                  className="absolute right-3 top-3 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isAISearching ? '분석중...' : '검색'}
-                </button>
-              )}
             </div>
-
-            {/* AI 검색 결과 피드백 */}
-            {aiSearchEnabled && aiSearchResult && (
-              <div className="mt-3 p-3 bg-white/10 backdrop-blur rounded-lg text-white text-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={14} />
-                  <span className="font-medium">AI 분석 결과:</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {aiSearchResult.filters.keywords.length > 0 && (
-                    <span className="px-2 py-1 bg-blue-500/30 rounded text-xs">
-                      키워드: {aiSearchResult.filters.keywords.join(', ')}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.themes.length > 0 && (
-                    <span className="px-2 py-1 bg-green-500/30 rounded text-xs">
-                      테마: {aiSearchResult.filters.themes.join(', ')}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.season && (
-                    <span className="px-2 py-1 bg-orange-500/30 rounded text-xs">
-                      시즌: {aiSearchResult.filters.season}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.tempo && (
-                    <span className="px-2 py-1 bg-purple-500/30 rounded text-xs">
-                      템포: {aiSearchResult.filters.tempo}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.key && (
-                    <span className="px-2 py-1 bg-pink-500/30 rounded text-xs">
-                      키: {aiSearchResult.filters.key}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.mood && (
-                    <span className="px-2 py-1 bg-yellow-500/30 rounded text-xs">
-                      분위기: {aiSearchResult.filters.mood}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
 
@@ -2153,7 +1833,7 @@ const hasMore = displayCount < filteredSongs.length
       </div>
 
       {/* 선택된 곡 상단바 */}
-      {selectedSongs.length > 0 && !(isTabletOrBelow && showFilterPanel) && (
+      {selectedSongs.length > 0 && !(isMobile && showFilterPanel) && (
         <div className="bg-white border-b sticky top-0 z-40 shadow-sm">
           <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
@@ -2241,31 +1921,25 @@ const hasMore = displayCount < filteredSongs.length
         </div>
       )}
 
-      {/* 필터 배경 오버레이 (lg 미만에서 표시) */}
-      {showFilterPanel && (
+      {/* 모바일 필터 배경 오버레이 */}
+      {isMobile && showFilterPanel && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setShowFilterPanel(false)}
         />
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-3 lg:gap-6">
-          {/* 왼쪽: 필터 패널 - lg 이상에서만 사이드바, 그 외에는 오버레이 */}
-          <div className={`
-            ${showFilterPanel ? 'lg:w-80' : 'lg:w-0'}
-            transition-all duration-300
-            ${showFilterPanel
-              ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4 w-72 overflow-y-auto overscroll-contain lg:relative lg:shadow-none lg:pt-0 lg:bg-transparent lg:overflow-visible'
-              : 'hidden lg:block overflow-hidden'}
-          `}>
+        <div className="flex flex-col md:flex-row gap-3 md:gap-6">
+          {/* 왼쪽: 필터 패널 */}
+          <div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
             <FilterPanel
               filters={filters}
               onFilterChange={handleFilterChange}
               onThemeToggle={toggleThemeFilter}
               onReset={resetFilters}
               onClose={() => setShowFilterPanel(false)}
-              isMobile={isTabletOrBelow}
+              isMobile={isMobile}
               isVisible={showFilterPanel}
               themeCounts={themeCounts}
               themesLoading={themesLoading}
@@ -2275,164 +1949,72 @@ const hasMore = displayCount < filteredSongs.length
           </div>
 
 {/* 오른쪽: 곡 목록 */}
-<div className="flex-1 min-w-0">
+<div className="flex-1">
   {/* 툴바 */}
-  <div className="bg-white rounded-lg shadow-md p-2 md:p-4 mb-4">
-    <div className="flex items-center justify-between gap-2">
-      {/* 왼쪽: 필터 + 곡 수 + 정렬 */}
-      <div className="flex items-center gap-1 md:gap-4 min-w-0 flex-shrink">
+  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
         <button
           onClick={() => setShowFilterPanel(!showFilterPanel)}
-          className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg flex-shrink-0"
+          className="p-2 hover:bg-gray-100 rounded-lg"
         >
-          <Filter size={18} className="md:w-5 md:h-5" />
+          <Filter size={20} />
         </button>
-        <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">
-          {displayCount < filteredSongs.length
-            ? `${displayCount} / ${filteredSongs.length}개`
-            : `${filteredSongs.length}개`
-          }
-        </span>
+        <span className="text-gray-600">
+{displayCount < filteredSongs.length 
+  ? `${displayCount} / ${filteredSongs.length}개의 찬양`
+  : `${filteredSongs.length}개의 찬양`
+}
+</span>
 
         {/* 🎵 정렬 드롭다운 */}
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-          className="px-2 md:px-3 py-1 md:py-1.5 border border-gray-300 rounded-lg text-xs md:text-sm focus:ring-2 focus:ring-blue-500 flex-shrink-0"
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
         >
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
           <option value="name">이름순</option>
         </select>
+    </div>
 
-        {/* 📝 내 필기 노트 포함 토글 */}
-        {user && mySheetNotes.length > 0 && (
-          <button
-            onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
-            className={`flex items-center gap-1 p-1.5 md:px-3 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
-              filters.includeMyNotes
-                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            title={filters.includeMyNotes ? '내 필기 노트 포함됨' : '내 필기 노트 미포함'}
-          >
-            <Pencil size={14} className="flex-shrink-0" />
-            <span className="hidden md:inline">
-              {filters.includeMyNotes ? '내 필기' : '내 필기'}
-            </span>
-            {filters.includeMyNotes && (
-              <span className="hidden md:inline text-purple-500">✓</span>
-            )}
-          </button>
-        )}
-      </div>
-
-      {/* 오른쪽: 공식/전체 토글 */}
-      <div className="flex items-center gap-1 flex-shrink-0">
+    <div className="flex items-center gap-2 md:gap-3">
         {/* 🛡️ 공식/사용자 악보 토글 */}
         <button
           onClick={() => setShowUserUploaded(!showUserUploaded)}
-          className={`flex items-center gap-1 p-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
             showUserUploaded
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
           }`}
           title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
         >
-          <Shield size={14} className="flex-shrink-0" />
+          <Shield size={16} className="flex-shrink-0" />
           <span className="hidden sm:inline">{showUserUploaded ? '전체' : '공식만'}</span>
+        </button>
+
+        <div className="w-px h-6 bg-gray-200 hidden md:block"></div>
+
+        <button
+          onClick={() => setViewMode('grid')}
+          className={`p-2 rounded-lg transition ${
+            viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+          }`}
+        >
+          <Grid size={20} />
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`p-2 rounded-lg transition ${
+            viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+          }`}
+        >
+          <List size={20} />
         </button>
       </div>
     </div>
   </div>
-
-  {/* 📝 내 필기 노트 검색 결과 */}
-  {matchingNotes.length > 0 && filters.includeMyNotes && (
-    <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg shadow-md mb-4 border border-purple-200">
-      <div className="p-4 border-b border-purple-200 bg-purple-100/50">
-        <h3 className="text-sm font-bold text-purple-800 flex items-center gap-2">
-          <Pencil size={16} />
-          내 필기 노트 검색 결과 ({matchingNotes.length}개)
-        </h3>
-        <p className="text-xs text-purple-600 mt-1">내가 수정하고 필기한 악보들입니다.</p>
-      </div>
-      <div className="divide-y divide-purple-100">
-        {matchingNotes.map(note => (
-          <div key={note.id} className="hover:bg-purple-50/50 transition">
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-gray-900">{note.song_name}</h4>
-                    <span className="px-2 py-0.5 bg-purple-200 text-purple-700 text-xs rounded-full">
-                      내 필기
-                    </span>
-                  </div>
-                  {note.team_name && (
-                    <p className="text-sm text-gray-600">{note.team_name}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    마지막 수정: {new Date(note.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {note.file_type === 'pdf' && (
-                    <span className="px-2 py-1 bg-red-100 text-red-600 text-xs rounded">PDF</span>
-                  )}
-                  {/* 미리보기 버튼 */}
-                  <button
-                    onClick={() => setNotePreviewStates(prev => ({
-                      ...prev,
-                      [note.id]: !prev[note.id]
-                    }))}
-                    className={`p-1.5 rounded transition ${
-                      notePreviewStates[note.id]
-                        ? 'bg-purple-100 text-purple-600'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-                    }`}
-                    title="미리보기"
-                  >
-                    {notePreviewStates[note.id] ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                  {/* 악보 뷰어/편집 버튼 */}
-                  <button
-                    onClick={() => {
-                      setEditingSong({
-                        id: note.song_id,
-                        song_name: note.song_name,
-                        team_name: note.team_name,
-                        file_url: note.file_url,
-                        file_type: note.file_type,
-                      } as Song)
-                      setEditingNote(note)
-                      setShowNoteEditor(true)
-                    }}
-                    className="p-1.5 text-purple-600 hover:bg-purple-100 rounded transition"
-                    title="악보 뷰어에서 열기"
-                  >
-                    <Presentation size={18} />
-                  </button>
-                </div>
-              </div>
-            </div>
-            {/* 미리보기 영역 (필기 포함) */}
-            {notePreviewStates[note.id] && note.file_url && (
-              <div className="px-4 pb-4">
-                <div className="bg-white rounded-lg border border-purple-200 overflow-hidden">
-                  <AnnotatedPreview
-                    fileUrl={note.file_url}
-                    fileType={note.file_type === 'pdf' ? 'pdf' : 'image'}
-                    annotations={note.annotations || []}
-                    maxHeight={1000}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )}
 
   {/* 곡 목록 */}
   <div className="bg-white rounded-lg shadow-md">
@@ -2441,25 +2023,156 @@ const hasMore = displayCount < filteredSongs.length
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         <p className="mt-4 text-gray-600">불러오는 중...</p>
       </div>
-    ) : filteredSongs.length === 0 && matchingNotes.length === 0 ? (
+    ) : filteredSongs.length === 0 ? (
       <div className="text-center py-12 text-gray-500">
         <Music size={48} className="mx-auto mb-4 text-gray-300" />
         <p>검색 결과가 없습니다.</p>
       </div>
-    ) : filteredSongs.length === 0 ? (
-      <div className="text-center py-8 text-gray-500">
-        <Music size={32} className="mx-auto mb-2 text-gray-300" />
-        <p className="text-sm">곡 검색 결과가 없습니다. (내 필기 노트만 검색됨)</p>
+    ) : viewMode === 'grid' ? (
+  
+  // 그리드 뷰
+  <div className="p-3 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+{displayedSongs.map((song, index) => (
+      <div
+        key={song.id}
+        onClick={() => {
+          toggleSongSelection(song)
+          setFocusedSongIndex(index)
+        }}
+        className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+          selectedSongs.find(s => s.id === song.id)
+            ? 'border-blue-500 bg-blue-50'
+            : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 truncate">{song.song_name}</h3>
+            {song.is_official ? (
+              <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center gap-1" title="공식 악보">
+                <Shield size={12} />
+              </span>
+            ) : song.is_user_uploaded && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full flex items-center gap-0.5" title="사용자 추가">
+                <UserPlus size={10} />
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1 ml-2">
+            {/* 악보 미리보기 버튼 - 모달로 열기 */}
+            {song.file_url && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPreviewSong(song)
+                  }}
+                  className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                  title="악보 보기"
+                >
+                  <Eye size={18} />
+                </button>
+                {/* 📝 필기 버튼 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingSong(song)
+                    setShowNoteEditor(true)
+                  }}
+                  className="p-1 text-gray-700 hover:bg-gray-100 rounded"
+                  title="필기하기"
+                >
+                  <Pencil size={18} />
+                </button>
+              </>
+            )}
+            {/* 유튜브 버튼 - 항상 표시 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (song.youtube_url) {
+                  setYoutubeModalSong(song)
+                }
+              }}
+              disabled={!song.youtube_url}
+              className="p-1 rounded"
+              style={{
+                color: song.youtube_url ? '#dc2626' : '#d1d5db',
+                cursor: song.youtube_url ? 'pointer' : 'not-allowed',
+                opacity: song.youtube_url ? 1 : 0.5
+              }}
+              title={song.youtube_url ? '유튜브' : '유튜브 링크 없음'}
+            >
+              <Youtube size={18} />
+            </button>
+          </div>
+        </div>
+        
+        {song.team_name && (
+          <p className="text-sm text-gray-600 mb-2">{song.team_name}</p>
+        )}
+        
+        {/* 미리보기 (토글 시 표시) */}
+        {previewStates[song.id] && (
+          <div className="mt-3 border-t pt-3">
+            {song.lyrics && (
+              <pre className="text-xs text-gray-700 whitespace-pre-wrap font-sans max-h-40 overflow-y-auto bg-gray-50 p-2 rounded">
+                {song.lyrics}
+              </pre>
+            )}
+            {song.file_url && (
+              <img 
+                src={song.file_url}
+                alt={song.song_name}
+                className="w-full h-auto mt-2 rounded"
+              />
+            )}
+          </div>
+        )}
+        
+        <div className="flex flex-wrap gap-2 text-xs mt-2">
+          {song.key && (
+            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+              Key: {song.key}
+            </span>
+          )}
+          {song.time_signature && (
+            <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+              {song.time_signature}
+            </span>
+          )}
+          {song.tempo && (
+            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
+              {song.tempo}
+            </span>
+          )}
+        </div>
+        {(song.theme1 || song.theme2) && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {song.theme1 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                {song.theme1}
+              </span>
+            )}
+            {song.theme2 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                {song.theme2}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-    ) : (
-      // 리스트 뷰
+    ))}
+  </div>
+              ) : (
+                // 리스트 뷰 (기존 스타일 유지)
 <div ref={songListRef} className="divide-y divide-gray-200">
   {displayedSongs.map((song, index) => (
     <div
       key={song.id}
       tabIndex={0}
       onFocus={() => setFocusedSongIndex(index)}
-      className={`p-2 md:p-4 cursor-pointer transition-all ${
+      className={`p-4 cursor-pointer transition-all ${
         selectedSongs.find(s => s.id === song.id)
           ? 'bg-blue-50'
           : focusedSongIndex === index
@@ -2476,7 +2189,7 @@ const hasMore = displayCount < filteredSongs.length
         }}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2">
+          <div className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={!!selectedSongs.find(s => s.id === song.id)}
@@ -2485,12 +2198,11 @@ const hasMore = displayCount < filteredSongs.length
                 setFocusedSongIndex(index)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="mr-2 md:mr-3 cursor-pointer mt-1"
-              style={{ width: '16px', height: '16px', minWidth: '16px', minHeight: '16px', maxHeight: '16px' }}
+              className="mr-3 flex-shrink-0 mt-1 w-4 h-4 cursor-pointer"
             />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1 md:gap-2 flex-wrap">
-                <h3 className="font-semibold text-sm md:text-base text-gray-900">{song.song_name}</h3>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
                 {song.is_official ? (
                   <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center" title="공식 악보">
                     <Shield size={12} />
@@ -2506,11 +2218,11 @@ const hasMore = displayCount < filteredSongs.length
                   </span>
                 )}
               </div>
-              <p className="text-xs md:text-sm text-gray-600 mt-1">
-                {song.team_name && <span>{song.team_name}</span>}
-                <span className="hidden sm:inline">
-                  {song.team_name && ' | '}Key: {song.key || '-'} | {song.time_signature || '-'} | {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
-                </span>
+              <p className="text-sm text-gray-600 mt-1">
+                {song.team_name && `${song.team_name} | `}
+                Key: {song.key || '-'} | 
+                박자: {song.time_signature || '-'} | 
+                템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
               </p>
               
               {/* 테마 태그 */}
@@ -2531,7 +2243,7 @@ const hasMore = displayCount < filteredSongs.length
         </div>
 
         {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
-        <div className="flex gap-0.5 md:gap-2 ml-1 md:ml-4 flex-shrink-0">
+        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
           {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
@@ -2539,7 +2251,7 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openFormModal(song)
               }}
-              className="px-1.5 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs rounded hover:bg-[#B0A8D8] whitespace-nowrap"
+              className="px-2 md:px-3 py-1 bg-[#C4BEE2] text-white text-xs md:text-sm rounded hover:bg-[#B0A8D8] whitespace-nowrap"
             >
               송폼
             </button>
@@ -2552,14 +2264,14 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 togglePreview(song.id)
               }}
-              className={`p-1.5 md:p-2 rounded-lg ${
+              className={`p-2 rounded-lg ${
                 previewStates[song.id]
                   ? 'text-blue-600 bg-blue-100'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
               title={previewStates[song.id] ? '접기' : '펼치기'}
             >
-              {previewStates[song.id] ? <EyeOff size={16} className="md:w-[18px] md:h-[18px]" /> : <Eye size={16} className="md:w-[18px] md:h-[18px]" />}
+              {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
 
@@ -2570,28 +2282,12 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openSheetViewer(song)
               }}
-              className="p-1.5 md:p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
               title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 뷰어` : '악보 보기/필기 모드'}
             >
-              <Presentation size={16} className="md:w-[18px] md:h-[18px]" />
+              <Presentation size={18} />
             </button>
           )}
-
-          {/* 가사 추가/보기 버튼 */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              openLyricsModal(song)
-            }}
-            className={`p-1.5 md:p-2 rounded-lg ${
-              song.lyrics
-                ? 'text-green-600 bg-green-100'
-                : 'text-gray-500 hover:bg-gray-100'
-            }`}
-            title={song.lyrics ? '가사 보기/수정' : '가사 추가'}
-          >
-            <FileText size={16} className="md:w-[18px] md:h-[18px]" />
-          </button>
 
           {/* 유튜브 영상 토글 버튼 */}
           <button
@@ -2602,11 +2298,11 @@ const hasMore = displayCount < filteredSongs.length
               }
             }}
             disabled={!song.youtube_url}
-            className="p-1.5 md:p-2 rounded-lg"
+            className="p-2 rounded-lg"
             style={{
-              color: !song.youtube_url
-                ? '#d1d5db'
-                : youtubeStates[song.id]
+              color: !song.youtube_url 
+                ? '#d1d5db' 
+                : youtubeStates[song.id] 
                 ? '#dc2626'
                 : '#dc2626',
               backgroundColor: !song.youtube_url
@@ -2625,22 +2321,22 @@ const hasMore = displayCount < filteredSongs.length
                 : '유튜브 열기'
             }
           >
-            <Youtube size={16} className="md:w-[18px] md:h-[18px]" />
+            <Youtube size={18} />
           </button>
 
           {/* 🎵 좋아요 버튼 */}
           <button
             onClick={(e) => toggleLike(e, song.id)}
-            className={`p-1.5 md:p-2 rounded-lg transition-colors flex items-center gap-0.5 md:gap-1 ${
+            className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
               likedSongs.has(song.id)
                 ? 'text-red-500 bg-red-50'
                 : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
             }`}
             title={likedSongs.has(song.id) ? '좋아요 취소' : '좋아요'}
           >
-            <Heart size={16} className="md:w-[18px] md:h-[18px]" fill={likedSongs.has(song.id) ? 'currentColor' : 'none'} />
+            <Heart size={18} fill={likedSongs.has(song.id) ? 'currentColor' : 'none'} />
             {((song as any).like_count || 0) > 0 && (
-              <span className="text-[10px] md:text-xs">{(song as any).like_count}</span>
+              <span className="text-xs">{(song as any).like_count}</span>
             )}
           </button>
         </div>
@@ -2854,7 +2550,7 @@ autoComplete="off"
                   공유 범위 <span className="text-red-500">*</span>
                 </label>
                 <div className="space-y-2">
-                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${
                     newSong.visibility === 'public'
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:bg-gray-50'
@@ -2869,18 +2565,15 @@ autoComplete="off"
                       }}
                       className="mr-3 accent-blue-500"
                     />
-                    <div className="flex-1">
+                    <div>
                       <div className={`font-medium ${newSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
                       <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
-                    {newSong.visibility === 'public' && (
-                      <span className="text-blue-500 text-xl">✓</span>
-                    )}
                   </label>
 
-                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${
                     newSong.visibility === 'teams'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-violet-500 bg-violet-50'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -2889,20 +2582,17 @@ autoComplete="off"
                       value="teams"
                       checked={newSong.visibility === 'teams'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'teams' })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-violet-500"
                     />
-                    <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-blue-700' : 'text-gray-900'}`}>팀 공개</div>
+                    <div>
+                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-violet-700' : 'text-gray-900'}`}>팀 공개</div>
                       <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
-                    {newSong.visibility === 'teams' && (
-                      <span className="text-blue-500 text-xl">✓</span>
-                    )}
                   </label>
 
-                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${
                     newSong.visibility === 'private'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-gray-500 bg-gray-100'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -2911,15 +2601,12 @@ autoComplete="off"
                       value="private"
                       checked={newSong.visibility === 'private'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'private', shared_with_teams: [] })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-gray-500"
                     />
-                    <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-blue-700' : 'text-gray-900'}`}>비공개</div>
+                    <div>
+                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-gray-700' : 'text-gray-900'}`}>비공개</div>
                       <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
-                    {newSong.visibility === 'private' && (
-                      <span className="text-blue-500 text-xl">✓</span>
-                    )}
                   </label>
                 </div>
 
@@ -2931,29 +2618,39 @@ autoComplete="off"
                     </label>
                     {userTeams.length > 0 ? (
                       <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                        {userTeams.map(team => (
-                          <label key={team.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={newSong.shared_with_teams.includes(team.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewSong({
-                                    ...newSong,
-                                    shared_with_teams: [...newSong.shared_with_teams, team.id]
-                                  })
-                                } else {
-                                  setNewSong({
-                                    ...newSong,
-                                    shared_with_teams: newSong.shared_with_teams.filter(id => id !== team.id)
-                                  })
-                                }
-                              }}
-                              className="mr-2"
-                            />
-                            <span>{team.name}</span>
-                          </label>
-                        ))}
+                        {userTeams.map(team => {
+                          const isSelected = newSong.shared_with_teams.includes(team.id)
+                          return (
+                            <label
+                              key={team.id}
+                              className={`flex items-center p-2 rounded cursor-pointer transition ${
+                                isSelected
+                                  ? 'bg-violet-100 border border-violet-300'
+                                  : 'hover:bg-gray-50 border border-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setNewSong({
+                                      ...newSong,
+                                      shared_with_teams: [...newSong.shared_with_teams, team.id]
+                                    })
+                                  } else {
+                                    setNewSong({
+                                      ...newSong,
+                                      shared_with_teams: newSong.shared_with_teams.filter(id => id !== team.id)
+                                    })
+                                  }
+                                }}
+                                className="mr-2 accent-violet-500"
+                              />
+                              <span className={isSelected ? 'text-violet-700 font-medium' : 'text-gray-700'}>{team.name}</span>
+                            </label>
+                          )
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500">소속된 팀이 없습니다. 먼저 팀에 참여하거나 생성하세요.</p>
@@ -3316,27 +3013,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   {previewSong.team_name} | Key: {previewSong.key || '-'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => openLyricsModal(previewSong)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
-                    previewSong.lyrics
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                  title={previewSong.lyrics ? '가사 보기/수정' : '가사 추가'}
-                >
-                  <FileText size={18} />
-                  <span className="text-sm">{previewSong.lyrics ? '가사' : '가사 추가'}</span>
-                </button>
-                <button
-                  onClick={() => setPreviewSong(null)}
-                  className="text-gray-500 hover:text-gray-700 p-2"
-                  title="닫기 (ESC)"
-                >
-                  <X size={24} />
-                </button>
-              </div>
+              <button
+                onClick={() => setPreviewSong(null)}
+                className="text-gray-500 hover:text-gray-700 p-2"
+                title="닫기 (ESC)"
+              >
+                <X size={24} />
+              </button>
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-100">
@@ -3636,13 +3319,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     fileUrl={editingSong.file_url}
     fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
     songName={editingSong.song_name}
-    songForms={editingNote?.songForms || songForms[editingSong.id]}
-    initialAnnotations={editingNote?.annotations || []}
-    initialSongFormEnabled={editingNote?.songFormEnabled || false}
-    initialSongFormStyle={editingNote?.songFormStyle}
-    initialPartTags={editingNote?.partTags || []}
-    initialPianoScores={editingNote?.pianoScores || []}
-    initialDrumScores={editingNote?.drumScores || []}
+    songForms={songForms[editingSong.id]}
     initialMode="view"
     onSave={async (annotations, extra) => {
       console.log('🟢 메인페이지 onSave 호출됨:', {
@@ -3669,25 +3346,21 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         songFormEnabled: extra?.songFormEnabled,
         songFormStyle: extra?.songFormStyle,
         partTags: extra?.partTags,
-        pianoScores: extra?.pianoScores,  // 피아노 악보도 저장
       })
       console.log('📝 saveNote 결과:', result)
       if (result) {
-        alert('필기가 저장되었습니다!')
-        // 필기 노트 목록 새로고침
-        if (user?.id) fetchMyNotes(user.id)
+        alert('필기가 my-page에 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.')
         setShowNoteEditor(false)
         setEditingSong(null)
-        setEditingNote(null)
       } else {
         console.error('❌ saveNote 실패')
         alert('저장에 실패했습니다.')
       }
     }}
+  
     onClose={() => {
       setShowNoteEditor(false)
       setEditingSong(null)
-      setEditingNote(null)
     }}
   />
 )}
@@ -3703,62 +3376,6 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     onSaveAll={handleSaveMultiSongNotes}
     onClose={handleCloseMultiSongEditor}
   />
-)}
-
-{/* 가사 입력/수정 모달 */}
-{showLyricsModal && editingLyricsSong && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-    <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">가사 {editingLyricsSong.lyrics ? '수정' : '추가'}</h2>
-          <p className="text-sm text-gray-600">{editingLyricsSong.song_name} - {editingLyricsSong.team_name}</p>
-        </div>
-        <button
-          onClick={() => {
-            setShowLyricsModal(false)
-            setEditingLyricsSong(null)
-            setLyricsText('')
-          }}
-          className="text-gray-500 hover:text-gray-700 p-2"
-        >
-          <X size={24} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-auto p-4">
-        <textarea
-          value={lyricsText}
-          onChange={(e) => setLyricsText(e.target.value)}
-          placeholder="가사를 입력하세요...&#10;&#10;예시:&#10;[Verse 1]&#10;주의 약속하신 말씀 위에 서&#10;&#10;[Chorus]&#10;주님만이 나의 반석..."
-          className="w-full h-[400px] p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-        />
-        <p className="mt-2 text-xs text-gray-500">
-          💡 팁: [Verse], [Chorus], [Bridge] 등으로 섹션을 구분하면 좋아요
-        </p>
-      </div>
-
-      <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
-        <button
-          onClick={() => {
-            setShowLyricsModal(false)
-            setEditingLyricsSong(null)
-            setLyricsText('')
-          }}
-          className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-        >
-          취소
-        </button>
-        <button
-          onClick={saveLyrics}
-          disabled={savingLyrics}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingLyrics ? '저장 중...' : '저장'}
-        </button>
-      </div>
-    </div>
-  </div>
 )}
 
     </div>

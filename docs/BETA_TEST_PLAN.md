@@ -1,4 +1,4 @@
-# Ministry Hub 베타테스트 종합 계획서
+# WORSHEEP 베타테스트 종합 계획서
 
 **작성일**: 2025년 1월 2일
 **목표 완료일**: 2025년 4월 30일
@@ -578,14 +578,14 @@ WHERE id IN ('song-id-1', 'song-id-2', 'song-id-3');
 #### 1차 연락 (DM/이메일)
 
 ```
-제목: [Ministry Hub] 찬양 악보 플랫폼 파트너십 제안
+제목: [WORSHEEP] 찬양 악보 플랫폼 파트너십 제안
 
 안녕하세요, [워십팀명] 팀!
 
-저는 교회 찬양팀을 위한 악보 관리 플랫폼 'Ministry Hub'를 개발하고 있는
+저는 교회 찬양팀을 위한 악보 관리 플랫폼 'WORSHEEP'를 개발하고 있는
 조민서입니다.
 
-Ministry Hub는 찬양팀이 악보를 한 곳에서 관리하고, 콘티를 쉽게 작성하며,
+WORSHEEP는 찬양팀이 악보를 한 곳에서 관리하고, 콘티를 쉽게 작성하며,
 팀원들과 실시간으로 공유할 수 있는 서비스입니다.
 
 현재 베타테스트를 준비 중이며, [워십팀명]과의 파트너십을 통해
@@ -603,7 +603,7 @@ Ministry Hub는 찬양팀이 악보를 한 곳에서 관리하고, 콘티를 쉽
 감사합니다.
 조민서 드림
 
-Ministry Hub | ministryhub.com
+WORSHEEP | worsheep.com
 ```
 
 #### 2차 연락 (관심 표현 시)
@@ -614,7 +614,7 @@ Ministry Hub | ministryhub.com
 관심 가져주셔서 감사합니다.
 
 미팅에서 다룰 내용:
-1. Ministry Hub 서비스 데모 (10분)
+1. WORSHEEP 서비스 데모 (10분)
 2. 파트너십 모델 설명 (10분)
 3. Q&A 및 논의 (10분)
 
@@ -631,10 +631,10 @@ Ministry Hub | ministryhub.com
 ### 5.4 파트너십 제안서 구성
 
 ```
-📋 Ministry Hub 파트너십 제안서
+📋 WORSHEEP 파트너십 제안서
 
 1. 서비스 소개
-   - Ministry Hub란?
+   - WORSHEEP란?
    - 주요 기능
    - 현재 현황 (곡 수, 사용자 등)
 
@@ -778,7 +778,7 @@ ALTER TABLE users ADD COLUMN referral_source TEXT;
 ### 6.4 인스타그램 운영 계획
 
 #### 계정 설정
-- **계정명**: `@ministryhub.official`
+- **계정명**: `@worsheep.official`
 - **프로필**: "찬양팀을 위한 악보 관리 플랫폼 | 베타테스터 모집 중"
 - **링크**: 랜딩페이지 또는 Linktree
 
@@ -805,7 +805,7 @@ ALTER TABLE users ADD COLUMN referral_source TEXT;
 팀원들과 공유가 어렵다면...
 
 [슬라이드 3]
-Ministry Hub가 해결해드립니다!
+WORSHEEP가 해결해드립니다!
 
 [슬라이드 4]
 ✅ 1,700곡+ 악보 검색
@@ -820,7 +820,7 @@ DM으로 문의하세요 💜
 
 **베타테스터 모집**
 ```
-🎵 Ministry Hub 베타테스터를 모집합니다!
+🎵 WORSHEEP 베타테스터를 모집합니다!
 
 찬양팀을 위한 악보 관리 앱을 함께 만들어갈
 베타테스터를 찾고 있어요.
@@ -1077,16 +1077,16 @@ export function FeedbackButton() {
 #### 도메인 구매
 | 옵션 | 가격 | 추천 |
 |------|------|------|
-| ministryhub.com | ~$12/년 | ⭐⭐⭐⭐⭐ |
-| ministryhub.kr | ~₩22,000/년 | ⭐⭐⭐⭐ |
-| ministryhub.app | ~$20/년 | ⭐⭐⭐ |
+| worsheep.com | ~$12/년 | ⭐⭐⭐⭐⭐ |
+| worsheep.kr | ~₩22,000/년 | ⭐⭐⭐⭐ |
+| worsheep.app | ~$20/년 | ⭐⭐⭐ |
 
 **구매처**: Namecheap, 가비아, Cloudflare
 
 #### Vercel 도메인 연결
 ```bash
 # Vercel CLI
-vercel domains add ministryhub.com
+vercel domains add worsheep.com
 ```
 
 또는 Vercel 대시보드 > Settings > Domains에서 추가
@@ -1120,7 +1120,7 @@ vercel domains add ministryhub.com
 #### 중간 설문 (3월)
 
 ```
-📋 Ministry Hub 베타테스트 중간 설문
+📋 WORSHEEP 베타테스트 중간 설문
 
 예상 소요시간: 5분
 
@@ -1141,7 +1141,7 @@ vercel domains add ministryhub.com
    ○ 기타 악기
    ○ 음향
 
-3. Ministry Hub 사용 기간
+3. WORSHEEP 사용 기간
    ○ 1주 미만
    ○ 1~2주
    ○ 2~4주
@@ -1223,7 +1223,7 @@ vercel domains add ministryhub.com
 [섹션 5: 추천 의향 (NPS)]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-17. 다른 찬양팀에 Ministry Hub를 추천할 의향이 있으신가요?
+17. 다른 찬양팀에 WORSHEEP를 추천할 의향이 있으신가요?
     0 1 2 3 4 5 6 7 8 9 10
     (0: 전혀 추천하지 않음 ~ 10: 적극 추천)
 
@@ -1252,7 +1252,7 @@ vercel domains add ministryhub.com
 #### 인터뷰 가이드
 
 ```
-📝 Ministry Hub 사용자 인터뷰 가이드
+📝 WORSHEEP 사용자 인터뷰 가이드
 
 소요시간: 20~30분
 방식: 줌/대면
@@ -1261,7 +1261,7 @@ vercel domains add ministryhub.com
 [도입부] 5분
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-"안녕하세요, Ministry Hub 개발자 조민서입니다.
+"안녕하세요, WORSHEEP 개발자 조민서입니다.
  오늘 인터뷰에 참여해주셔서 감사합니다.
 
  이 인터뷰는 서비스 개선을 위한 것으로,
@@ -1277,7 +1277,7 @@ vercel domains add ministryhub.com
 [사용 맥락] 5분
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- Ministry Hub를 어떻게 알게 되셨나요?
+- WORSHEEP를 어떻게 알게 되셨나요?
 - 주로 언제, 어디서 사용하시나요?
 - 예배 준비 과정에서 어떻게 활용하시나요?
 
@@ -1302,7 +1302,7 @@ vercel domains add ministryhub.com
 [가치 확인] 5분
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-- Ministry Hub가 없어진다면 어떨 것 같으세요?
+- WORSHEEP가 없어진다면 어떨 것 같으세요?
 - 이 앱이 예배 준비에 도움이 되나요? 어떤 면에서?
 - 정식 출시되면 유료로 사용하실 의향이 있으신가요?
   - (있다면) 얼마까지 지불할 의향이 있으신가요?
@@ -1358,7 +1358,7 @@ vercel domains add ministryhub.com
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Ministry Hub 대시보드                     │
+│                    WORSHEEP 대시보드                     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  [사용자]          [활성도]           [리텐션]              │
@@ -1455,7 +1455,7 @@ vercel domains add ministryhub.com
 ### 11.2 베타테스트 리포트 구성
 
 ```
-📊 Ministry Hub 베타테스트 결과 리포트
+📊 WORSHEEP 베타테스트 결과 리포트
 
 1. Executive Summary
    - 주요 성과 요약
@@ -1646,5 +1646,5 @@ vercel domains add ministryhub.com
 
 ---
 
-**문서 작성자**: Ministry Hub 개발팀
+**문서 작성자**: WORSHEEP 개발팀
 **최종 수정일**: 2025년 1월 2일

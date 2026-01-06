@@ -96,14 +96,14 @@ const isMobile = useMobile()
                 PraiseHub
               </span>
             </div>
-            {/* Ministry Hub로 돌아가기 */}
-            <button 
+            {/* WORSHEEP으로 돌아가기 */}
+            <button
               onClick={() => router.push('/')}
               className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
-              title="Ministry Hub로 돌아가기"
+              title="WORSHEEP으로 돌아가기"
             >
               <ArrowLeft className="w-3 h-3" />
-              <span>Ministry</span>
+              <span>WORSHEEP</span>
             </button>
           </div>
         </div>

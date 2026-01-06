@@ -7,7 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import {
   TrendingUp, Users, Music, FileText, Download,
   BarChart3, Calendar, Award, Activity, ArrowLeft,
-  Building, UserCheck, FileSpreadsheet
+  Building, UserCheck, FileSpreadsheet, Settings, Tag,
+  Shield, CheckCircle, Upload
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -523,6 +524,37 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 관리 도구 바로가기 */}
+        <div className="bg-white rounded-lg shadow mb-8 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">관리 도구</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => router.push('/admin/content-management')}
+              className="flex items-center gap-4 p-6 bg-blue-50 hover:bg-blue-100 rounded-xl transition text-left"
+            >
+              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                <Music className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <span className="text-lg font-semibold text-blue-900">콘텐츠 관리</span>
+                <p className="text-sm text-blue-600">곡 승인, 공식곡, 가사/테마 편집</p>
+              </div>
+            </button>
+            <button
+              onClick={() => router.push('/admin/account-management')}
+              className="flex items-center gap-4 p-6 bg-violet-50 hover:bg-violet-100 rounded-xl transition text-left"
+            >
+              <div className="w-12 h-12 bg-violet-600 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <span className="text-lg font-semibold text-violet-900">계정 관리</span>
+                <p className="text-sm text-violet-600">팀, 업로더, 퍼블리셔, 관리자</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* 핵심 지표 카드 - 1행 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow p-6">

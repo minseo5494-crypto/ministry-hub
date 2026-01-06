@@ -1,4 +1,4 @@
-# Ministry Hub 사업계획서
+# WORSHEEP 사업계획서
 
 ## 내부용 | 2024년 12월
 
@@ -7,7 +7,7 @@
 ## 1. Executive Summary
 
 ### 서비스 개요
-**Ministry Hub**는 교회 찬양팀을 위한 올인원 악보 관리 및 콘티 제작 플랫폼입니다. 찬양팀이 예배를 준비하는 전 과정을 디지털화하여 효율성을 극대화합니다.
+**WORSHEEP**는 교회 찬양팀을 위한 올인원 악보 관리 및 콘티 제작 플랫폼입니다. 찬양팀이 예배를 준비하는 전 과정을 디지털화하여 효율성을 극대화합니다.
 
 ### 핵심 가치 제안
 - **시간 절약**: 악보 검색, 정리, 공유에 드는 시간을 80% 절감
@@ -206,7 +206,7 @@ Backend: Supabase (Auth, Database, Storage)
 
 ### 직접 경쟁자
 
-| 서비스 | 강점 | 약점 | Ministry Hub 차별점 |
+| 서비스 | 강점 | 약점 | WORSHEEP 차별점 |
 |--------|------|------|-------------------|
 | **Planning Center** | 글로벌 표준, 풍부한 기능 | 영어 전용, 높은 가격 | 한국어, 합리적 가격 |
 | **GoodNotes/Notability** | 뛰어난 필기 | 악보 특화 X | 악보 전용 기능 |
@@ -286,5 +286,5 @@ Backend: Supabase (Auth, Database, Storage)
 
 **문서 버전**: v1.0
 **작성일**: 2024년 12월
-**작성**: Ministry Hub Team
+**작성**: WORSHEEP Team
 

@@ -78,7 +78,7 @@ function LoginForm() {
             로그인
           </h1>
           <p className="text-gray-600">
-            Ministry Hub에 오신 것을 환영합니다
+            WORSHEEP에 오신 것을 환영합니다
           </p>
         </div>
 

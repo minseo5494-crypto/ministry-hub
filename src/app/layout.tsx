@@ -6,13 +6,13 @@ import Footer from '@/components/Footer'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Ministry Hub',
+  title: 'WORSHEEP',
   description: '예배팀을 위한 악보 관리 및 셋리스트 앱',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Ministry Hub',
+    title: 'WORSHEEP',
   },
   formatDetection: {
     telephone: false,
@@ -46,10 +46,10 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         {/* PWA 메타태그 */}
-        <meta name="application-name" content="Ministry Hub" />
+        <meta name="application-name" content="WORSHEEP" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Ministry Hub" />
+        <meta name="apple-mobile-web-app-title" content="WORSHEEP" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>

@@ -6,7 +6,7 @@
   --foreground: #171717;
 }
 
-/* ===== 기본 스타일 - Ministry Hub용 (검은색) ===== */
+/* ===== 기본 스타일 - WORSHEEP용 (검은색) ===== */
 body {
   background: #ffffff;
   color: #1F2937;
@@ -46,7 +46,7 @@ input[type="file"]::file-selector-button {
   color: #1F2937;
 }
 
-/* Tailwind 색상 클래스들 - Ministry Hub용 */
+/* Tailwind 색상 클래스들 - WORSHEEP용 */
 .text-gray-300 { color: #D1D5DB; }
 .text-gray-400 { color: #9CA3AF; }
 .text-gray-500 { color: #6B7280; }

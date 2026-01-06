@@ -1527,7 +1527,7 @@ autoComplete="off"
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     newSong.visibility === 'teams'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-violet-500 bg-violet-50'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -1536,20 +1536,20 @@ autoComplete="off"
                       value="teams"
                       checked={newSong.visibility === 'teams'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'teams' })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-violet-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-blue-700' : 'text-gray-900'}`}>팀 공개</div>
+                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-violet-700' : 'text-gray-900'}`}>팀 공개</div>
                       <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {newSong.visibility === 'teams' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-violet-500 text-xl">✓</span>
                     )}
                   </label>
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     newSong.visibility === 'private'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-gray-500 bg-gray-100'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -1558,14 +1558,14 @@ autoComplete="off"
                       value="private"
                       checked={newSong.visibility === 'private'}
                       onChange={(e) => setNewSong({ ...newSong, visibility: 'private', shared_with_teams: [] })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-gray-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-blue-700' : 'text-gray-900'}`}>비공개</div>
+                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-gray-700' : 'text-gray-900'}`}>비공개</div>
                       <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {newSong.visibility === 'private' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-gray-500 text-xl">✓</span>
                     )}
                   </label>
                 </div>
@@ -1578,29 +1578,39 @@ autoComplete="off"
                     </label>
                     {userTeams.length > 0 ? (
                       <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                        {userTeams.map(team => (
-                          <label key={team.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={newSong.shared_with_teams.includes(team.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewSong({
-                                    ...newSong,
-                                    shared_with_teams: [...newSong.shared_with_teams, team.id]
-                                  })
-                                } else {
-                                  setNewSong({
-                                    ...newSong,
-                                    shared_with_teams: newSong.shared_with_teams.filter(id => id !== team.id)
-                                  })
-                                }
-                              }}
-                              className="mr-2"
-                            />
-                            <span>{team.name}</span>
-                          </label>
-                        ))}
+                        {userTeams.map(team => {
+                          const isSelected = newSong.shared_with_teams.includes(team.id)
+                          return (
+                            <label
+                              key={team.id}
+                              className={`flex items-center p-2 rounded cursor-pointer transition ${
+                                isSelected
+                                  ? 'bg-violet-100 border border-violet-300'
+                                  : 'hover:bg-gray-50 border border-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setNewSong({
+                                      ...newSong,
+                                      shared_with_teams: [...newSong.shared_with_teams, team.id]
+                                    })
+                                  } else {
+                                    setNewSong({
+                                      ...newSong,
+                                      shared_with_teams: newSong.shared_with_teams.filter(id => id !== team.id)
+                                    })
+                                  }
+                                }}
+                                className="mr-2 accent-violet-500"
+                              />
+                              <span className={isSelected ? 'text-violet-700 font-medium' : 'text-gray-700'}>{team.name}</span>
+                            </label>
+                          )
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500">소속된 팀이 없습니다. 먼저 팀에 참여하거나 생성하세요.</p>
@@ -2308,7 +2318,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     editSong.visibility === 'teams'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-violet-500 bg-violet-50'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -2317,20 +2327,20 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       value="teams"
                       checked={editSong.visibility === 'teams'}
                       onChange={(e) => setEditSong({ ...editSong, visibility: 'teams' })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-violet-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${editSong.visibility === 'teams' ? 'text-blue-700' : 'text-gray-900'}`}>팀 공개</div>
+                      <div className={`font-medium ${editSong.visibility === 'teams' ? 'text-violet-700' : 'text-gray-900'}`}>팀 공개</div>
                       <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {editSong.visibility === 'teams' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-violet-500 text-xl">✓</span>
                     )}
                   </label>
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     editSong.visibility === 'private'
-                      ? 'border-blue-500 bg-blue-50'
+                      ? 'border-gray-500 bg-gray-100'
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}>
                     <input
@@ -2339,14 +2349,14 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       value="private"
                       checked={editSong.visibility === 'private'}
                       onChange={(e) => setEditSong({ ...editSong, visibility: 'private', shared_with_teams: [] })}
-                      className="mr-3 accent-blue-500"
+                      className="mr-3 accent-gray-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${editSong.visibility === 'private' ? 'text-blue-700' : 'text-gray-900'}`}>비공개</div>
+                      <div className={`font-medium ${editSong.visibility === 'private' ? 'text-gray-700' : 'text-gray-900'}`}>비공개</div>
                       <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {editSong.visibility === 'private' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-gray-500 text-xl">✓</span>
                     )}
                   </label>
                 </div>
@@ -2359,29 +2369,36 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     </label>
                     {userTeams.length > 0 ? (
                       <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                        {userTeams.map(team => (
-                          <label key={team.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editSong.shared_with_teams.includes(team.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setEditSong({
-                                    ...editSong,
-                                    shared_with_teams: [...editSong.shared_with_teams, team.id]
-                                  })
-                                } else {
-                                  setEditSong({
-                                    ...editSong,
-                                    shared_with_teams: editSong.shared_with_teams.filter(id => id !== team.id)
-                                  })
-                                }
-                              }}
-                              className="mr-2"
-                            />
-                            <span>{team.name}</span>
-                          </label>
-                        ))}
+                        {userTeams.map(team => {
+                          const isSelected = editSong.shared_with_teams.includes(team.id)
+                          return (
+                            <label key={team.id} className={`flex items-center p-2 rounded cursor-pointer transition ${
+                              isSelected
+                                ? 'bg-violet-100 border border-violet-300'
+                                : 'hover:bg-gray-50 border border-transparent'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditSong({
+                                      ...editSong,
+                                      shared_with_teams: [...editSong.shared_with_teams, team.id]
+                                    })
+                                  } else {
+                                    setEditSong({
+                                      ...editSong,
+                                      shared_with_teams: editSong.shared_with_teams.filter(id => id !== team.id)
+                                    })
+                                  }
+                                }}
+                                className="mr-2 accent-violet-600"
+                              />
+                              <span>{team.name}</span>
+                            </label>
+                          )
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500">소속된 팀이 없습니다.</p>
