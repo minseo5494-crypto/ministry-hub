@@ -50,14 +50,15 @@ const isMobileDevice = () => {
 export default function Home() {
   const router = useRouter()
   const isMobile = useMobile()
+  const isTabletOrBelow = useMobile(1024)  // lg 미만 (태블릿/모바일)
   const [user, setUser] = useState<User | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [showMenu, setShowMenu] = useState(false)
 
   // UI 상태 추가
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
-  const [showFilterPanel, setShowFilterPanel] = useState(true)
-  const [showMobileMenu, setShowMobileMenu] = useState(false)  // ← 🆕 추가!
+  const [showFilterPanel, setShowFilterPanel] = useState(false)  // 초기값 false, useEffect에서 설정
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   
   // 임시 사용자 ID
   const USER_ID = user?.id || '00000000-0000-0000-0000-000000000001'
@@ -137,7 +138,10 @@ const {
   // 📝 필기 에디터 상태
   const [showNoteEditor, setShowNoteEditor] = useState(false)
   const [editingSong, setEditingSong] = useState<Song | null>(null)
-  const { saveNote } = useSheetMusicNotes()
+  const { saveNote, notes: mySheetNotes, fetchNotes: fetchMyNotes } = useSheetMusicNotes()
+
+  // 📝 내 필기 노트 검색 결과
+  const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])
 
   // 📝 다중 곡 악보 뷰어 상태
   const [multiSongEditorSongs, setMultiSongEditorSongs] = useState<{
@@ -223,6 +227,7 @@ const {
     searchText: string;
     bpmMin: string;
     bpmMax: string;
+    includeMyNotes: boolean;  // 내 필기 노트 검색 포함
   }>({
     season: '전체',
     themes: [] as string[],
@@ -232,6 +237,7 @@ const {
     timeSignature: '',
     tempo: '',
     searchText: '',
+    includeMyNotes: false,  // 기본값: 미포함
     // 👇 BPM 필터 추가
     bpmMin: '',
     bpmMax: ''
@@ -294,12 +300,26 @@ useEffect(() => {
       setCheckingAuth(false)
     }
   }
-  // 🆕 초기 로드 시 모바일이면 필터 패널 닫기
+  // 🆕 초기 로드 시 화면 크기에 따라 필터 패널 표시 설정
+  // 모바일/태블릿: 필터 닫힌 상태 (버튼 클릭 시 오버레이로 표시)
+  // 데스크톱: 필터 열린 상태
 useEffect(() => {
-  if (window.innerWidth < 768) {
-    setShowFilterPanel(false)
+  const handleFilterVisibility = () => {
+    if (window.innerWidth < 768) {
+      setShowFilterPanel(false)
+    } else {
+      setShowFilterPanel(true)
+    }
   }
+  handleFilterVisibility()
 }, [])
+
+  // 📝 사용자 로드 시 필기 노트 가져오기
+  useEffect(() => {
+    if (user?.id) {
+      fetchMyNotes(user.id)
+    }
+  }, [user?.id, fetchMyNotes])
 
   const handleSignOut = async () => {
     try {
@@ -1154,6 +1174,20 @@ if (sortBy === 'likes') {
 }
 // 'recent'는 기본 정렬 (created_at desc) 유지
 
+    // 📝 내 필기 노트 검색 (필터가 켜져 있을 때만)
+    if (filters.includeMyNotes && mySheetNotes.length > 0) {
+      const searchText = filters.searchText.toLowerCase().replace(/\s+/g, '')
+      const matchedNotes = mySheetNotes.filter(note => {
+        if (!searchText) return true
+        const normalizedSongName = (note.song_name || '').toLowerCase().replace(/\s+/g, '')
+        const normalizedTeamName = (note.team_name || '').toLowerCase().replace(/\s+/g, '')
+        return normalizedSongName.includes(searchText) || normalizedTeamName.includes(searchText)
+      })
+      setMatchingNotes(matchedNotes)
+    } else {
+      setMatchingNotes([])
+    }
+
     setFilteredSongs(result)
     setFocusedSongIndex(-1)
 
@@ -1171,7 +1205,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy, showUserUploaded])
+  }, [songs, filters, user, sortBy, showUserUploaded, mySheetNotes])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1358,7 +1392,8 @@ const hasMore = displayCount < filteredSongs.length
       tempo: '',
       searchText: filters.searchText,  // 검색어는 유지
       bpmMin: '',
-      bpmMax: ''
+      bpmMax: '',
+      includeMyNotes: false  // 필기 노트 필터도 초기화
     })
   }
 
@@ -1932,27 +1967,28 @@ const hasMore = displayCount < filteredSongs.length
 {/* 오른쪽: 곡 목록 */}
 <div className="flex-1">
   {/* 툴바 */}
-  <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
+  <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 mb-4">
+    {/* 첫 번째 줄: 필터 버튼, 곡 수, 뷰 모드 */}
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <button
           onClick={() => setShowFilterPanel(!showFilterPanel)}
-          className="p-2 hover:bg-gray-100 rounded-lg"
+          className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg flex-shrink-0"
         >
-          <Filter size={20} />
+          <Filter size={18} className="sm:w-5 sm:h-5" />
         </button>
-        <span className="text-gray-600">
-{displayCount < filteredSongs.length 
+        <span className="text-gray-600 text-sm sm:text-base whitespace-nowrap">
+{displayCount < filteredSongs.length
   ? `${displayCount} / ${filteredSongs.length}개의 찬양`
   : `${filteredSongs.length}개의 찬양`
 }
 </span>
 
-        {/* 🎵 정렬 드롭다운 */}
+        {/* 🎵 정렬 드롭다운 - 데스크탑에서만 표시 */}
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          className="hidden sm:block px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
         >
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
@@ -1960,11 +1996,11 @@ const hasMore = displayCount < filteredSongs.length
         </select>
     </div>
 
-    <div className="flex items-center gap-2 md:gap-3">
-        {/* 🛡️ 공식/사용자 악보 토글 */}
+    <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+        {/* 🛡️ 공식/사용자 악보 토글 - 데스크탑에서만 표시 */}
         <button
           onClick={() => setShowUserUploaded(!showUserUploaded)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`hidden sm:flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
             showUserUploaded
               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
@@ -1972,30 +2008,173 @@ const hasMore = displayCount < filteredSongs.length
           title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
         >
           <Shield size={16} className="flex-shrink-0" />
-          <span className="hidden sm:inline">{showUserUploaded ? '전체' : '공식만'}</span>
+          <span>{showUserUploaded ? '전체' : '공식만'}</span>
         </button>
+
+        {/* 📝 내 필기 노트 포함 토글 - 데스크탑 */}
+        {user && mySheetNotes.length > 0 && (
+          <button
+            onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
+            className={`hidden sm:flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              filters.includeMyNotes
+                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title={filters.includeMyNotes ? '내 필기 노트 포함됨' : '내 필기 노트 미포함'}
+          >
+            <Pencil size={14} className="flex-shrink-0" />
+            <span>내 필기</span>
+            {filters.includeMyNotes && (
+              <span className="ml-1 text-xs bg-purple-200 px-1.5 py-0.5 rounded-full">{mySheetNotes.length}</span>
+            )}
+          </button>
+        )}
 
         <div className="w-px h-6 bg-gray-200 hidden md:block"></div>
 
         <button
           onClick={() => setViewMode('grid')}
-          className={`p-2 rounded-lg transition ${
+          className={`p-1.5 sm:p-2 rounded-lg transition ${
             viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <Grid size={20} />
+          <Grid size={18} className="sm:w-5 sm:h-5" />
         </button>
         <button
           onClick={() => setViewMode('list')}
-          className={`p-2 rounded-lg transition ${
+          className={`p-1.5 sm:p-2 rounded-lg transition ${
             viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
           }`}
         >
-          <List size={20} />
+          <List size={18} className="sm:w-5 sm:h-5" />
         </button>
       </div>
     </div>
+
+    {/* 두 번째 줄: 정렬 및 필터 - 모바일에서만 표시 */}
+    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 sm:hidden">
+      <select
+        value={sortBy}
+        onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
+        className="h-8 px-2.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="recent">최신순</option>
+        <option value="likes">좋아요순</option>
+        <option value="name">이름순</option>
+      </select>
+      <button
+        onClick={() => setShowUserUploaded(!showUserUploaded)}
+        className={`h-8 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium transition-all ${
+          showUserUploaded
+            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+        }`}
+      >
+        <Shield size={12} className="flex-shrink-0" />
+        <span>{showUserUploaded ? '전체' : '공식만'}</span>
+      </button>
+      {/* 📝 내 필기 노트 포함 토글 - 모바일 */}
+      {user && mySheetNotes.length > 0 && (
+        <button
+          onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
+          className={`h-8 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium transition-all ${
+            filters.includeMyNotes
+              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Pencil size={12} className="flex-shrink-0" />
+          <span>내 필기</span>
+        </button>
+      )}
+    </div>
   </div>
+
+  {/* 📝 내 필기 노트 검색 결과 */}
+  {matchingNotes.length > 0 && filters.includeMyNotes && (
+    <div className="bg-white rounded-lg shadow-md mb-4">
+      <div className="px-4 py-3 border-b border-purple-100 bg-purple-50 rounded-t-lg">
+        <h3 className="font-semibold text-purple-700 flex items-center gap-2 text-sm">
+          <Pencil size={16} />
+          내 필기 노트 ({matchingNotes.length}개)
+        </h3>
+      </div>
+      <div className="divide-y divide-gray-200">
+        {matchingNotes.slice(0, 20).map(note => (
+          <div
+            key={note.id}
+            className="p-4 hover:bg-gray-50 transition cursor-pointer"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
+              {/* 곡 정보 */}
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-gray-900">{note.song_name}</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  {note.team_name || '팀 없음'}
+                  {(() => {
+                    const song = songs.find(s => s.id === note.song_id)
+                    if (song) {
+                      return (
+                        <>
+                          {song.key && ` | Key: ${song.key}`}
+                          {song.bpm && ` | ${song.bpm}BPM`}
+                        </>
+                      )
+                    }
+                    return null
+                  })()}
+                </p>
+                <p className="text-sm text-purple-600 mt-0.5">
+                  📝 {note.title || '내 필기'}
+                </p>
+              </div>
+
+              {/* 버튼들 - 기존 곡 목록과 동일한 스타일 */}
+              <div className="flex gap-1 md:gap-2 mt-2 sm:mt-0 sm:ml-4 flex-shrink-0">
+                {/* 악보 보기 버튼 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const song = songs.find(s => s.id === note.song_id)
+                    if (song) {
+                      openSheetViewer(song)
+                    }
+                  }}
+                  className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                  title="악보 보기"
+                >
+                  <Presentation size={18} />
+                </button>
+
+                {/* 필기 수정 버튼 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const song = songs.find(s => s.id === note.song_id)
+                    if (song) {
+                      setEditingSong(song)
+                      setShowNoteEditor(true)
+                    }
+                  }}
+                  className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+                  title="필기 수정"
+                >
+                  <Pencil size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* 더 많은 노트가 있을 때 */}
+        {matchingNotes.length > 20 && (
+          <div className="p-4 text-center text-gray-500 text-sm">
+            {matchingNotes.length - 20}개의 노트가 더 있습니다. 검색어를 입력하여 필터링하세요.
+          </div>
+        )}
+      </div>
+    </div>
+  )}
 
   {/* 곡 목록 */}
   <div className="bg-white rounded-lg shadow-md">
@@ -2153,7 +2332,7 @@ const hasMore = displayCount < filteredSongs.length
       key={song.id}
       tabIndex={0}
       onFocus={() => setFocusedSongIndex(index)}
-      className={`p-4 cursor-pointer transition-all ${
+      className={`p-3 sm:p-4 cursor-pointer transition-all ${
         selectedSongs.find(s => s.id === song.id)
           ? 'bg-blue-50'
           : focusedSongIndex === index
@@ -2199,11 +2378,17 @@ const hasMore = displayCount < filteredSongs.length
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 mt-1">
+              {/* 모바일: 팀명과 음악정보 분리, 데스크톱: 한 줄 */}
+              {song.team_name && (
+                <p className="text-sm text-gray-600 mt-1 md:hidden">{song.team_name}</p>
+              )}
+              <p className="text-sm text-gray-500 mt-0.5 md:hidden">
+                Key: {song.key || '-'} | 박자: {song.time_signature || '-'} | 템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
+              </p>
+              {/* 데스크톱: 한 줄로 표시 */}
+              <p className="text-sm text-gray-600 mt-1 hidden md:block">
                 {song.team_name && `${song.team_name} | `}
-                Key: {song.key || '-'} | 
-                박자: {song.time_signature || '-'} | 
-                템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
+                Key: {song.key || '-'} | 박자: {song.time_signature || '-'} | 템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
               </p>
               
               {/* 테마 태그 */}
@@ -2224,7 +2409,7 @@ const hasMore = displayCount < filteredSongs.length
         </div>
 
         {/* 버튼들 - 모바일에서는 아래에, 데스크탑에서는 오른쪽에 */}
-        <div className="flex gap-1 md:gap-2 mt-2 sm:mt-0 sm:ml-4 flex-shrink-0 ml-7 sm:ml-4">
+        <div className="flex gap-1 md:gap-2 mt-1 sm:mt-0 sm:ml-4 flex-shrink-0 ml-7 sm:ml-4">
           {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
@@ -2374,8 +2559,8 @@ const hasMore = displayCount < filteredSongs.length
               <h4 className="font-semibold text-gray-700 mb-2 text-sm px-4 sm:px-0">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
-                  src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                  className="w-full h-[600px] border-y sm:border sm:rounded"
+                  src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                  className="w-full h-[80vh] sm:h-[600px] border-y sm:border sm:rounded"
                 />
               ) : (
                 <img
