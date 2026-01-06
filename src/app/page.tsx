@@ -2360,7 +2360,7 @@ const hasMore = displayCount < filteredSongs.length
 
       {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) */}
       {previewStates[song.id] && (
-        <div className="mt-4 ml-7 border-t pt-4">
+        <div className="mt-4 sm:ml-7 border-t pt-4">
           {song.lyrics && (
             <div className="mb-4">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
@@ -2378,10 +2378,10 @@ const hasMore = displayCount < filteredSongs.length
                   className="w-full h-[600px] border rounded"
                 />
               ) : (
-                <img 
+                <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="max-w-full h-auto rounded shadow-sm"
+                  className="w-full h-auto rounded shadow-sm"
                 />
               )}
             </div>
