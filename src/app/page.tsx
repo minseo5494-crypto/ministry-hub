@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
 import { logSongSearch, logPPTDownload, logSongView, logPDFDownload } from '@/lib/activityLogger'
+import { getErrorMessage } from '@/lib/errorMessages'
 // 🆕 추가
 import SongFormPositionModal from '@/components/SongFormPositionModal'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
@@ -273,9 +274,8 @@ useEffect(() => {
   // 🆕 PDF.js 초기화
   useEffect(() => {
     if (typeof window !== 'undefined' && window.pdfjsLib) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      console.log('✅ PDF.js 초기화 완료');
     }
   }, [])
 
@@ -415,8 +415,6 @@ const fetchSongs = async () => {
     let from = 0
     const pageSize = 1000
 
-    console.log('📊 데이터 로딩 시작...')
-
     while (true) {
       const { data, error } = await supabase
         .from('songs')
@@ -428,36 +426,14 @@ const fetchSongs = async () => {
       if (!data || data.length === 0) break
 
       allData = [...allData, ...data]
-      console.log(`📦 ${allData.length}개 로딩 중...`)
 
       // 마지막 페이지면 종료
       if (data.length < pageSize) break
-      
+
       from += pageSize
     }
-
-    console.log('✅ 전체 곡 데이터:', allData.length)
-
-    // 🔍 특정 곡 존재 여부 확인
-    const has3149 = allData.some(s => s.id === '3149')
-    const has3150 = allData.some(s => s.id === '3150')
-    const has3151 = allData.some(s => s.id === '3151')
-    console.log('🎵 3149 존재?', has3149)
-    console.log('🎵 3150 존재?', has3150)
-    console.log('🎵 3151 존재?', has3151)
-
     // 🆕 공유 범위에 따른 필터링
     const filteredData = allData.filter(song => {
-      // 🔍 디버깅: 특정 곡 체크
-      if (song.id === '3149' || song.id === '3150' || song.id === '3151') {
-        console.log(`🔍 곡 ${song.id} - "${song.song_name}" 필터링 체크:`, {
-          song_name: song.song_name,
-          name_length: song.song_name?.length,
-          visibility: song.visibility,
-          will_pass: song.song_name && song.song_name.trim() !== '' && song.song_name.length > 1
-        })
-      }
-        
       // 기본 유효성 검사
       if (!song.song_name || song.song_name.trim() === '' || song.song_name.length <= 1) {
         return false
@@ -493,16 +469,7 @@ const fetchSongs = async () => {
 
       return false
     })
-  
-    console.log(`✅ 총 ${allData.length}개 중 ${filteredData.length}개의 곡 표시`)
-    console.log(`   - 사용자: ${user?.email || '비로그인'}`)
-    console.log(`   - 소속 팀: ${userTeams.length}개`)
-    
-    // 🔍 필터링 후 특정 곡 존재 여부
-    console.log('🎵 필터링 후 3149 포함?', filteredData.some(s => s.id === '3149'))
-    console.log('🎵 필터링 후 3150 포함?', filteredData.some(s => s.id === '3150'))
-    console.log('🎵 필터링 후 3151 포함?', filteredData.some(s => s.id === '3151'))
-  
+
     setSongs(filteredData)
     
     // 🆕 미리보기 상태 초기화
@@ -517,7 +484,7 @@ const fetchSongs = async () => {
     setFilteredSongs(filteredData)
   } catch (error) {
     console.error('Error fetching songs:', error)
-    alert('데이터를 불러오는데 실패했습니다.')
+    alert(getErrorMessage(error))
   } finally {
     setLoading(false)
   }
@@ -566,7 +533,6 @@ const fetchSongs = async () => {
       }) || []
 
       setUserTeams(teams)
-      console.log('✅ 사용자 팀 목록:', teams)
     } catch (error) {
       console.error('Error fetching user teams:', error)
       setUserTeams([])
@@ -842,8 +808,6 @@ const handleTempoChange = (tempoValue: string) => {
       const safeFileName = `${timestamp}_${randomStr}.${fileExt}`
       const filePath = `${user.id}/${safeFileName}`
 
-      console.log('📤 파일 업로드 시작:', filePath)
-
       const { error: uploadError } = await supabase.storage
         .from('song-sheets')
         .upload(filePath, uploadingFile, {
@@ -857,19 +821,13 @@ const handleTempoChange = (tempoValue: string) => {
         throw new Error(`파일 업로드 실패: ${uploadError.message}`)
       }
 
-      console.log('✅ 파일 업로드 성공')
-
       const { data: urlData } = supabase.storage
         .from('song-sheets')
         .getPublicUrl(filePath)
 
       fileUrl = urlData.publicUrl
       fileType = fileExt
-
-      console.log('🔗 Public URL:', fileUrl)
     }
-
-    console.log('📝 DB에 곡 정보 저장 중...')
 
     // 🔍 공식 업로더 여부 확인 (기존 official_uploaders 테이블)
     const { data: officialUploader } = await supabase
@@ -887,18 +845,6 @@ const handleTempoChange = (tempoValue: string) => {
 
     const isOfficial = !!officialUploader || (!!publisherAccount && (publisherAccount.verified_publishers as any)?.is_active)
     const publisherId = publisherAccount?.publisher_id || null
-
-    // ✅ 디버깅: 저장할 데이터 확인
-    console.log('📋 저장할 곡 정보:', {
-      song_name: newSong.song_name,
-      team_name: newSong.team_name,
-      key: newSong.key,
-      time_signature: newSong.time_signature,  // ← 박자 값 확인
-      tempo: newSong.tempo,
-      bpm: newSong.bpm,
-      visibility: newSong.visibility,
-      is_official: isOfficial
-    })
 
     // ✨ 임시 변경: 모든 곡을 바로 songs 테이블에 저장 (승인 프로세스 비활성화)
 // 나중에 복원하려면 이 주석 아래의 원본 코드 참고
@@ -967,8 +913,6 @@ if (newSong.visibility === 'public') {
 }
 ========== 원본 코드 끝 ========== */
 
-    console.log('✅ 곡 저장 완료')
-
     // 초기화
     setShowAddSongModal(false)
     setNewSong({
@@ -1014,7 +958,6 @@ if (newSong.visibility === 'public') {
       return
     }
 
-    console.log('✅ 파일 선택됨:', file.name, file.type, (file.size / 1024 / 1024).toFixed(2) + 'MB')
     setUploadingFile(file)
   }
 
@@ -1083,7 +1026,7 @@ if (newSong.visibility === 'public') {
     
     } catch (error) {
       console.error('Error saving setlist:', error)
-      alert('콘티 저장에 실패했습니다.')
+      alert(getErrorMessage(error))
     }
   }
 
@@ -3327,17 +3270,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     songForms={songForms[editingSong.id]}
     initialMode="view"
     onSave={async (annotations, extra) => {
-      console.log('🟢 메인페이지 onSave 호출됨:', {
-        annotationCount: annotations.length,
-        strokeCount: annotations.reduce((sum, a) => sum + (a.strokes?.length || 0), 0),
-        songFormEnabled: extra?.songFormEnabled
-      })
       if (!user) {
         alert('로그인이 필요합니다.')
         return
       }
       // 새로운 LocalSheetMusicNote 형식으로 저장 (송폼 정보 포함)
-      console.log('📝 saveNote 호출 직전, annotations:', annotations)
       const result = await saveNote({
         user_id: user.id,
         song_id: editingSong.id,
@@ -3352,7 +3289,6 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         songFormStyle: extra?.songFormStyle,
         partTags: extra?.partTags,
       })
-      console.log('📝 saveNote 결과:', result)
       if (result) {
         alert('필기가 my-page에 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.')
         setShowNoteEditor(false)

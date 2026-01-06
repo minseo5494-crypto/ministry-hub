@@ -100,13 +100,11 @@ export default function UploadPage() {
           const idMatch = originalFileName.match(/^(\d{3,4})/)
           
           if (!idMatch) {
-            console.warn(`파일명에서 ID를 찾을 수 없음: ${originalFileName}`)
             failedFiles.push(`${originalFileName} (ID 형식 오류)`)
             continue
           }
           
           const rawId = idMatch[1]
-          console.log(`[${i+1}/${files.length}] 파일: ${originalFileName}, 추출된 ID: ${rawId}`)
           
           // ⭐ 핵심 변경: 각 파일마다 실시간으로 DB 조회
           // 3자리든 4자리든 모두 처리 가능하도록 OR 조건 사용
@@ -129,34 +127,28 @@ export default function UploadPage() {
               .single()
             
             if (retryError || !retryData) {
-              console.warn(`곡을 찾을 수 없음: ${rawId} (패딩 시도: ${paddedId})`)
               failedFiles.push(`${originalFileName} (ID ${rawId} 없음)`)
               continue
             }
             
             // 재시도 성공
             const targetId = retryData.id
-            console.log(`재시도 성공 - ID 변환: ${rawId} → ${targetId}`)
-            
+
             // 파일 업로드 진행
             await uploadFileToStorage(file, targetId, originalFileName)
             uploadCount++
-            console.log(`✅ [${uploadCount}] ${originalFileName} → ID: ${targetId}`)
           } else if (songData) {
             // 첫 시도에서 성공
             const targetId = songData.id
-            console.log(`DB 조회 성공 - ID: ${targetId}, 곡명: ${songData.song_name}`)
-            
+
             // 파일 업로드 진행
             const uploadSuccess = await uploadFileToStorage(file, targetId, originalFileName)
             if (uploadSuccess) {
               uploadCount++
-              console.log(`✅ [${uploadCount}] ${originalFileName} → ID: ${targetId}`)
             } else {
               failedFiles.push(`${originalFileName} (업로드 실패)`)
             }
           } else {
-            console.warn(`곡 데이터가 비어있음: ${rawId}`)
             failedFiles.push(`${originalFileName} (데이터 없음)`)
           }
           
@@ -171,8 +163,6 @@ export default function UploadPage() {
         setUploadStatus('success')
         setMessage(`✅ ${uploadCount}개의 악보 파일이 모두 성공적으로 업로드되었습니다!`)
         
-        // 로그 기록은 일단 스킵 (타입 오류)
-        console.log('Upload success:', { count: uploadCount })
       } else if (uploadCount > 0) {
         setUploadStatus('success')
         const failedList = failedFiles.map((f, idx) => `  ${idx + 1}. ${f}`).join('\n')
@@ -215,9 +205,7 @@ export default function UploadPage() {
       // 안전한 파일명 생성 (특수문자 제거)
       const cleanFileName = originalFileName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
       const safeFileName = `${songId}/${cleanFileName}`
-      
-      console.log(`Storage 업로드 시작: ${safeFileName}`)
-      
+
       // Storage에 업로드
       const { error: uploadError } = await supabase.storage
         .from('sheetmusic')
@@ -236,8 +224,6 @@ export default function UploadPage() {
       const { data: { publicUrl } } = supabase.storage
         .from('sheetmusic')
         .getPublicUrl(safeFileName)
-      
-      console.log(`생성된 URL: ${publicUrl}`)
       
       // DB 업데이트
       const { error: updateError } = await supabase
@@ -274,10 +260,8 @@ export default function UploadPage() {
         .upload(testFileName, testContent)
       
       if (error) {
-        console.error('테스트 업로드 실패:', error)
         alert('Storage 연결 실패: ' + error.message)
       } else {
-        console.log('테스트 업로드 성공:', data)
         alert('Storage 연결 성공!')
         await supabase.storage.from('sheetmusic').remove([testFileName])
       }
@@ -296,10 +280,8 @@ export default function UploadPage() {
         .limit(1)
       
       if (error) {
-        console.error('DB 테스트 실패:', error)
         alert('데이터베이스 연결 실패: ' + JSON.stringify(error))
       } else {
-        console.log('DB 테스트 성공:', data)
         alert('데이터베이스 연결 성공!')
       }
     } catch (err) {
@@ -345,7 +327,6 @@ export default function UploadPage() {
           .single()
 
         if (songError || !songData) {
-          console.log(`곡 정보 없음: ${songId}`)
           skipCount++
           continue
         }
@@ -356,7 +337,6 @@ export default function UploadPage() {
           .list(songId)
 
         if (filesError || !files || files.length === 0) {
-          console.log(`파일 없음: ${songId}`)
           skipCount++
           continue
         }
@@ -381,9 +361,7 @@ export default function UploadPage() {
 
         if (!updateError) {
           updateCount++
-          console.log(`✅ ${songId}: ${actualFile.name}`)
         } else {
-          console.error(`업데이트 실패 ${songId}:`, updateError)
           skipCount++
         }
 
@@ -412,17 +390,12 @@ export default function UploadPage() {
         .limit(1)
       
       if (error) {
-        console.error('테이블 조회 실패:', error)
         alert('테이블 조회 실패: ' + JSON.stringify(error))
       } else {
-        console.log('테이블 구조 (샘플):', data)
-        if (data && data.length > 0) {
-          console.log('테이블 컬럼들:', Object.keys(data[0]))
-        }
-        alert('콘솔에서 테이블 구조를 확인하세요')
+        alert('테이블 컬럼: ' + (data && data.length > 0 ? Object.keys(data[0]).join(', ') : '데이터 없음'))
       }
-    } catch (err) {
-      console.error('스키마 확인 오류:', err)
+    } catch {
+      // 스키마 확인 실패
     }
   }
 

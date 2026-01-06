@@ -124,12 +124,6 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     throw new Error('곡이 없습니다.')
   }
 
-  console.log('==================== PDF 생성 시작 ====================')
-  console.log('선택된 곡 목록:', songs.map(s => ({ id: s.id, name: s.song_name })))
-  console.log('각 곡별 송폼:', songForms)
-  console.log('각 곡별 송폼 위치:', songFormPositions)
-  console.log('🏷️ 각 곡별 파트 태그:', partTags)  // 🆕 디버깅
-
   try {
     const pdfLib = await import('pdf-lib')
     const { PDFDocument, rgb } = pdfLib
@@ -146,21 +140,16 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     // fontkit 등록
     const fontkit = await import('@pdf-lib/fontkit')
     mergedPdf.registerFontkit(fontkit.default)
-    console.log('✅ fontkit 등록 완료')
 
     // 한글 폰트 로드
-    console.log('📝 한글 폰트 로딩 시작...')
     let koreanFont = null
     try {
       const fontBytes = await loadKoreanFont()
       if (fontBytes) {
         koreanFont = await mergedPdf.embedFont(fontBytes)
-        console.log('✅ 한글 폰트 임베드 성공!')
-      } else {
-        console.warn('⚠️ 한글 폰트를 찾을 수 없습니다.')
       }
-    } catch (fontError) {
-      console.error('❌ 한글 폰트 로드 실패:', fontError)
+    } catch {
+      // 폰트 로드 실패 시 기본 폰트 사용
     }
 
     // 🆕 표지 포함 옵션이 true일 때만 생성
@@ -215,13 +204,11 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
 
     const [coverPage] = await mergedPdf.copyPages(coverDoc, [0])
     mergedPdf.addPage(coverPage)
-    console.log('✅ 표지 페이지 생성 완료')
   } // 🆕 if (includeCover) 닫기
 
     // 각 곡별 악보 페이지 추가
     for (let i = 0; i < songs.length; i++) {
       const song = songs[i]
-      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name}`)
 
       // 진행률 콜백 호출
       if (onProgress) {
@@ -231,7 +218,6 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
       }
 
       if (!song.file_url) {
-        console.warn(`⚠️ "${song.song_name}"에 악보 파일이 없습니다. 건너뜁니다.`)
         continue
       }
 
@@ -254,7 +240,6 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             break // 성공 시 루프 탈출
           } catch (fetchError) {
             lastError = fetchError as Error
-            console.warn(`⚠️ 파일 다운로드 시도 ${attempt}/3 실패:`, fetchError)
             if (attempt < 3) {
               // 재시도 전 대기 (1초, 2초) - 더 긴 대기 시간
               await new Promise(resolve => setTimeout(resolve, attempt * 1000))
@@ -271,14 +256,10 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
         const songPosition = songFormPositions?.[song.id]
         const formSize = songPosition?.size || 'medium' // 크기 정보
 
-        console.log(`📍 송폼 위치 정보:`, songPosition)
-        console.log(`📐 송폼 크기:`, formSize)
-
         // PDF 파일 처리
         if (song.file_type === 'pdf' || song.file_url.toLowerCase().endsWith('.pdf')) {
           const sheetPdf = await PDFDocument.load(arrayBuffer)
           const pageCount = sheetPdf.getPageCount()
-          console.log(`📄 PDF 페이지 수: ${pageCount}`)
 
           for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
             const srcPage = sheetPdf.getPage(pageIdx)
@@ -315,14 +296,9 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
 
             // 송폼 오버레이 (각 곡의 첫 페이지에만)
             if (pageIdx === 0 && selectedForms.length > 0 && koreanFont) {
-              console.log(`✅ PDF 송폼 오버레이 시작: ${song.song_name}`)
-              console.log(` 송폼 내용: ${selectedForms.join(' - ')}`)
-
               const formText = selectedForms.join(' - ')
               const { fontSize, padding } = getSizeConfig(formSize)
               const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
-
-              console.log(` 📐 폰트 크기: ${fontSize}, 패딩: ${padding}`)
 
               // 🆕 악보 영역 기준으로 위치 계산
               const boxHeight = fontSize + padding
@@ -340,14 +316,11 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
                 )
                 textX = position.x + padding  // 텍스트는 패딩 안쪽
                 textY = position.y + (padding * 0.25)
-                console.log(` 📍 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
-                console.log(` 📍 실제 좌표: x=${textX}, y=${textY}`)
               } else {
                 // 기본값: 악보 우측 상단
                 const boxHeight = fontSize + padding
                 textX = x + scaledWidth - textWidth - (padding * 2) - 20 + padding
                 textY = y + scaledHeight - boxHeight - 15 + (padding * 0.25)
-                console.log(` 📍 기본 위치 사용: 악보 우측 상단`)
               }
 
               const outlineOffsets: [number, number][] = []
@@ -377,11 +350,9 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
                 color: rgb(0.49, 0.23, 0.93),
               })
 
-              console.log(`✅ PDF 송폼 표시 성공! (곡 ${i + 1}: ${song.song_name})`)
               // 🆕 파트 태그 그리기
               const songPartTags = partTags?.[song.id] || []
               if (songPartTags.length > 0 && koreanFont) {
-                console.log(`🏷️ 파트 태그 ${songPartTags.length}개 그리기`)
                 
                 for (const tag of songPartTags) {
                   const tagFontSize = 36
@@ -426,16 +397,12 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
                 color: rgb(color.r, color.g, color.b),
               })
                 }
-                console.log(`✅ 파트 태그 표시 완료`)
               }
             }
           }
-
-          console.log(`✅ PDF 악보 처리 완료: ${song.song_name}`)
         }
         // 이미지 파일 처리
         else {
-          console.log('🖼️ 이미지 파일 처리 중...')
 
           let image
           if (song.file_url.toLowerCase().endsWith('.png')) {
@@ -472,8 +439,6 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             const { fontSize, padding } = getSizeConfig(formSize)
             const textWidth = koreanFont.widthOfTextAtSize(formText, fontSize)
 
-            console.log(` 📐 이미지: 폰트 크기: ${fontSize}, 패딩: ${padding}`)
-
             // 🆕 악보 영역 기준으로 위치 계산
             const boxHeight = fontSize + padding
             let textX, textY
@@ -490,14 +455,11 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
               )
               textX = position.x + padding
               textY = position.y + (padding * 0.25)
-              console.log(` 📍 이미지: 저장된 위치 사용: ${songPosition.x}%, ${songPosition.y}%`)
-              console.log(` 📍 이미지: 실제 좌표: x=${textX}, y=${textY}`)
             } else {
               // 기본값: 악보 우측 상단
               const defaultBoxHeight = fontSize + padding
               textX = x + scaledWidth - textWidth - (padding * 2) - 20 + padding
               textY = y + scaledHeight - defaultBoxHeight - 15 + (padding * 0.25)
-              console.log(` 📍 이미지: 기본 위치 사용: 악보 우측 상단`)
             }
 
             // 텍스트 (흰색 외곽선 효과)
@@ -532,7 +494,6 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           // 🆕 파트 태그 그리기 (이미지)
           const songPartTags = partTags?.[song.id] || []
           if (songPartTags.length > 0 && koreanFont) {
-            console.log(`🏷️ 이미지: 파트 태그 ${songPartTags.length}개 그리기`)
             
             for (const tag of songPartTags) {
               const tagFontSize = 36
@@ -576,13 +537,10 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
                 color: rgb(color.r, color.g, color.b),
               })
             }
-            console.log(`✅ 이미지: 파트 태그 표시 완료`)
           }
-
-          console.log(`✅ 이미지 악보 처리 완료: ${song.song_name}`)
         }
-      } catch (error) {
-        console.error(`❌ "${song.song_name}" 처리 중 오류:`, error)
+      } catch {
+        // 개별 곡 처리 실패 시 건너뜀
       }
     }
 
@@ -600,10 +558,8 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     link.click()
     URL.revokeObjectURL(url)
 
-    console.log('✅ PDF 생성 완료!')
     return true
   } catch (error) {
-    console.error('PDF 생성 오류:', error)
     throw error
   }
 }
@@ -625,10 +581,6 @@ export const generatePDFFromCanvas = async (options: {
   if (songs.length === 0) {
     throw new Error('곡이 없습니다.')
   }
-
-  console.log('==================== WYSIWYG PDF 생성 시작 (다중 페이지) ====================')
-  console.log('곡 수:', songs.length)
-  console.log('캔버스 데이터:', Object.keys(canvasDataUrls))
 
   try {
     const pdfLib = await import('pdf-lib')
@@ -694,7 +646,6 @@ export const generatePDFFromCanvas = async (options: {
 
       const [coverPage] = await mergedPdf.copyPages(coverDoc, [0])
       mergedPdf.addPage(coverPage)
-      console.log('✅ 표지 페이지 생성 완료')
     }
 
     // 🆕 각 곡의 모든 페이지를 PDF에 추가
@@ -710,11 +661,8 @@ export const generatePDFFromCanvas = async (options: {
       }
 
       if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
-        console.warn(`⚠️ "${song.song_name}"의 캔버스 데이터가 없습니다. 건너뜁니다.`)
         continue
       }
-
-      console.log(`\n📄 처리 중: ${i + 1}/${songs.length} - ${song.song_name} (${canvasDataUrlArray.length}페이지)`)
 
       try {
         // 🆕 모든 페이지 순회
@@ -739,16 +687,11 @@ export const generatePDFFromCanvas = async (options: {
             height: A4_HEIGHT,
           })
 
-          console.log(`  ✅ 페이지 ${pageIdx + 1}/${canvasDataUrlArray.length} 추가 완료`)
-
           // 각 페이지 처리 후 UI 업데이트 시간 확보
           await new Promise(resolve => setTimeout(resolve, 30))
         }
-
-        console.log(`✅ ${song.song_name} 완료 (${canvasDataUrlArray.length}페이지)`)
-
-      } catch (error) {
-        console.error(`❌ "${song.song_name}" 처리 중 오류:`, error)
+      } catch {
+        // 개별 곡 처리 실패 시 건너뜀
       }
     }
 
@@ -766,11 +709,8 @@ export const generatePDFFromCanvas = async (options: {
     link.click()
     URL.revokeObjectURL(url)
 
-    console.log('✅ WYSIWYG PDF 생성 완료!')
     return true
-
   } catch (error) {
-    console.error('PDF 생성 오류:', error)
     throw error
   }
 }
