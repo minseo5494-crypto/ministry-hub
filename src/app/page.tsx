@@ -73,10 +73,9 @@ const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
 const [sortBy, setSortBy] = useState<'recent' | 'likes' | 'name'>('recent')
 const [showUserUploaded, setShowUserUploaded] = useState(true) // 사용자 추가 악보 표시 여부
 
-  // 🆕 무한 스크롤을 위한 상태
+  // 🆕 더보기 버튼을 위한 상태
 const [displayCount, setDisplayCount] = useState(20)
 const [isLoadingMore, setIsLoadingMore] = useState(false)
-const loadMoreRef = useRef<HTMLDivElement>(null)
 
   // 송폼 관련 상태
   const [songForms, setSongForms] = useState<{[songId: string]: string[]}>({})
@@ -150,6 +149,12 @@ const {
     songForms?: string[]
   }[]>([])
   const [showMultiSongEditor, setShowMultiSongEditor] = useState(false)
+
+  // 가사 입력 모달 상태
+  const [showLyricsModal, setShowLyricsModal] = useState(false)
+  const [editingLyricsSong, setEditingLyricsSong] = useState<Song | null>(null)
+  const [lyricsText, setLyricsText] = useState('')
+  const [savingLyrics, setSavingLyrics] = useState(false)
 
   // 콘티 저장 관련 상태
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -1173,27 +1178,14 @@ useEffect(() => {
   setDisplayCount(20)
 }, [filteredSongs])
 
-// 🆕 무한 스크롤 Intersection Observer
-useEffect(() => {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      if (entries[0].isIntersecting && displayCount < filteredSongs.length && !isLoadingMore) {
-        setIsLoadingMore(true)
-        setTimeout(() => {
-          setDisplayCount(prev => Math.min(prev + 20, filteredSongs.length))
-          setIsLoadingMore(false)
-        }, 300)
-      }
-    },
-    { threshold: 0.1 }
-  )
-
-  if (loadMoreRef.current) {
-    observer.observe(loadMoreRef.current)
-  }
-
-  return () => observer.disconnect()
-}, [displayCount, filteredSongs.length, isLoadingMore])
+// 🆕 더보기 버튼 핸들러
+const loadMore = () => {
+  setIsLoadingMore(true)
+  setTimeout(() => {
+    setDisplayCount(prev => Math.min(prev + 20, filteredSongs.length))
+    setIsLoadingMore(false)
+  }, 300)
+}
 
 // 🆕 표시할 곡 목록 계산
 const displayedSongs = filteredSongs.slice(0, displayCount)
@@ -1299,6 +1291,47 @@ const hasMore = displayCount < filteredSongs.length
     }
     setShowMultiSongEditor(false)
     setMultiSongEditorSongs([])
+  }
+
+  // ===== 가사 관련 함수들 =====
+  const saveLyrics = async () => {
+    if (!editingLyricsSong) return
+
+    setSavingLyrics(true)
+    try {
+      const { error } = await supabase
+        .from('songs')
+        .update({ lyrics: lyricsText })
+        .eq('id', editingLyricsSong.id)
+
+      if (error) throw error
+
+      // 로컬 상태 업데이트
+      setSongs(prev => prev.map(s =>
+        s.id === editingLyricsSong.id ? { ...s, lyrics: lyricsText } : s
+      ))
+
+      // previewSong도 업데이트
+      if (previewSong?.id === editingLyricsSong.id) {
+        setPreviewSong({ ...previewSong, lyrics: lyricsText })
+      }
+
+      alert('가사가 저장되었습니다.')
+      setShowLyricsModal(false)
+      setEditingLyricsSong(null)
+      setLyricsText('')
+    } catch (error) {
+      console.error('가사 저장 오류:', error)
+      alert('가사 저장에 실패했습니다.')
+    } finally {
+      setSavingLyrics(false)
+    }
+  }
+
+  const openLyricsModal = (song: Song) => {
+    setEditingLyricsSong(song)
+    setLyricsText(song.lyrics || '')
+    setShowLyricsModal(true)
   }
 
   // ===== 송폼 관련 함수들 =====
@@ -2128,9 +2161,9 @@ const hasMore = displayCount < filteredSongs.length
           : 'hover:bg-gray-50'
       }`}
     >
-      {/* 상단: 곡 정보 + 버튼 (항상 고정) */}
-      <div 
-        className="flex items-start justify-between"
+      {/* 상단: 곡 정보 + 버튼 (모바일에서는 세로 배치) */}
+      <div
+        className="flex flex-col sm:flex-row sm:items-start sm:justify-between"
         onClick={() => {
           toggleSongSelection(song)
           setFocusedSongIndex(index)
@@ -2190,8 +2223,8 @@ const hasMore = displayCount < filteredSongs.length
           </div>
         </div>
 
-        {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
-        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
+        {/* 버튼들 - 모바일에서는 아래에, 데스크탑에서는 오른쪽에 */}
+        <div className="flex gap-1 md:gap-2 mt-2 sm:mt-0 sm:ml-4 flex-shrink-0 ml-7 sm:ml-4">
           {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
@@ -2236,6 +2269,23 @@ const hasMore = displayCount < filteredSongs.length
               <Presentation size={18} />
             </button>
           )}
+
+          {/* 가사 추가/보기 버튼 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              openLyricsModal(song)
+            }}
+            className="p-1.5 md:p-2 rounded-lg"
+            style={{
+              color: song.lyrics ? '#16a34a' : '#d1d5db',
+              backgroundColor: song.lyrics ? '#dcfce7' : 'transparent',
+              opacity: song.lyrics ? 1 : 0.5
+            }}
+            title={song.lyrics ? '가사 보기/수정' : '가사 추가'}
+          >
+            <FileText size={16} className="md:w-[18px] md:h-[18px]" />
+          </button>
 
           {/* 유튜브 영상 토글 버튼 */}
           <button
@@ -2344,21 +2394,21 @@ const hasMore = displayCount < filteredSongs.length
               )}
             </div>
 
-            {/* 🆕 무한 스크롤 로딩 표시 */}
+            {/* 🆕 더보기 버튼 */}
 {hasMore && (
-  <div 
-    ref={loadMoreRef} 
-    className="py-8 text-center"
-  >
+  <div className="py-8 text-center">
     {isLoadingMore ? (
       <div className="flex items-center justify-center gap-2">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
         <span className="text-gray-600">더 불러오는 중...</span>
       </div>
     ) : (
-      <span className="text-gray-400">
-        스크롤하여 더 보기 ({displayCount} / {filteredSongs.length})
-      </span>
+      <button
+        onClick={loadMore}
+        className="px-6 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+      >
+        더보기 ({displayCount} / {filteredSongs.length}곡)
+      </button>
     )}
   </div>
 )}
@@ -3317,6 +3367,62 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
     onSaveAll={handleSaveMultiSongNotes}
     onClose={handleCloseMultiSongEditor}
   />
+)}
+
+{/* 가사 입력/수정 모달 */}
+{showLyricsModal && editingLyricsSong && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+    <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="flex items-center justify-between p-4 border-b">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">가사 {editingLyricsSong.lyrics ? '수정' : '추가'}</h2>
+          <p className="text-sm text-gray-600">{editingLyricsSong.song_name} - {editingLyricsSong.team_name}</p>
+        </div>
+        <button
+          onClick={() => {
+            setShowLyricsModal(false)
+            setEditingLyricsSong(null)
+            setLyricsText('')
+          }}
+          className="text-gray-500 hover:text-gray-700 p-2"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4">
+        <textarea
+          value={lyricsText}
+          onChange={(e) => setLyricsText(e.target.value)}
+          placeholder="가사를 입력하세요...&#10;&#10;예시:&#10;[Verse 1]&#10;주의 약속하신 말씀 위에 서&#10;&#10;[Chorus]&#10;주님만이 나의 반석..."
+          className="w-full h-[400px] p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+        />
+        <p className="mt-2 text-xs text-gray-500">
+          💡 팁: [Verse], [Chorus], [Bridge] 등으로 섹션을 구분하면 좋아요
+        </p>
+      </div>
+
+      <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
+        <button
+          onClick={() => {
+            setShowLyricsModal(false)
+            setEditingLyricsSong(null)
+            setLyricsText('')
+          }}
+          className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+        >
+          취소
+        </button>
+        <button
+          onClick={saveLyrics}
+          disabled={savingLyrics}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {savingLyrics ? '저장 중...' : '저장'}
+        </button>
+      </div>
+    </div>
+  </div>
 )}
 
     </div>
