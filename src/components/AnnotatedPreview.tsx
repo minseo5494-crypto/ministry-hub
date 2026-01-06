@@ -75,7 +75,7 @@ export default function AnnotatedPreview({
   const drawText = useCallback((ctx: CanvasRenderingContext2D, text: TextElement) => {
     ctx.font = `${text.fontSize}px sans-serif`
     ctx.fillStyle = text.color
-    ctx.fillText(text.content, text.x, text.y + text.fontSize)
+    ctx.fillText(text.text, text.x, text.y + text.fontSize)
   }, [])
 
   // 어노테이션 렌더링
@@ -103,8 +103,8 @@ export default function AnnotatedPreview({
     }
 
     // 텍스트 그리기
-    if (pageAnnotation.texts) {
-      pageAnnotation.texts.forEach(text => {
+    if (pageAnnotation.textElements) {
+      pageAnnotation.textElements.forEach(text => {
         drawText(ctx, text)
       })
     }

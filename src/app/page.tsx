@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase, Song, User, SECTION_ABBREVIATIONS, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
+import { supabase, Song, User, Team, Folder, SECTION_ABBREVIATIONS, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
+import { SongFormStyle, PartTagStyle, PianoScoreElement, DrumScoreElement, EditorSong } from '@/components/SheetMusicEditor/types'
 import { getCurrentUser, signOut } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { parseLyrics } from '@/lib/lyricParser'
@@ -156,7 +157,7 @@ const {
   const [setlistType, setSetlistType] = useState('주일집회')
   const [customSetlistType, setCustomSetlistType] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
-  const [folders, setFolders] = useState<any[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
   // 🆕 팀 선택 상태 추가
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
   
@@ -186,7 +187,7 @@ const {
   const [uploadingFile, setUploadingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [userTeams, setUserTeams] = useState<any[]>([])
+  const [userTeams, setUserTeams] = useState<{ id: string; name: string }[]>([])
 
   // 🎨 동적 테마 목록 상태
   const [themeCounts, setThemeCounts] = useState<ThemeCount[]>([])
@@ -410,7 +411,7 @@ const fetchSongs = async () => {
   setLoading(true)
   try {
     // 🔥 전체 데이터를 페이지네이션으로 가져오기
-    let allData: any[] = []
+    let allData: Song[] = []
     let from = 0
     const pageSize = 1000
 
@@ -556,10 +557,13 @@ const fetchSongs = async () => {
 
       if (error) throw error
 
-      const teams = data?.map((tm: any) => ({
-        id: tm.teams.id,
-        name: tm.teams.name
-      })) || []
+      const teams = data?.map((tm) => {
+        const team = tm.teams as unknown as { id: string; name: string }
+        return {
+          id: team.id,
+          name: team.name
+        }
+      }) || []
 
       setUserTeams(teams)
       console.log('✅ 사용자 팀 목록:', teams)
@@ -986,9 +990,10 @@ if (newSong.visibility === 'public') {
 
     fetchSongs()
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ 곡 추가 오류:', error)
-    alert(`❌ 곡 추가에 실패했습니다.\n\n오류: ${error.message}`)
+    const message = error instanceof Error ? error.message : '알 수 없는 오류'
+    alert(`❌ 곡 추가에 실패했습니다.\n\n오류: ${message}`)
   } finally {
     setUploading(false)
   }
@@ -1301,7 +1306,7 @@ const hasMore = displayCount < filteredSongs.length
   }
 
   // 📝 다중 곡 악보 뷰어 저장 핸들러
-  const handleSaveMultiSongNotes = async (data: { song: any, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: any, partTags: any[] } }[]) => {
+  const handleSaveMultiSongNotes = async (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] } }[]) => {
     if (!user) {
       alert('로그인이 필요합니다.')
       return
@@ -1361,7 +1366,7 @@ const hasMore = displayCount < filteredSongs.length
   }
 
   // 🆕 필터 변경 핸들러 (FilterPanel용)
-  const handleFilterChange = (key: string, value: any) => {
+  const handleFilterChange = (key: string, value: string | string[] | boolean) => {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
 

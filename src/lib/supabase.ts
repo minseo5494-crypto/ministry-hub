@@ -174,6 +174,7 @@ export interface Song {
   part?: string
   version_info?: string
   visibility?: 'private' | 'teams' | 'public'
+  shared_with_teams?: string[]  // 공유된 팀 ID 배열
   upload_status?: 'pending' | 'completed' | 'failed'
   like_count?: number
   is_official?: boolean

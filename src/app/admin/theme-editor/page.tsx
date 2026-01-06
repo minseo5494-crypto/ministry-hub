@@ -203,7 +203,8 @@ export default function ThemeEditorPage() {
     setSections(parsedSections)
 
     // 기존 테마가 있으면 로드
-    setThemes(song.themes || '')
+    const existingThemes = song.themes
+    setThemes(Array.isArray(existingThemes) ? existingThemes.join(', ') : (existingThemes || ''))
   }
 
   // 가사를 섹션별로 파싱

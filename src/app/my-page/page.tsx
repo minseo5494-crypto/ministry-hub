@@ -1358,7 +1358,8 @@ setNewSong({ ...newSong, tempo: tempoValue })
           initialPartTags={editingNote.partTags}
           initialPianoScores={editingNote.pianoScores}
           onSave={async (annotations, extra) => {
-            const success = await updateSheetMusicNote(editingNote.id, annotations, undefined, extra)
+            // Type assertion needed due to identical but separately declared types
+            const success = await updateSheetMusicNote(editingNote.id, annotations, undefined, extra as unknown as Parameters<typeof updateSheetMusicNote>[3])
             if (success) {
               alert('저장되었습니다!')
               setShowNoteEditor(false)

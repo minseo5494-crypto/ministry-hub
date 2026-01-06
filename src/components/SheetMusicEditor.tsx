@@ -14,241 +14,46 @@ import DrumScoreEditor from './scores/DrumScoreEditor'
 import PianoScoreRenderer from './scores/PianoScoreRenderer'
 import PianoScoreEditor from './scores/PianoScoreEditor'
 
-// ===== 타입 정의 =====
-type Tool = 'pen' | 'highlighter' | 'eraser' | 'text' | 'pan' | 'lasso'
+// ===== 분리된 파일에서 import =====
+import {
+  Tool,
+  SongFormStyle,
+  PartTagStyle,
+  PianoNote,
+  PianoScoreElement,
+  DrumNote,
+  DrumScoreElement,
+  EditorSong,
+  EditorProps,
+  LassoSelection,
+  SongFormState,
+  DraggingFormItem,
+} from './SheetMusicEditor/types'
 
-// 송폼 스타일 (SongFormPositionModal에서 가져옴)
-export interface SongFormStyle {
-  x: number           // 0-100 (퍼센트)
-  y: number           // 0-100 (퍼센트)
-  fontSize: number    // 10-80 (pt)
-  color: string       // hex 색상
-  opacity: number     // 0-1
+import {
+  COLORS,
+  HIGHLIGHTER_COLORS,
+  PART_COLORS,
+  AVAILABLE_PARTS,
+  FORM_COLOR_PRESETS,
+  DEFAULT_SONG_FORM_STYLE,
+} from './SheetMusicEditor/constants'
+
+import {
+  getSvgPathFromStroke,
+  isPointInPolygon,
+  isStrokeInSelection,
+} from './SheetMusicEditor/utils'
+
+// ===== 타입 재export (하위 호환성) =====
+export type {
+  SongFormStyle,
+  PartTagStyle,
+  PianoScoreElement,
+  DrumScoreElement,
+  EditorSong,
 }
-
-export interface PartTagStyle {
-  id: string
-  label: string
-  x: number           // 0-100 (퍼센트)
-  y: number           // 0-100 (퍼센트)
-  fontSize: number    // 10-60 (pt)
-  color: string       // hex 색상
-  opacity: number     // 0-1
-  pageIndex?: number  // 페이지 인덱스 (0부터 시작)
-}
-
-// 피아노 악보 음표 타입
-export interface PianoNote {
-  pitch: string       // 음이름 (C4, D4, E4 등)
-  position: number    // 마디 내 위치 (0부터 시작)
-  duration?: 1 | 2 | 4 | 8 | 16  // 음표 길이 (1=온음표, 2=2분음표, 4=4분음표, 8=8분음표, 16=16분음표, 기본값 4)
-  beamGroup?: string  // 잇단음표 그룹 ID (같은 ID를 가진 음표끼리 연결)
-}
-
-// 피아노 악보 코드 타입
-export interface PianoChord {
-  name: string        // 코드 이름 (예: "Bb7")
-  position: number    // 마디 내 위치 (0-100, 자동 계산됨)
-}
-
-// 피아노 악보 요소 타입
-export interface PianoScoreElement {
-  id: string
-  x: number           // 0-100 (퍼센트)
-  y: number           // 0-100 (퍼센트)
-  pageIndex: number   // 페이지 인덱스
-  measureCount: 1 | 2 | 3 | 4  // 마디 수 (1=코드 하나)
-  measureWidths?: number[]  // 각 마디 너비 (없으면 균등 분배)
-  chordName?: string  // 코드 이름 (예: "Bb7") - 호환성용, deprecated
-  chords?: PianoChord[]  // 코드 배열 (마디당 최대 3개)
-  notes: PianoNote[]  // 음표 배열
-  scale?: number      // 크기 조절 (0.5-2.0, 기본값 1.0)
-}
-
-// 드럼 악보 음표 타입
-export interface DrumNote {
-  part: 'HH' | 'SN' | 'KK' | 'TH' | 'TM' | 'TL' | 'CY' | 'RD'  // 드럼 파트 (HH=하이햇, SN=스네어, KK=킥, TH/TM/TL=탐, CY=심벌, RD=라이드)
-  position: number    // 마디 내 위치 (0-100)
-  duration?: 4 | 8 | 16  // 음표 길이 (4=4분음표, 8=8분음표, 16=16분음표, 기본값 8)
-  noteType?: 'normal' | 'x' | 'ghost'  // 음표 타입 (normal=일반, x=엑스표시, ghost=고스트노트)
-  beamGroup?: string  // 잇단음표 그룹 ID
-}
-
-// 드럼 악보 요소 타입
-export interface DrumScoreElement {
-  id: string
-  x: number           // 0-100 (퍼센트)
-  y: number           // 0-100 (퍼센트)
-  pageIndex: number   // 페이지 인덱스
-  measureCount: 1 | 2 | 3 | 4  // 마디 수
-  measureWidths?: number[]  // 각 마디 너비
-  notes: DrumNote[]   // 드럼 음표 배열
-  scale?: number      // 크기 조절 (0.5-2.0, 기본값 1.0)
-}
-
-// 다중 곡 지원을 위한 곡 정보 타입
-export interface EditorSong {
-  song_id: string
-  song_name: string
-  team_name?: string
-  file_url: string
-  file_type: 'pdf' | 'image'
-  songForms?: string[]
-}
-
-// 저장 시 전달되는 데이터 타입
-export interface SavedNoteData {
-  annotations: PageAnnotation[]
-  songFormEnabled: boolean
-  songFormStyle: SongFormStyle
-  partTags: PartTagStyle[]
-  pianoScores?: PianoScoreElement[]
-  drumScores?: DrumScoreElement[]
-}
-
-interface EditorProps {
-  fileUrl: string
-  fileType: 'pdf' | 'image'
-  songName: string
-  artistName?: string
-  initialAnnotations?: PageAnnotation[]
-  onSave?: (annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] }) => void
-  onClose?: () => void
-  queueInfo?: {
-    current: number
-    total: number
-    nextSongName?: string
-  }
-  // 송폼 관련 props (선택적)
-  songForms?: string[]  // 선택된 송폼 배열 (예: ['I', 'V', 'C', 'B'])
-  initialSongFormStyle?: SongFormStyle
-  initialSongFormEnabled?: boolean  // 초기 송폼 활성화 상태
-  initialPartTags?: PartTagStyle[]
-  initialPianoScores?: PianoScoreElement[]  // 초기 피아노 악보
-  initialDrumScores?: DrumScoreElement[]  // 초기 드럼 악보
-  // 다중 곡 모드 (콘티 필기용)
-  songs?: EditorSong[]
-  setlistTitle?: string
-  initialSongIndex?: number  // 초기 곡 인덱스 (다중 곡 모드에서 사용)
-  onSaveAll?: (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] } }[]) => void
-  // 보기/편집 모드 통합
-  initialMode?: 'view' | 'edit'  // 초기 모드 (기본: edit)
-}
-
-// 올가미 선택 영역 타입
-interface LassoSelection {
-  points: StrokePoint[]
-  boundingBox: { x: number; y: number; width: number; height: number } | null
-  selectedStrokeIds: string[]
-  selectedTextIds: string[]
-}
-
-// 색상 프리셋 (확장됨)
-const COLORS = [
-  '#000000', // 검정
-  '#FF0000', // 빨강
-  '#0066FF', // 파랑
-  '#00AA00', // 초록
-  '#FF6600', // 주황
-  '#9900FF', // 보라
-  '#666666', // 회색
-  '#8B4513', // 갈색
-  '#FF1493', // 핫핑크
-  '#00CED1', // 다크터콰이즈
-]
-
-const HIGHLIGHTER_COLORS = [
-  '#FFFF00', // 노랑
-  '#00FF00', // 연두
-  '#00FFFF', // 하늘
-  '#FF00FF', // 분홍
-  '#FFA500', // 주황
-  '#90EE90', // 연초록
-  '#FFB6C1', // 연분홍
-  '#87CEEB', // 하늘색
-]
-
-// 파트 태그 색상
-const PART_COLORS: { [key: string]: string } = {
-  'I': '#EF4444',
-  'V': '#3B82F6',
-  'V1': '#3B82F6',
-  'V2': '#2563EB',
-  'V3': '#1D4ED8',
-  'PC': '#EAB308',
-  'C': '#22C55E',
-  'C1': '#22C55E',
-  'C2': '#16A34A',
-  'B': '#A855F7',
-  '간주': '#F97316',
-  'Out': '#6B7280',
-}
-
-// 사용 가능한 파트 태그
-const AVAILABLE_PARTS = [
-  { key: 'I', label: 'Intro' },
-  { key: 'V', label: 'Verse' },
-  { key: 'V1', label: 'Verse1' },
-  { key: 'V2', label: 'Verse2' },
-  { key: 'V3', label: 'Verse3' },
-  { key: 'PC', label: 'PreChorus' },
-  { key: 'C', label: 'Chorus' },
-  { key: 'C1', label: 'Chorus1' },
-  { key: 'C2', label: 'Chorus2' },
-  { key: 'B', label: 'Bridge' },
-  { key: '간주', label: 'Interlude' },
-  { key: 'Out', label: 'Outro' },
-]
-
-// 송폼 색상 프리셋
-const FORM_COLOR_PRESETS = [
-  { name: '보라', value: '#7C3AED' },
-  { name: '파랑', value: '#2563EB' },
-  { name: '빨강', value: '#DC2626' },
-  { name: '초록', value: '#16A34A' },
-  { name: '주황', value: '#EA580C' },
-  { name: '검정', value: '#1F2937' },
-]
-
-// SVG path 생성 함수
-const getSvgPathFromStroke = (stroke: number[][]) => {
-  if (!stroke.length) return ''
-
-  const d = stroke.reduce(
-    (acc, [x0, y0], i, arr) => {
-      const [x1, y1] = arr[(i + 1) % arr.length]
-      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2)
-      return acc
-    },
-    ['M', ...stroke[0], 'Q']
-  )
-
-  d.push('Z')
-  return d.join(' ')
-}
-
-// 점이 다각형 내부에 있는지 확인 (Ray casting algorithm)
-const isPointInPolygon = (point: StrokePoint, polygon: StrokePoint[]): boolean => {
-  if (polygon.length < 3) return false
-
-  let inside = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x, yi = polygon[i].y
-    const xj = polygon[j].x, yj = polygon[j].y
-
-    if (((yi > point.y) !== (yj > point.y)) &&
-        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
-// 스트로크가 선택 영역에 포함되는지 확인
-const isStrokeInSelection = (stroke: Stroke, polygon: StrokePoint[]): boolean => {
-  // 스트로크의 점 중 하나라도 선택 영역 안에 있으면 선택됨
-  return stroke.points.some(point => isPointInPolygon(point, polygon))
-}
+export type { PianoNote, PianoChord, DrumNote, SavedNoteData } from './SheetMusicEditor/types'
 
 export default function SheetMusicEditor({
   fileUrl,
