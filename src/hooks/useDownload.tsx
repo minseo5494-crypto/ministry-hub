@@ -107,13 +107,24 @@ export function useDownload({
   const [previewImages, setPreviewImages] = useState<PreviewImage[]>([])
   const [showPreview, setShowPreview] = useState(false)
 
-  // 미리보기에서 저장
+  // 미리보기에서 저장 (Web Share API 사용하여 iOS 사진첩에 바로 저장)
   const handlePreviewSave = useCallback(async (index: number) => {
     const image = previewImages[index]
     if (!image) return
 
     try {
-      // iOS Safari에서는 다운로드 링크 생성
+      // Web Share API가 지원되면 공유 시트로 저장 (iOS에서 "이미지 저장" 옵션 제공)
+      if (navigator.share && navigator.canShare) {
+        const file = new File([image.blob], image.filename, { type: 'image/jpeg' })
+        const shareData = { files: [file] }
+
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData)
+          return
+        }
+      }
+
+      // Web Share API 미지원 시 기존 다운로드 방식
       const url = URL.createObjectURL(image.blob)
       const a = document.createElement('a')
       a.href = url
@@ -123,8 +134,11 @@ export function useDownload({
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (error) {
-      console.error('저장 실패:', error)
-      alert('저장에 실패했습니다.')
+      // 사용자가 공유 취소한 경우 무시
+      if ((error as Error).name !== 'AbortError') {
+        console.error('저장 실패:', error)
+        alert('저장에 실패했습니다.')
+      }
     }
   }, [previewImages])
 

@@ -34,14 +34,18 @@ export default function ImagePreviewModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col z-[100]">
       {/* 헤더 */}
-      <div className="flex items-center justify-between p-4 bg-black bg-opacity-50">
+      <div className="flex items-center justify-between p-4 bg-black/80">
         <button
           onClick={onClose}
           className="p-2 text-white hover:bg-white/20 rounded-full"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
         >
-          <X size={24} />
+          <X size={24} strokeWidth={2.5} />
         </button>
-        <span className="text-white font-medium">
+        <span
+          className="text-white font-semibold text-base"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+        >
           {hasMultiple ? `${currentIndex + 1} / ${images.length}` : currentImage.filename}
         </span>
         <div className="w-10" /> {/* 균형을 위한 빈 공간 */}
@@ -86,17 +90,17 @@ export default function ImagePreviewModal({
       )}
 
       {/* 하단 버튼들 */}
-      <div className="p-4 bg-black bg-opacity-50 flex gap-3 justify-center">
+      <div className="p-4 bg-black/80 flex gap-3 justify-center">
         <button
           onClick={() => onSave(currentIndex)}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 active:scale-95 transition"
+          className="flex items-center gap-2 px-6 py-3 bg-blue-500/70 text-white rounded-xl font-medium hover:bg-blue-500/90 active:scale-95 transition"
         >
           <Download size={20} />
           저장
         </button>
         <button
           onClick={() => onShare(currentIndex)}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 active:scale-95 transition"
+          className="flex items-center gap-2 px-6 py-3 bg-emerald-500/70 text-white rounded-xl font-medium hover:bg-emerald-500/90 active:scale-95 transition"
         >
           <Share2 size={20} />
           공유
