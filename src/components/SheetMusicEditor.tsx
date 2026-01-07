@@ -1061,7 +1061,37 @@ export default function SheetMusicEditor({
         if (!isFingerTouch || isZoomed) {
           const dx = e.clientX - lastPanPositionRef.current.x
           const dy = e.clientY - lastPanPositionRef.current.y
-          setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+
+          // 경계 제한 계산
+          const container = containerRef.current
+          const containerWidth = container?.clientWidth || 0
+          const containerHeight = container?.clientHeight || 0
+          const scaledWidth = canvasSize.width * scale
+          const scaledHeight = canvasSize.height * scale
+
+          // 새 offset 계산 및 경계 제한
+          setOffset((prev) => {
+            let newX = prev.x + dx
+            let newY = prev.y + dy
+
+            // 가로 경계 제한 (악보가 컨테이너보다 클 때만)
+            if (scaledWidth > containerWidth) {
+              const minX = -(scaledWidth - containerWidth)
+              newX = Math.max(minX, Math.min(0, newX))
+            } else {
+              newX = 0 // 악보가 작으면 중앙 고정
+            }
+
+            // 세로 경계 제한 (악보가 컨테이너보다 클 때만)
+            if (scaledHeight > containerHeight) {
+              const minY = -(scaledHeight - containerHeight)
+              newY = Math.max(minY, Math.min(0, newY))
+            } else {
+              newY = 0 // 악보가 작으면 중앙 고정
+            }
+
+            return { x: newX, y: newY }
+          })
           lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
         }
         return
@@ -1130,7 +1160,7 @@ export default function SheetMusicEditor({
         })
       }
     },
-    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage, minScale]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage, minScale, canvasSize]
   )
 
   // ===== 히스토리 관리 (handlePointerUp보다 먼저 정의) =====
