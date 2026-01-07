@@ -32,17 +32,17 @@ export default function ImagePreviewModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col z-[100]">
       {/* 헤더 */}
-      <div className="flex items-center justify-between p-4 bg-black/80">
+      <div className="flex items-center justify-between p-4 bg-black">
         <button
           onClick={onClose}
-          className="p-2 text-white hover:bg-white/20 rounded-full"
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+          className="p-2 hover:bg-white/20 rounded-full"
+          style={{ color: '#FFFFFF' }}
         >
           <X size={24} strokeWidth={2.5} />
         </button>
         <span
-          className="text-white font-semibold text-base"
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+          className="font-semibold text-base"
+          style={{ color: '#FFFFFF' }}
         >
           {hasMultiple ? `${currentIndex + 1} / ${images.length}` : currentImage.filename}
         </span>
@@ -88,10 +88,15 @@ export default function ImagePreviewModal({
       )}
 
       {/* 하단 버튼 */}
-      <div className="p-4 bg-black/80 flex justify-center">
+      <div className="p-4 bg-black flex justify-center">
         <button
           onClick={() => onSave(currentIndex)}
-          className="flex items-center gap-2 px-8 py-3 bg-white/20 text-white rounded-xl font-medium hover:bg-white/30 active:scale-95 transition"
+          className="flex items-center gap-2 px-8 py-3 rounded-xl font-medium active:scale-95 transition"
+          style={{
+            color: '#FFFFFF',
+            border: '2px solid #FFFFFF',
+            backgroundColor: 'transparent'
+          }}
         >
           <Share size={20} />
           저장 / 공유
