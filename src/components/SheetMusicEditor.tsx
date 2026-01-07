@@ -1052,13 +1052,13 @@ export default function SheetMusicEditor({
     (e: React.PointerEvent) => {
       const pos = getPointerPosition(e)
       const isFingerTouch = e.pointerType === 'touch'
+      const isZoomed = scale > minScale + 0.01 // 확대 상태인지 확인 (약간의 여유값)
 
-      // 손가락 터치로 팬 모드가 활성화된 경우 (도구에 관계없이)
-      // 손가락 터치 시 악보 이동 비활성화 (스와이프로 페이지만 넘김)
-      // 펜 또는 마우스로만 팬 가능
+      // 손가락 터치로 팬 모드가 활성화된 경우
       if (isPanningRef.current) {
-        // 손가락 터치가 아닌 경우에만 팬 허용 (펜/마우스)
-        if (!isFingerTouch) {
+        // 손가락 터치: 확대 상태일 때만 팬 허용
+        // 펜/마우스: 항상 팬 허용
+        if (!isFingerTouch || isZoomed) {
           const dx = e.clientX - lastPanPositionRef.current.x
           const dy = e.clientY - lastPanPositionRef.current.y
           setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
@@ -1130,7 +1130,7 @@ export default function SheetMusicEditor({
         })
       }
     },
-    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage, minScale]
   )
 
   // ===== 히스토리 관리 (handlePointerUp보다 먼저 정의) =====
@@ -1523,7 +1523,27 @@ export default function SheetMusicEditor({
       const isSwipe = Math.abs(deltaX) > Math.abs(deltaY) &&
                       (Math.abs(deltaX) > 30 || (velocity > 0.3 && Math.abs(deltaX) > 15))
 
-      if (isSwipe) {
+      // 확대 상태인지 확인
+      const isZoomed = scale > minScale + 0.01
+
+      // 확대 상태에서 경계 확인
+      // 캔버스의 확대된 크기와 컨테이너 크기 비교
+      const container = containerRef.current
+      const containerWidth = container?.clientWidth || 0
+      const scaledWidth = canvasSize.width * scale
+
+      // 경계 확인: 왼쪽/오른쪽 끝에 도달했는지
+      const atLeftEdge = offset.x >= 0
+      const atRightEdge = offset.x <= -(scaledWidth - containerWidth)
+
+      // 페이지 변경 조건:
+      // 1. 확대되지 않은 상태 (기본 크기)
+      // 2. 확대 상태이지만 경계에 도달한 경우
+      const canChangePage = !isZoomed ||
+        (deltaX > 0 && atLeftEdge) || // 오른쪽 스와이프 + 왼쪽 끝
+        (deltaX < 0 && atRightEdge)   // 왼쪽 스와이프 + 오른쪽 끝
+
+      if (isSwipe && canChangePage) {
         // 스와이프로 페이지 변경 시 offset 리셋 (악보 위치 초기화)
         setOffset({ x: 0, y: 0 })
 
@@ -1612,7 +1632,7 @@ export default function SheetMusicEditor({
     swipeStartX.current = null
     swipeStartY.current = null
     isSwiping.current = false
-  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen, isViewMode])
+  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen, isViewMode, minScale, offset])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
   // hideToolbar 변경 시에도 화면에 맞추기 (상단바 숨김/표시 시 레이아웃 변경)
