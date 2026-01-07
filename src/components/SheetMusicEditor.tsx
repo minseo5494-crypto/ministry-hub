@@ -88,6 +88,55 @@ export default function SheetMusicEditor({
 
   // ===== 보기 모드 전용: 툴바 숨기기 =====
   const [hideToolbar, setHideToolbar] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // ===== 전체 화면 토글 =====
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        // 전체 화면 진입
+        const elem = document.documentElement
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen()
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen()
+        }
+        setIsFullscreen(true)
+        setHideToolbar(true)
+      } else {
+        // 전체 화면 해제
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen()
+        }
+        setIsFullscreen(false)
+        setHideToolbar(false)
+      }
+    } catch (err) {
+      // 전체 화면 API 지원 안 되는 경우 (iOS PWA 등) 툴바만 토글
+      setHideToolbar(prev => !prev)
+    }
+  }, [])
+
+  // 전체 화면 상태 변경 감지
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+      setIsFullscreen(isFs)
+      if (!isFs) {
+        setHideToolbar(false)
+      }
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   // ===== 모드 전환 토스트 =====
   const [modeToast, setModeToast] = useState<{ show: boolean, mode: 'view' | 'edit' }>({ show: false, mode: 'view' })
@@ -1484,10 +1533,10 @@ export default function SheetMusicEditor({
         setCurrentPage(1)
       }
     } else {
-      // 중앙 클릭: 상단바 토글
-      setHideToolbar(prev => !prev)
+      // 중앙 클릭: 전체 화면 토글
+      toggleFullscreen()
     }
-  }, [isViewMode, totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length])
+  }, [isViewMode, totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, toggleFullscreen])
 
   // 마우스 휠로 줌 (데스크톱)
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -1651,8 +1700,8 @@ export default function SheetMusicEditor({
                 setCurrentSongIndex(i => i + 1)
               }
             } else {
-              // 중앙 탭: 상단바 토글
-              setHideToolbar(prev => !prev)
+              // 중앙 탭: 전체 화면 토글
+              toggleFullscreen()
             }
           }
         } else {
@@ -1668,7 +1717,7 @@ export default function SheetMusicEditor({
     swipeStartX.current = null
     swipeStartY.current = null
     isSwiping.current = false
-  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen, isViewMode, minScale, offset])
+  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen, isViewMode, minScale, offset, toggleFullscreen])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
   // hideToolbar 변경 시에도 화면에 맞추기 (상단바 숨김/표시 시 레이아웃 변경)
