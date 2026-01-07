@@ -2327,13 +2327,14 @@ const hasMore = displayCount < filteredSongs.length
   </div>
               ) : (
                 // 리스트 뷰 (기존 스타일 유지)
-<div ref={songListRef} className="divide-y divide-gray-200 w-full">
+<div ref={songListRef} className="divide-y divide-gray-200" style={{ width: '100%', maxWidth: '100%' }}>
   {displayedSongs.map((song, index) => (
     <div
       key={song.id}
       tabIndex={0}
       onFocus={() => setFocusedSongIndex(index)}
-      className={`p-3 sm:p-4 cursor-pointer transition-all w-full min-w-0 overflow-hidden ${
+      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+      className={`p-3 sm:p-4 cursor-pointer transition-all overflow-hidden ${
         selectedSongs.find(s => s.id === song.id)
           ? 'bg-blue-50'
           : focusedSongIndex === index
@@ -2546,7 +2547,7 @@ const hasMore = displayCount < filteredSongs.length
 
       {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) */}
       {previewStates[song.id] && (
-        <div className="mt-4 border-t pt-4 w-full min-w-0">
+        <div className="mt-4 border-t pt-4" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
           {song.lyrics && (
             <div className="mb-4">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
@@ -2556,8 +2557,8 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div className="-mx-3 sm:mx-0">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm px-3 sm:px-0">악보</h4>
+            <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
@@ -2569,11 +2570,11 @@ const hasMore = displayCount < filteredSongs.length
                   alt={`${song.song_name} 악보`}
                   style={{
                     display: 'block',
-                    width: 'calc(100vw - 32px)',
-                    maxWidth: 'calc(100vw - 32px)',
+                    width: '100%',
+                    maxWidth: '100%',
                     height: 'auto',
+                    objectFit: 'scale-down',
                   }}
-                  className="sm:!w-full sm:!max-w-full sm:rounded"
                 />
               )}
             </div>
