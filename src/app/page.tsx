@@ -28,6 +28,7 @@ import ImagePreviewModal from '@/components/ImagePreviewModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
+import ResponsiveImage from '@/components/ResponsiveImage'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
 import { generatePDF as generatePDFFile, PDFSong, SongFormPosition } from '@/lib/pdfGenerator'
@@ -2304,8 +2305,10 @@ const hasMore = displayCount < filteredSongs.length
               </pre>
             )}
             {song.file_url && (
-              <div
-                className="mt-2 rounded cursor-pointer overflow-hidden"
+              <ResponsiveImage
+                src={song.file_url}
+                alt={song.song_name}
+                className="mt-2 rounded cursor-pointer"
                 onDoubleClick={(e) => {
                   e.stopPropagation()
                   openSheetViewer(song)
@@ -2314,19 +2317,7 @@ const hasMore = displayCount < filteredSongs.length
                   e.stopPropagation()
                   handleDoubleTap(song)
                 }}
-              >
-                <img
-                  src={song.file_url}
-                  alt={song.song_name}
-                  width="100%"
-                  height="auto"
-                  style={{
-                    display: 'block',
-                    maxWidth: 'none',
-                    width: 'calc(100vw - 2rem)',
-                  }}
-                />
-              </div>
+              />
             )}
           </div>
         )}
@@ -2618,8 +2609,10 @@ const hasMore = displayCount < filteredSongs.length
                   <div className="absolute inset-0" />
                 </div>
               ) : (
-                <div
-                  className="rounded shadow-sm cursor-pointer overflow-hidden"
+                <ResponsiveImage
+                  src={song.file_url}
+                  alt={`${song.song_name} 악보`}
+                  className="rounded shadow-sm cursor-pointer"
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     openSheetViewer(song)
@@ -2628,19 +2621,7 @@ const hasMore = displayCount < filteredSongs.length
                     e.stopPropagation()
                     handleDoubleTap(song)
                   }}
-                >
-                  <img
-                    src={song.file_url}
-                    alt={`${song.song_name} 악보`}
-                    width="100%"
-                    height="auto"
-                    style={{
-                      display: 'block',
-                      maxWidth: 'none',
-                      width: 'calc(100vw - 2rem)',
-                    }}
-                  />
-                </div>
+                />
               )}
             </div>
           )}
