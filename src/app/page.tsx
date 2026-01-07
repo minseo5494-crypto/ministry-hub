@@ -1800,12 +1800,13 @@ const hasMore = displayCount < filteredSongs.length
             }}>
             찬양으로 하나되는 예배
             </h1>
-            <p className="text-xl" style={{ 
+            <p className="text-lg md:text-xl" style={{
               color: '#FFFFFF',
               opacity: 0.95,
               textShadow: '0 2px 8px rgba(0,0,0,0.8)'
             }}>
-              WORSHEEP과 함께 은혜로운 예배를 준비하세요
+              <span className="whitespace-nowrap">WORSHEEP과 함께 은혜로운</span>{' '}
+              <span className="whitespace-nowrap">예배를 준비하세요</span>
             </p>
           </div>
 
@@ -1825,25 +1826,25 @@ const hasMore = displayCount < filteredSongs.length
           </div>
 
 
-          {/* 통계 카드 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>{songs.length}+</div>
-              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>찬양곡</div>
+          {/* 통계 카드 - 모바일에서 더 작게 */}
+          <div className="grid grid-cols-4 gap-2 md:gap-4">
+            <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>{songs.length}+</div>
+              <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>찬양곡</div>
             </div>
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>
+            <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>
                 {new Set(songs.map(s => s.team_name).filter(Boolean)).size}+
               </div>
-              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>아티스트</div>
+              <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>아티스트</div>
             </div>
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>{selectedSongs.length}</div>
-              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>선택한 곡</div>
+            <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>{selectedSongs.length}</div>
+              <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>선택한 곡</div>
             </div>
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4 text-center">
-              <div className="text-2xl font-semibold" style={{ color: '#ffffff' }}>12</div>
-              <div className="text-xs opacity-80" style={{ color: '#ffffff' }}>Key</div>
+            <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
+              <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>12</div>
+              <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>Key</div>
             </div>
           </div>
         </div>
