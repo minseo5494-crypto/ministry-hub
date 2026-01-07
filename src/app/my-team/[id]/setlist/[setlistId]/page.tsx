@@ -1774,7 +1774,6 @@ const saveNote = async () => {
           images={previewImages}
           onClose={() => setShowPreview(false)}
           onSave={handlePreviewSave}
-          onShare={handlePreviewShare}
         />
       )}
     </div>

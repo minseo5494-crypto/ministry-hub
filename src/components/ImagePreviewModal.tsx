@@ -1,20 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Download, Share2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Share, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ImagePreviewModalProps {
   images: { url: string; filename: string }[]
   onClose: () => void
   onSave: (index: number) => void
-  onShare: (index: number) => void
 }
 
 export default function ImagePreviewModal({
   images,
   onClose,
-  onSave,
-  onShare
+  onSave
 }: ImagePreviewModalProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -89,21 +87,14 @@ export default function ImagePreviewModal({
         </div>
       )}
 
-      {/* 하단 버튼들 */}
-      <div className="p-4 bg-black/80 flex gap-3 justify-center">
+      {/* 하단 버튼 */}
+      <div className="p-4 bg-black/80 flex justify-center">
         <button
           onClick={() => onSave(currentIndex)}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-500/70 text-white rounded-xl font-medium hover:bg-blue-500/90 active:scale-95 transition"
+          className="flex items-center gap-2 px-8 py-3 bg-white/20 text-white rounded-xl font-medium hover:bg-white/30 active:scale-95 transition"
         >
-          <Download size={20} />
-          저장
-        </button>
-        <button
-          onClick={() => onShare(currentIndex)}
-          className="flex items-center gap-2 px-6 py-3 bg-emerald-500/70 text-white rounded-xl font-medium hover:bg-emerald-500/90 active:scale-95 transition"
-        >
-          <Share2 size={20} />
-          공유
+          <Share size={20} />
+          저장 / 공유
         </button>
       </div>
 
