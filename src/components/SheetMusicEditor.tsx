@@ -1051,13 +1051,14 @@ export default function SheetMusicEditor({
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       const pos = getPointerPosition(e)
+      const isFingerTouch = e.pointerType === 'touch'
 
       // 손가락 터치로 팬 모드가 활성화된 경우 (도구에 관계없이)
       // 손가락 터치 시 악보 이동 비활성화 (스와이프로 페이지만 넘김)
       // 펜 또는 마우스로만 팬 가능
       if (isPanningRef.current) {
         // 손가락 터치가 아닌 경우에만 팬 허용 (펜/마우스)
-        if (currentPointerTypeRef.current !== 'touch') {
+        if (!isFingerTouch) {
           const dx = e.clientX - lastPanPositionRef.current.x
           const dy = e.clientY - lastPanPositionRef.current.y
           setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
