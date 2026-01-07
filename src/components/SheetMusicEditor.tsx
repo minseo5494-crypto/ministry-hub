@@ -140,6 +140,7 @@ export default function SheetMusicEditor({
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [scale, setScale] = useState(0.5)  // 초기값을 작게 설정
+  const [minScale, setMinScale] = useState(0.2) // 최소 스케일 (fitToScreen 기준)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [canvasReady, setCanvasReady] = useState(false) // 캔버스가 렌더링 완료되었는지 추적
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 }) // 캔버스 크기 추적
@@ -321,6 +322,7 @@ export default function SheetMusicEditor({
     const fitScale = Math.min(scaleX, scaleY)
 
     setScale(fitScale)
+    setMinScale(fitScale) // 최소 스케일을 화면 맞춤 값으로 설정 (축소 불가)
     setOffset({ x: 0, y: 0 }) // 중앙 정렬
   }, [])
 
@@ -1051,7 +1053,8 @@ export default function SheetMusicEditor({
       const pos = getPointerPosition(e)
 
       // 손가락 터치로 팬 모드가 활성화된 경우 (도구에 관계없이)
-      if (isPanningRef.current) {
+      // 보기 모드에서는 악보 이동 비활성화 (스와이프로 페이지만 넘김)
+      if (isPanningRef.current && !isViewMode) {
         const dx = e.clientX - lastPanPositionRef.current.x
         const dy = e.clientY - lastPanPositionRef.current.y
         setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
@@ -1122,7 +1125,7 @@ export default function SheetMusicEditor({
         })
       }
     },
-    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage, isViewMode]
   )
 
   // ===== 히스토리 관리 (handlePointerUp보다 먼저 정의) =====
@@ -1374,8 +1377,8 @@ export default function SheetMusicEditor({
 
   // ===== 줌 컨트롤 =====
   const handleZoom = useCallback((delta: number) => {
-    setScale((prev) => Math.max(0.2, Math.min(3, prev + delta)))
-  }, [])
+    setScale((prev) => Math.max(minScale, Math.min(3, prev + delta)))
+  }, [minScale])
 
   // 화면에 맞추기 버튼용
   const handleFitToScreen = useCallback(() => {
@@ -1516,6 +1519,9 @@ export default function SheetMusicEditor({
                       (Math.abs(deltaX) > 30 || (velocity > 0.3 && Math.abs(deltaX) > 15))
 
       if (isSwipe) {
+        // 스와이프로 페이지 변경 시 offset 리셋 (악보 위치 초기화)
+        setOffset({ x: 0, y: 0 })
+
         if (deltaX > 0) {
           // 오른쪽 스와이프 -> 이전 페이지/이전 곡
           if (totalPages > 1 && currentPage > 1) {
