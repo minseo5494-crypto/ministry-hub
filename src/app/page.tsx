@@ -2281,10 +2281,11 @@ const hasMore = displayCount < filteredSongs.length
               </pre>
             )}
             {song.file_url && (
-              <img 
+              <img
                 src={song.file_url}
                 alt={song.song_name}
-                className="w-full h-auto mt-2 rounded"
+                className="mt-2 rounded"
+                style={{ width: '100%', maxWidth: '100%', height: 'auto' }}
               />
             )}
           </div>
@@ -2555,7 +2556,7 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div className="sm:mx-0">
+            <div className="w-full overflow-hidden">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
@@ -2566,7 +2567,8 @@ const hasMore = displayCount < filteredSongs.length
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="w-full h-auto rounded shadow-sm block"
+                  className="rounded shadow-sm block"
+                  style={{ width: '100%', maxWidth: '100%', height: 'auto' }}
                 />
               )}
             </div>
