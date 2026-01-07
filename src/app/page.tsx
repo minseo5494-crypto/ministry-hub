@@ -2305,8 +2305,7 @@ const hasMore = displayCount < filteredSongs.length
             )}
             {song.file_url && (
               <div
-                className="w-full mt-2"
-                style={{ maxWidth: '100%', overflow: 'hidden' }}
+                className="mt-2 rounded cursor-pointer overflow-hidden"
                 onDoubleClick={(e) => {
                   e.stopPropagation()
                   openSheetViewer(song)
@@ -2319,14 +2318,12 @@ const hasMore = displayCount < filteredSongs.length
                 <img
                   src={song.file_url}
                   alt={song.song_name}
-                  className="rounded cursor-pointer"
+                  width="100%"
+                  height="auto"
                   style={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    height: 'auto',
                     display: 'block',
-                    WebkitTransform: 'translateZ(0)',
-                    transform: 'translateZ(0)'
+                    maxWidth: 'none',
+                    width: 'calc(100vw - 2rem)',
                   }}
                 />
               </div>
@@ -2622,8 +2619,7 @@ const hasMore = displayCount < filteredSongs.length
                 </div>
               ) : (
                 <div
-                  className="w-full"
-                  style={{ maxWidth: '100%', overflow: 'hidden' }}
+                  className="rounded shadow-sm cursor-pointer overflow-hidden"
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     openSheetViewer(song)
@@ -2636,14 +2632,12 @@ const hasMore = displayCount < filteredSongs.length
                   <img
                     src={song.file_url}
                     alt={`${song.song_name} 악보`}
-                    className="rounded shadow-sm cursor-pointer"
+                    width="100%"
+                    height="auto"
                     style={{
-                      width: '100%',
-                      maxWidth: '100%',
-                      height: 'auto',
                       display: 'block',
-                      WebkitTransform: 'translateZ(0)',
-                      transform: 'translateZ(0)'
+                      maxWidth: 'none',
+                      width: 'calc(100vw - 2rem)',
                     }}
                   />
                 </div>
