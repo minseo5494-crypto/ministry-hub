@@ -2284,7 +2284,11 @@ const hasMore = displayCount < filteredSongs.length
               <img
                 src={song.file_url}
                 alt={song.song_name}
-                className="w-full mt-2 rounded"
+                className="w-full mt-2 rounded cursor-pointer"
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  openSheetViewer(song)
+                }}
               />
             )}
           </div>
@@ -2556,7 +2560,7 @@ const hasMore = displayCount < filteredSongs.length
           )}
           {song.file_url && (
             <div className="w-full">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보 <span className="text-xs text-gray-400">(더블탭하여 전체화면)</span></h4>
               {song.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
@@ -2566,7 +2570,11 @@ const hasMore = displayCount < filteredSongs.length
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="rounded shadow-sm"
+                  className="rounded shadow-sm cursor-pointer"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    openSheetViewer(song)
+                  }}
                 />
               )}
             </div>

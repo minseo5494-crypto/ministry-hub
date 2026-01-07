@@ -313,7 +313,8 @@ export default function SheetMusicEditor({
     // 캔버스는 2배 크기로 렌더링됨 (고해상도)
     // CSS transform scale은 캔버스 픽셀 크기에 적용되므로
     // 컨테이너에 맞추려면 캔버스 전체 크기 기준으로 계산
-    const padding = 40 // 상하좌우 여백
+    // 모바일에서는 패딩 최소화하여 악보가 화면에 꽉 차게 표시
+    const padding = isMobile ? 8 : 20 // 상하좌우 여백 (모바일: 8px, 데스크톱: 20px)
     const scaleX = (containerWidth - padding * 2) / canvasWidth
     const scaleY = (containerHeight - padding * 2) / canvasHeight
 
@@ -2732,7 +2733,7 @@ export default function SheetMusicEditor({
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
       {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
       <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
@@ -3304,7 +3305,7 @@ export default function SheetMusicEditor({
       {/* 캔버스 영역 */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto flex items-center justify-center bg-gray-400 select-none"
+        className="flex-1 overflow-auto flex items-center justify-center bg-black select-none"
         style={{
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
