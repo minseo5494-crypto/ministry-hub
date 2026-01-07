@@ -313,10 +313,9 @@ export default function SheetMusicEditor({
     // 캔버스는 2배 크기로 렌더링됨 (고해상도)
     // CSS transform scale은 캔버스 픽셀 크기에 적용되므로
     // 컨테이너에 맞추려면 캔버스 전체 크기 기준으로 계산
-    // 모바일에서는 패딩 최소화하여 악보가 화면에 꽉 차게 표시
-    const padding = isMobile ? 8 : 20 // 상하좌우 여백 (모바일: 8px, 데스크톱: 20px)
-    const scaleX = (containerWidth - padding * 2) / canvasWidth
-    const scaleY = (containerHeight - padding * 2) / canvasHeight
+    // 여백 없이 악보가 화면에 꽉 차게 표시 (이미지 다운로드 화면과 동일)
+    const scaleX = containerWidth / canvasWidth
+    const scaleY = containerHeight / canvasHeight
 
     // 둘 중 작은 값을 사용하여 전체가 보이도록
     const fitScale = Math.min(scaleX, scaleY)
@@ -1390,8 +1389,7 @@ export default function SheetMusicEditor({
     if (!containerRef.current || canvasSize.width === 0) return
 
     const containerWidth = containerRef.current.clientWidth
-    const padding = 20
-    const fitScale = (containerWidth - padding * 2) / canvasSize.width
+    const fitScale = containerWidth / canvasSize.width
     setScale(fitScale)
     setOffset({ x: 0, y: 0 })
   }, [canvasSize.width])
