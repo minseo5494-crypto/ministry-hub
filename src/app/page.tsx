@@ -2611,7 +2611,8 @@ const hasMore = displayCount < filteredSongs.length
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="rounded shadow-sm cursor-pointer"
+                  className="w-full rounded shadow-sm cursor-pointer"
+                  style={{ maxWidth: '100%', height: 'auto' }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     openSheetViewer(song)
