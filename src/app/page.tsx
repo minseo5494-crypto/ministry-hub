@@ -2589,10 +2589,24 @@ const hasMore = displayCount < filteredSongs.length
             <div className="w-full">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보 <span className="text-xs text-gray-400">(더블탭하여 전체화면)</span></h4>
               {song.file_type === 'pdf' ? (
-                <iframe
-                  src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
-                  className="w-full h-[80vh] sm:h-[600px] border sm:rounded"
-                />
+                <div
+                  className="relative w-full h-[80vh] sm:h-[600px] cursor-pointer"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    openSheetViewer(song)
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation()
+                    handleDoubleTap(song)
+                  }}
+                >
+                  <iframe
+                    src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                    className="w-full h-full border sm:rounded pointer-events-none"
+                  />
+                  {/* 더블탭 감지용 투명 오버레이 */}
+                  <div className="absolute inset-0" />
+                </div>
               ) : (
                 <img
                   src={song.file_url}
