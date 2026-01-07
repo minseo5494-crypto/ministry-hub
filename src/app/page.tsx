@@ -2177,7 +2177,7 @@ const hasMore = displayCount < filteredSongs.length
   )}
 
   {/* 곡 목록 */}
-  <div className="bg-white rounded-lg shadow-md">
+  <div className="bg-white rounded-lg shadow-md overflow-visible">
     {loading ? (
       <div className="text-center py-12">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -2555,18 +2555,18 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div className="-mx-4 sm:mx-0">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm px-4 sm:px-0">악보</h4>
+            <div className="sm:mx-0">
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
-                  className="w-full h-[80vh] sm:h-[600px] border-y sm:border sm:rounded"
+                  className="w-full h-[80vh] sm:h-[600px] border sm:rounded"
                 />
               ) : (
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  className="w-full h-auto sm:rounded shadow-sm"
+                  className="w-full h-auto rounded shadow-sm block"
                 />
               )}
             </div>
