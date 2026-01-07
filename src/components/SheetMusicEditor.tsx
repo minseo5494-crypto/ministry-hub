@@ -1053,12 +1053,16 @@ export default function SheetMusicEditor({
       const pos = getPointerPosition(e)
 
       // 손가락 터치로 팬 모드가 활성화된 경우 (도구에 관계없이)
-      // 보기 모드에서는 악보 이동 비활성화 (스와이프로 페이지만 넘김)
-      if (isPanningRef.current && !isViewMode) {
-        const dx = e.clientX - lastPanPositionRef.current.x
-        const dy = e.clientY - lastPanPositionRef.current.y
-        setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
-        lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+      // 손가락 터치 시 악보 이동 비활성화 (스와이프로 페이지만 넘김)
+      // 펜 또는 마우스로만 팬 가능
+      if (isPanningRef.current) {
+        // 손가락 터치가 아닌 경우에만 팬 허용 (펜/마우스)
+        if (currentPointerTypeRef.current !== 'touch') {
+          const dx = e.clientX - lastPanPositionRef.current.x
+          const dy = e.clientY - lastPanPositionRef.current.y
+          setOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+          lastPanPositionRef.current = { x: e.clientX, y: e.clientY }
+        }
         return
       }
 
@@ -1125,7 +1129,7 @@ export default function SheetMusicEditor({
         })
       }
     },
-    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage, isViewMode]
+    [tool, getPointerPosition, eraseAtPosition, isMovingSelection, moveStartPos, moveSelection, isDraggingText, selectedTextId, scale, currentPage]
   )
 
   // ===== 히스토리 관리 (handlePointerUp보다 먼저 정의) =====
@@ -1479,14 +1483,14 @@ export default function SheetMusicEditor({
       const dy = e.touches[0].clientY - e.touches[1].clientY
       lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
       isSwiping.current = false
-    } else if (e.touches.length === 1 && isViewMode) {
-      // 스와이프 시작 (보기 모드에서만)
+    } else if (e.touches.length === 1) {
+      // 스와이프 시작 (보기 모드 + 필기 모드 모두)
       swipeStartX.current = e.touches[0].clientX
       swipeStartY.current = e.touches[0].clientY
       swipeStartTime.current = Date.now()
       isSwiping.current = true
     }
-  }, [isViewMode])
+  }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastTouchDistance.current !== null) {
@@ -1545,7 +1549,7 @@ export default function SheetMusicEditor({
           Math.pow(endY - lastTapY.current, 2)
         )
 
-        // 더블탭 감지: 300ms 이내, 50px 이내 위치
+        // 더블탭 감지: 300ms 이내, 50px 이내 위치 (보기/필기 모드 모두)
         if (now - lastTapTime.current < DOUBLE_TAP_DELAY && tapDistance < DOUBLE_TAP_DISTANCE) {
           // 더블탭 줌 토글 (100% <-> 화면 맞춤)
           if (scale > 1.2) {
@@ -1556,8 +1560,8 @@ export default function SheetMusicEditor({
             setScale(2.0)
           }
           lastTapTime.current = 0 // 더블탭 처리 후 초기화
-        } else {
-          // 싱글탭: 영역별 동작
+        } else if (isViewMode) {
+          // 싱글탭: 영역별 동작 (보기 모드에서만)
           lastTapTime.current = now
           lastTapX.current = endX
           lastTapY.current = endY
@@ -1594,6 +1598,11 @@ export default function SheetMusicEditor({
               setHideToolbar(prev => !prev)
             }
           }
+        } else {
+          // 필기 모드: 더블탭 감지용 시간만 기록
+          lastTapTime.current = now
+          lastTapX.current = endX
+          lastTapY.current = endY
         }
       }
     }
@@ -1602,7 +1611,7 @@ export default function SheetMusicEditor({
     swipeStartX.current = null
     swipeStartY.current = null
     isSwiping.current = false
-  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen])
+  }, [totalPages, currentPage, isMultiSongMode, currentSongIndex, songs.length, scale, canvasSize, fitToScreen, isViewMode])
 
   // 뷰 모드일 때 캔버스 로드 완료시 자동으로 화면에 맞추기
   // hideToolbar 변경 시에도 화면에 맞추기 (상단바 숨김/표시 시 레이아웃 변경)
