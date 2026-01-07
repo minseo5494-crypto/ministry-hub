@@ -127,6 +127,10 @@ const {
   // 악보 미리보기 상태
   const [previewSong, setPreviewSong] = useState<Song | null>(null)
 
+  // 더블탭 감지용 ref (터치 디바이스 지원)
+  const lastTapTimeRef = useRef<number>(0)
+  const lastTapSongIdRef = useRef<string | null>(null)
+
   // 🆕 미리보기 토글 상태 (각 곡별로)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
 
@@ -1275,6 +1279,23 @@ const hasMore = displayCount < filteredSongs.length
     }
   }
 
+  // 📱 더블탭 핸들러 (터치 디바이스 지원)
+  const handleDoubleTap = (song: Song) => {
+    const now = Date.now()
+    const DOUBLE_TAP_DELAY = 300 // 300ms 이내 두 번 탭
+
+    if (lastTapSongIdRef.current === song.id && now - lastTapTimeRef.current < DOUBLE_TAP_DELAY) {
+      // 더블탭 감지 - 악보 뷰어 열기
+      openSheetViewer(song)
+      lastTapTimeRef.current = 0
+      lastTapSongIdRef.current = null
+    } else {
+      // 첫 번째 탭
+      lastTapTimeRef.current = now
+      lastTapSongIdRef.current = song.id
+    }
+  }
+
   // 📝 다중 곡 악보 뷰어 저장 핸들러
   const handleSaveMultiSongNotes = async (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] } }[]) => {
     if (!user) {
@@ -2291,6 +2312,10 @@ const hasMore = displayCount < filteredSongs.length
                   e.stopPropagation()
                   openSheetViewer(song)
                 }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation()
+                  handleDoubleTap(song)
+                }}
               />
             )}
           </div>
@@ -2576,6 +2601,10 @@ const hasMore = displayCount < filteredSongs.length
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     openSheetViewer(song)
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation()
+                    handleDoubleTap(song)
                   }}
                 />
               )}
