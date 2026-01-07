@@ -2307,7 +2307,7 @@ const hasMore = displayCount < filteredSongs.length
               <div
                 className="w-full mt-2 rounded cursor-pointer"
                 style={{
-                  paddingTop: '141.4%',
+                  aspectRatio: '1 / 1.414',
                   backgroundImage: `url(${song.file_url})`,
                   backgroundSize: 'contain',
                   backgroundPosition: 'top center',
@@ -2619,7 +2619,7 @@ const hasMore = displayCount < filteredSongs.length
                 <div
                   className="w-full rounded shadow-sm cursor-pointer"
                   style={{
-                    paddingTop: '141.4%',
+                    aspectRatio: '1 / 1.414',
                     backgroundImage: `url(${song.file_url})`,
                     backgroundSize: 'contain',
                     backgroundPosition: 'top center',
