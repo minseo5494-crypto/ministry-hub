@@ -2305,8 +2305,15 @@ const hasMore = displayCount < filteredSongs.length
             )}
             {song.file_url && (
               <div
-                className="w-full mt-2 rounded cursor-pointer bg-gray-100"
-                style={{ position: 'relative', paddingTop: '141.4%' }}
+                className="w-full mt-2 rounded cursor-pointer"
+                style={{
+                  paddingTop: '141.4%',
+                  backgroundImage: `url(${song.file_url})`,
+                  backgroundSize: 'contain',
+                  backgroundPosition: 'top center',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundColor: '#f3f4f6'
+                }}
                 onDoubleClick={(e) => {
                   e.stopPropagation()
                   openSheetViewer(song)
@@ -2315,20 +2322,9 @@ const hasMore = displayCount < filteredSongs.length
                   e.stopPropagation()
                   handleDoubleTap(song)
                 }}
-              >
-                <img
-                  src={song.file_url}
-                  alt={song.song_name}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain'
-                  }}
-                />
-              </div>
+                role="img"
+                aria-label={song.song_name}
+              />
             )}
           </div>
         )}
@@ -2621,8 +2617,15 @@ const hasMore = displayCount < filteredSongs.length
                 </div>
               ) : (
                 <div
-                  className="w-full rounded shadow-sm cursor-pointer bg-gray-100"
-                  style={{ position: 'relative', paddingTop: '141.4%' }}
+                  className="w-full rounded shadow-sm cursor-pointer"
+                  style={{
+                    paddingTop: '141.4%',
+                    backgroundImage: `url(${song.file_url})`,
+                    backgroundSize: 'contain',
+                    backgroundPosition: 'top center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundColor: '#f3f4f6'
+                  }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
                     openSheetViewer(song)
@@ -2631,20 +2634,9 @@ const hasMore = displayCount < filteredSongs.length
                     e.stopPropagation()
                     handleDoubleTap(song)
                   }}
-                >
-                  <img
-                    src={song.file_url}
-                    alt={`${song.song_name} 악보`}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain'
-                    }}
-                  />
-                </div>
+                  role="img"
+                  aria-label={`${song.song_name} 악보`}
+                />
               )}
             </div>
           )}
