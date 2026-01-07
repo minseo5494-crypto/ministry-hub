@@ -1,10 +1,11 @@
 'use client'
 
+import { useState } from 'react'
+
 interface ResponsiveImageProps {
   src: string
   alt: string
   className?: string
-  maxHeight?: string
   onDoubleClick?: (e: React.MouseEvent) => void
   onTouchEnd?: (e: React.TouchEvent) => void
 }
@@ -13,31 +14,59 @@ export default function ResponsiveImage({
   src,
   alt,
   className = '',
-  maxHeight = '400px',
   onDoubleClick,
   onTouchEnd
 }: ResponsiveImageProps) {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+
   return (
     <div
       className={`w-full ${className}`}
-      style={{
-        maxHeight,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch'
-      }}
       onDoubleClick={onDoubleClick}
       onTouchEnd={onTouchEnd}
     >
+      {!imageLoaded && !imageError && (
+        <div
+          style={{
+            width: '100%',
+            paddingTop: '141%',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '8px'
+          }}
+        />
+      )}
       <img
         src={src}
         alt={alt}
+        loading="eager"
+        decoding="async"
+        onLoad={() => setImageLoaded(true)}
+        onError={() => setImageError(true)}
         style={{
           width: '100%',
           height: 'auto',
-          display: 'block'
+          display: imageLoaded ? 'block' : 'none',
+          WebkitTransform: 'translateZ(0)',
+          transform: 'translateZ(0)',
+          WebkitBackfaceVisibility: 'hidden',
+          backfaceVisibility: 'hidden'
         }}
       />
+      {imageError && (
+        <div
+          style={{
+            width: '100%',
+            padding: '20px',
+            backgroundColor: '#fee',
+            borderRadius: '8px',
+            textAlign: 'center',
+            color: '#c00'
+          }}
+        >
+          이미지를 불러올 수 없습니다
+        </div>
+      )}
     </div>
   )
 }
