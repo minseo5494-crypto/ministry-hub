@@ -50,11 +50,10 @@ export default function ResponsiveImage({
         onError={() => setImageError(true)}
         style={{
           display: imageLoaded ? 'block' : 'none',
-          width: '100%',
-          maxWidth: '100%',
+          width: '-webkit-fill-available',
+          maxWidth: '100vw',
           height: 'auto',
-          minHeight: 0,
-          flexShrink: 0
+          objectFit: 'contain'
         }}
       />
       {imageError && (
