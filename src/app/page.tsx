@@ -2304,25 +2304,28 @@ const hasMore = displayCount < filteredSongs.length
               </pre>
             )}
             {song.file_url && (
-              <div className="w-full mt-2 overflow-x-auto">
+              <div
+                className="w-full mt-2 rounded cursor-pointer bg-gray-100"
+                style={{ position: 'relative', paddingTop: '141.4%' }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  openSheetViewer(song)
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation()
+                  handleDoubleTap(song)
+                }}
+              >
                 <img
                   src={song.file_url}
                   alt={song.song_name}
-                  className="rounded cursor-pointer"
                   style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
                     width: '100%',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    display: 'block',
-                    minWidth: 0
-                  }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation()
-                    openSheetViewer(song)
-                  }}
-                  onTouchEnd={(e) => {
-                    e.stopPropagation()
-                    handleDoubleTap(song)
+                    height: '100%',
+                    objectFit: 'contain'
                   }}
                 />
               </div>
@@ -2617,25 +2620,28 @@ const hasMore = displayCount < filteredSongs.length
                   <div className="absolute inset-0" />
                 </div>
               ) : (
-                <div className="w-full overflow-x-auto">
+                <div
+                  className="w-full rounded shadow-sm cursor-pointer bg-gray-100"
+                  style={{ position: 'relative', paddingTop: '141.4%' }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    openSheetViewer(song)
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation()
+                    handleDoubleTap(song)
+                  }}
+                >
                   <img
                     src={song.file_url}
                     alt={`${song.song_name} 악보`}
-                    className="rounded shadow-sm cursor-pointer"
                     style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
                       width: '100%',
-                      maxWidth: '100%',
-                      height: 'auto',
-                      display: 'block',
-                      minWidth: 0
-                    }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation()
-                      openSheetViewer(song)
-                    }}
-                    onTouchEnd={(e) => {
-                      e.stopPropagation()
-                      handleDoubleTap(song)
+                      height: '100%',
+                      objectFit: 'contain'
                     }}
                   />
                 </div>
