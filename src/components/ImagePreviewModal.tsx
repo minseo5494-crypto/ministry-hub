@@ -7,12 +7,14 @@ interface ImagePreviewModalProps {
   images: { url: string; filename: string }[]
   onClose: () => void
   onSave: (index: number) => void
+  onSaveAll?: () => void
 }
 
 export default function ImagePreviewModal({
   images,
   onClose,
-  onSave
+  onSave,
+  onSaveAll
 }: ImagePreviewModalProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -88,10 +90,25 @@ export default function ImagePreviewModal({
       )}
 
       {/* 하단 버튼 */}
-      <div className="p-4 bg-black flex justify-center">
+      <div className="p-4 bg-black flex justify-center gap-3">
+        {/* 여러 장일 때 전체 저장 버튼 */}
+        {hasMultiple && onSaveAll && (
+          <button
+            onClick={onSaveAll}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium active:scale-95 transition"
+            style={{
+              color: '#000000',
+              backgroundColor: '#FFFFFF'
+            }}
+          >
+            <Share size={20} />
+            전체 저장 ({images.length})
+          </button>
+        )}
+        {/* 현재 페이지 저장 */}
         <button
           onClick={() => onSave(currentIndex)}
-          className="flex items-center gap-2 px-8 py-3 rounded-xl font-medium active:scale-95 transition"
+          className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium active:scale-95 transition"
           style={{
             color: '#FFFFFF',
             border: '2px solid #FFFFFF',
@@ -99,7 +116,7 @@ export default function ImagePreviewModal({
           }}
         >
           <Share size={20} />
-          저장 / 공유
+          {hasMultiple ? '현재 페이지' : '저장 / 공유'}
         </button>
       </div>
 

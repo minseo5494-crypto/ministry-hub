@@ -451,6 +451,7 @@ const {
   setShowPreview,
   handlePreviewSave,
   handlePreviewShare,
+  handlePreviewSaveAll,
   setShowFormatModal,
   setShowPositionModal,
   handleDownload,
@@ -1774,6 +1775,7 @@ const saveNote = async () => {
           images={previewImages}
           onClose={() => setShowPreview(false)}
           onSave={handlePreviewSave}
+          onSaveAll={handlePreviewSaveAll}
         />
       )}
     </div>

@@ -59,6 +59,7 @@ interface UseDownloadReturn {
   setShowPreview: (show: boolean) => void
   handlePreviewSave: (index: number) => void
   handlePreviewShare: (index: number) => void
+  handlePreviewSaveAll: () => void
 
   setShowFormatModal: (show: boolean) => void
   setShowPositionModal: (show: boolean) => void
@@ -162,6 +163,50 @@ export function useDownload({
       }
     }
   }, [previewImages, handlePreviewSave])
+
+  // 미리보기에서 전체 이미지 저장 (Web Share API로 여러 파일 한번에 공유)
+  const handlePreviewSaveAll = useCallback(async () => {
+    if (previewImages.length === 0) return
+
+    try {
+      // Web Share API가 지원되면 모든 파일을 한번에 공유
+      if (navigator.share && navigator.canShare) {
+        const files = previewImages.map(img =>
+          new File([img.blob], img.filename, { type: 'image/jpeg' })
+        )
+        const shareData = { files }
+
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData)
+          return
+        }
+      }
+
+      // Web Share API 미지원 시 개별 다운로드
+      for (let i = 0; i < previewImages.length; i++) {
+        const image = previewImages[i]
+        const url = URL.createObjectURL(image.blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = image.filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        // 다운로드 간 딜레이
+        if (i < previewImages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300))
+        }
+      }
+    } catch (error) {
+      // 사용자가 공유 취소한 경우 무시
+      if ((error as Error).name !== 'AbortError') {
+        console.error('전체 저장 실패:', error)
+        alert('저장에 실패했습니다.')
+      }
+    }
+  }, [previewImages])
 
   // 미리보기 닫기 시 정리
   const closePreview = useCallback(() => {
@@ -1104,6 +1149,7 @@ export function useDownload({
     setShowPreview: closePreview,
     handlePreviewSave,
     handlePreviewShare,
+    handlePreviewSaveAll,
 
     setShowFormatModal,
     setShowPositionModal,
