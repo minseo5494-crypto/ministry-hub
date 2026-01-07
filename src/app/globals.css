@@ -13,6 +13,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* 이미지 기본 스타일 - iOS Safari 호환성 */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 /* 모든 기본 요소들 - 검은색 계열 */
 h1, h2, h3, h4, h5, h6 {
   color: #111827;

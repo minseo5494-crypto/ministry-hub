@@ -2284,8 +2284,7 @@ const hasMore = displayCount < filteredSongs.length
               <img
                 src={song.file_url}
                 alt={song.song_name}
-                className="mt-2 rounded"
-                style={{ width: '100%', maxWidth: '100%', height: 'auto' }}
+                className="w-full mt-2 rounded"
               />
             )}
           </div>
@@ -2327,14 +2326,13 @@ const hasMore = displayCount < filteredSongs.length
   </div>
               ) : (
                 // 리스트 뷰 (기존 스타일 유지)
-<div ref={songListRef} className="divide-y divide-gray-200" style={{ width: '100%', maxWidth: '100%' }}>
+<div ref={songListRef} className="divide-y divide-gray-200">
   {displayedSongs.map((song, index) => (
     <div
       key={song.id}
       tabIndex={0}
       onFocus={() => setFocusedSongIndex(index)}
-      style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
-      className={`p-3 sm:p-4 cursor-pointer transition-all overflow-hidden ${
+      className={`p-3 sm:p-4 cursor-pointer transition-all ${
         selectedSongs.find(s => s.id === song.id)
           ? 'bg-blue-50'
           : focusedSongIndex === index
@@ -2547,7 +2545,7 @@ const hasMore = displayCount < filteredSongs.length
 
       {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) */}
       {previewStates[song.id] && (
-        <div className="mt-4 border-t pt-4" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+        <div className="mt-4 border-t pt-4">
           {song.lyrics && (
             <div className="mb-4">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
@@ -2557,7 +2555,7 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div style={{ width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+            <div className="w-full">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
@@ -2568,13 +2566,7 @@ const hasMore = displayCount < filteredSongs.length
                 <img
                   src={song.file_url}
                   alt={`${song.song_name} 악보`}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    objectFit: 'scale-down',
-                  }}
+                  className="w-full rounded shadow-sm"
                 />
               )}
             </div>
