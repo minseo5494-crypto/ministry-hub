@@ -15,9 +15,21 @@ body {
 
 /* 이미지 기본 스타일 - iOS Safari 호환성 */
 img {
-  max-width: 100%;
-  height: auto;
+  max-width: 100% !important;
+  width: 100%;
+  height: auto !important;
   display: block;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* iOS Safari 이미지 축소 강제 */
+@supports (-webkit-touch-callout: none) {
+  img {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+  }
 }
 
 /* 모든 기본 요소들 - 검은색 계열 */

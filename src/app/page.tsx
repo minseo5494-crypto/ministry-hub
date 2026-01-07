@@ -2563,13 +2563,11 @@ const hasMore = displayCount < filteredSongs.length
                   className="w-full h-[80vh] sm:h-[600px] border sm:rounded"
                 />
               ) : (
-                <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-                  <img
-                    src={song.file_url}
-                    alt={`${song.song_name} 악보`}
-                    className="min-w-full w-auto max-w-none sm:w-full sm:max-w-full rounded shadow-sm"
-                  />
-                </div>
+                <img
+                  src={song.file_url}
+                  alt={`${song.song_name} 악보`}
+                  className="rounded shadow-sm"
+                />
               )}
             </div>
           )}
