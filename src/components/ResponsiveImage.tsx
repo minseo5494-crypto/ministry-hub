@@ -10,6 +10,21 @@ interface ResponsiveImageProps {
   onTouchEnd?: (e: React.TouchEvent) => void
 }
 
+// Supabase Storage URL에 리사이즈 파라미터 추가
+function getResizedImageUrl(src: string, width: number): string {
+  // Supabase Storage URL인지 확인
+  if (src.includes('supabase.co/storage')) {
+    // 이미 transform 파라미터가 있으면 그대로 반환
+    if (src.includes('/render/image') || src.includes('?width=')) {
+      return src
+    }
+    // /object/public/ 을 /render/image/public/ 으로 변경하고 리사이즈 파라미터 추가
+    const resizedUrl = src.replace('/object/public/', '/render/image/public/')
+    return `${resizedUrl}?width=${width}&resize=contain`
+  }
+  return src
+}
+
 export default function ResponsiveImage({
   src,
   alt,
@@ -26,7 +41,8 @@ export default function ResponsiveImage({
     const calculateWidth = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
-        setPixelWidth(Math.floor(rect.width))
+        // 모바일 화면에 맞게 최대 800px로 제한
+        setPixelWidth(Math.min(Math.floor(rect.width), 800))
       }
     }
 
@@ -43,6 +59,9 @@ export default function ResponsiveImage({
       window.removeEventListener('orientationchange', calculateWidth)
     }
   }, [])
+
+  // 리사이즈된 이미지 URL
+  const imageSrc = pixelWidth ? getResizedImageUrl(src, pixelWidth * 2) : src
 
   return (
     <div
@@ -63,7 +82,7 @@ export default function ResponsiveImage({
         />
       )}
       <img
-        src={src}
+        src={imageSrc}
         alt={alt}
         loading="eager"
         decoding="async"
