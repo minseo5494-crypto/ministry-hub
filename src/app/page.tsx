@@ -2546,7 +2546,7 @@ const hasMore = displayCount < filteredSongs.length
 
       {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) */}
       {previewStates[song.id] && (
-        <div className="mt-4 sm:ml-7 border-t pt-4 w-full min-w-0 box-border">
+        <div className="mt-4 border-t pt-4 w-full min-w-0">
           {song.lyrics && (
             <div className="mb-4">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm">가사</h4>
@@ -2556,8 +2556,8 @@ const hasMore = displayCount < filteredSongs.length
             </div>
           )}
           {song.file_url && (
-            <div className="w-full min-w-0 box-border">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+            <div className="-mx-3 sm:mx-0">
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm px-3 sm:px-0">악보</h4>
               {song.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
@@ -2569,11 +2569,11 @@ const hasMore = displayCount < filteredSongs.length
                   alt={`${song.song_name} 악보`}
                   style={{
                     display: 'block',
-                    width: '100%',
-                    maxWidth: '100%',
+                    width: 'calc(100vw - 32px)',
+                    maxWidth: 'calc(100vw - 32px)',
                     height: 'auto',
-                    objectFit: 'contain'
                   }}
+                  className="sm:!w-full sm:!max-w-full sm:rounded"
                 />
               )}
             </div>
