@@ -423,6 +423,9 @@ export default function SheetMusicEditor({
     const renderPDF = async () => {
       if (effectiveFileType !== 'pdf' || !pdfCanvasRef.current || !effectiveFileUrl) return
 
+      // 페이지 변경 시 canvasReady를 false로 설정하여 필기 다시 렌더링되도록 함
+      setCanvasReady(false)
+
       try {
         const pdfjsLib = (window as any).pdfjsLib
         if (!pdfjsLib) {
@@ -610,6 +613,9 @@ export default function SheetMusicEditor({
 
   // ===== 필기 렌더링 =====
   useEffect(() => {
+    // 캔버스가 준비되지 않았으면 렌더링 건너뛰기
+    if (!canvasReady) return
+
     const canvas = canvasRef.current
     if (!canvas) return
 
