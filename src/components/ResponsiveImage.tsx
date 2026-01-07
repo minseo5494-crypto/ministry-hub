@@ -22,7 +22,12 @@ export default function ResponsiveImage({
 
   return (
     <div
-      className={`w-full ${className}`}
+      className={`${className}`}
+      style={{
+        width: '100%',
+        overflow: 'visible',
+        minHeight: 0
+      }}
       onDoubleClick={onDoubleClick}
       onTouchEnd={onTouchEnd}
     >
@@ -44,13 +49,12 @@ export default function ResponsiveImage({
         onLoad={() => setImageLoaded(true)}
         onError={() => setImageError(true)}
         style={{
-          width: '100%',
-          height: 'auto',
           display: imageLoaded ? 'block' : 'none',
-          WebkitTransform: 'translateZ(0)',
-          transform: 'translateZ(0)',
-          WebkitBackfaceVisibility: 'hidden',
-          backfaceVisibility: 'hidden'
+          width: '100%',
+          maxWidth: '100%',
+          height: 'auto',
+          minHeight: 0,
+          flexShrink: 0
         }}
       />
       {imageError && (
