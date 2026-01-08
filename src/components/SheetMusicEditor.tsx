@@ -2858,10 +2858,10 @@ export default function SheetMusicEditor({
       {isViewMode && hideToolbar && (
         <button
           onClick={onClose}
-          className="fixed top-4 right-4 z-[60] bg-black/50 hover:bg-black/70 text-white rounded-full p-3 shadow-lg"
+          className="fixed top-4 right-4 z-[60] p-3"
           style={{ touchAction: 'manipulation' }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}>
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
