@@ -87,7 +87,8 @@ export default function SheetMusicEditor({
   const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
   // ===== 보기 모드 전용: 툴바 숨기기 =====
-  const [hideToolbar, setHideToolbar] = useState(false)
+  // 보기 모드로 시작하면 상단바 숨긴 상태로 시작 (터치하면 표시)
+  const [hideToolbar, setHideToolbar] = useState(initialMode === 'view')
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   // ===== 전체 화면 토글 =====

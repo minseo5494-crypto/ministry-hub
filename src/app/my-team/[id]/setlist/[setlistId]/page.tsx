@@ -1757,6 +1757,7 @@ const saveNote = async () => {
           songs={sheetEditorSongs}
           initialSongIndex={startingSongIndex}
           setlistTitle={setlist?.title}
+          initialMode="view"
           onClose={closeSheetMusicEditor}
           onSaveAll={handleSaveSheetNotes}
         />
