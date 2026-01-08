@@ -2854,6 +2854,20 @@ export default function SheetMusicEditor({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      {/* 전체화면 모드에서 닫기 버튼 (항상 표시) */}
+      {isViewMode && hideToolbar && (
+        <button
+          onClick={onClose}
+          className="fixed top-4 right-4 z-[60] bg-black/50 hover:bg-black/70 text-white rounded-full p-3 shadow-lg"
+          style={{ touchAction: 'manipulation' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      )}
+
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
       {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
       <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
