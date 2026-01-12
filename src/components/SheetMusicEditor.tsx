@@ -2904,62 +2904,68 @@ export default function SheetMusicEditor({
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
       {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
-      <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
+      <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'px-1.5 py-1' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
         {/* 1줄 레이아웃: 왼쪽(닫기+곡정보) | 중앙(네비게이션) | 오른쪽(모드+버튼) */}
-        <div className={`flex items-center ${isMobile ? 'flex-wrap gap-2' : 'justify-between gap-4'}`}>
-          {/* 왼쪽: 닫기 + 곡 정보 */}
-          <div className={`flex items-center gap-2 ${isMobile ? 'flex-1 min-w-0' : 'flex-shrink-0'}`}>
+        <div className={`flex items-center ${isMobile ? 'justify-between gap-1' : 'justify-between gap-4'}`}>
+          {/* 왼쪽: 닫기 + 페이지 */}
+          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'} flex-shrink-0`}>
             <button
               onClick={handleCloseRequest}
-              className={`hover:bg-gray-100 rounded text-gray-700 ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
+              className={`hover:bg-gray-100 rounded text-gray-700 ${isMobile ? 'p-1.5 text-base' : 'p-2'}`}
             >
               ✕
             </button>
-            <div className="flex flex-col min-w-0">
-              {isMultiSongMode && setlistTitle && (
-                <span className="text-xs text-purple-600 font-medium truncate">{setlistTitle}</span>
-              )}
-              <span className={`font-medium truncate text-gray-800 ${isMobile ? 'max-w-[120px] text-sm' : 'max-w-[200px]'}`}>
-                {effectiveSongName}
-              </span>
-              {effectiveArtistName && !isMobile && (
-                <span className="text-xs text-gray-500 truncate max-w-[200px]">{effectiveArtistName}</span>
-              )}
-            </div>
-            {isMultiSongMode && (
-              <span className={`px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full whitespace-nowrap ${isMobile ? 'ml-1' : 'ml-2'}`}>
-                {currentSongIndex + 1}/{songs.length}
-              </span>
-            )}
-            {!isMultiSongMode && queueInfo && (
-              <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full whitespace-nowrap">
-                {queueInfo.current}/{queueInfo.total}
-              </span>
-            )}
 
-            {/* 페이지 네비게이션 - 항상 제목 옆에 표시 */}
+            {/* 페이지 네비게이션 */}
             {totalPages > 1 && (
-              <div className={`flex items-center text-gray-700 bg-gray-100 rounded-lg ${isMobile ? 'gap-0.5 px-1.5 py-0.5 ml-1' : 'gap-1 px-2 py-1 ml-2'}`}>
+              <div className={`flex items-center text-gray-700 bg-gray-100 rounded-lg ${isMobile ? 'gap-0 px-1 py-0.5' : 'gap-1 px-2 py-1'}`}>
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-1 text-sm' : 'p-1'}`}
+                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-0.5 text-xs' : 'p-1'}`}
                 >
                   ◀
                 </button>
-                <span className={`font-medium min-w-[35px] text-center ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                <span className={`font-medium text-center ${isMobile ? 'text-xs min-w-[28px]' : 'text-sm min-w-[35px]'}`}>
                   {currentPage}/{totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-1 text-sm' : 'p-1'}`}
+                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-0.5 text-xs' : 'p-1'}`}
                 >
                   ▶
                 </button>
               </div>
             )}
           </div>
+
+          {/* 중앙: 곡 정보 (모바일에서는 숨김) */}
+          {!isMobile && (
+            <div className="flex items-center gap-2 flex-shrink min-w-0">
+              <div className="flex flex-col min-w-0">
+                {isMultiSongMode && setlistTitle && (
+                  <span className="text-xs text-purple-600 font-medium truncate">{setlistTitle}</span>
+                )}
+                <span className="font-medium truncate text-gray-800 max-w-[200px]">
+                  {effectiveSongName}
+                </span>
+                {effectiveArtistName && (
+                  <span className="text-xs text-gray-500 truncate max-w-[200px]">{effectiveArtistName}</span>
+                )}
+              </div>
+              {isMultiSongMode && (
+                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full whitespace-nowrap ml-2">
+                  {currentSongIndex + 1}/{songs.length}
+                </span>
+              )}
+              {!isMultiSongMode && queueInfo && (
+                <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full whitespace-nowrap">
+                  {queueInfo.current}/{queueInfo.total}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* 중앙: 곡 네비게이션 (다중 곡 모드, 데스크톱) */}
           {!isMobile && isMultiSongMode && songs.length > 1 && (
@@ -2987,7 +2993,7 @@ export default function SheetMusicEditor({
           )}
 
           {/* 오른쪽: 모드 전환 + 저장/내보내기 버튼 */}
-          <div className={`flex items-center gap-1.5 ${isMobile ? '' : 'gap-2 flex-shrink-0'}`}>
+          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'} flex-shrink-0`}>
             {!isMultiSongMode && queueInfo && queueInfo.nextSongName && !isMobile && (
               <span className="text-xs text-gray-500">
                 다음: {queueInfo.nextSongName}
@@ -3000,7 +3006,9 @@ export default function SheetMusicEditor({
             }`}>
               <button
                 onClick={() => setEditorMode('view')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`rounded-md font-medium transition-all duration-200 ${
+                  isMobile ? 'px-2 py-1 text-sm' : 'px-3 py-1.5 text-sm'
+                } ${
                   isViewMode
                     ? 'bg-blue-500 text-white shadow-md'
                     : 'text-blue-600 hover:bg-blue-200'
@@ -3011,7 +3019,9 @@ export default function SheetMusicEditor({
               </button>
               <button
                 onClick={() => setEditorMode('edit')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`rounded-md font-medium transition-all duration-200 ${
+                  isMobile ? 'px-2 py-1 text-sm' : 'px-3 py-1.5 text-sm'
+                } ${
                   !isViewMode
                     ? 'bg-orange-500 text-white shadow-md'
                     : 'text-orange-600 hover:bg-orange-200'
@@ -3080,7 +3090,7 @@ export default function SheetMusicEditor({
                 <button
                   onClick={() => setShowExportModal(true)}
                   className={`bg-green-50 hover:bg-green-100 border border-green-200 rounded font-medium text-green-700 ${
-                    isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
+                    isMobile ? 'px-2 py-1 text-sm' : 'px-4 py-2'
                   }`}
                   disabled={exporting}
                 >
@@ -3089,7 +3099,7 @@ export default function SheetMusicEditor({
                 <button
                   onClick={handleSave}
                   className={`bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium text-blue-700 ${
-                    isMobile ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2'
+                    isMobile ? 'px-2 py-1 text-sm' : 'px-4 py-2'
                   }`}
                 >
                   {isMobile ? '💾' : (isMultiSongMode ? '전체 저장' : (queueInfo && queueInfo.current < queueInfo.total ? '저장 & 다음' : '저장'))}
