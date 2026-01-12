@@ -91,16 +91,6 @@ export default function SheetMusicEditor({
 
   // ===== 전체 화면 토글 =====
   const toggleFullscreen = useCallback(async () => {
-    // iOS/iPadOS 감지 (전체화면 API가 불안정함)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-
-    if (isIOS) {
-      // iOS에서는 툴바만 토글 (전체화면 API 불안정)
-      setHideToolbar(prev => !prev)
-      return
-    }
-
     try {
       if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
         // 전체 화면 진입
@@ -121,7 +111,7 @@ export default function SheetMusicEditor({
         setHideToolbar(false)
       }
     } catch (err) {
-      // 전체 화면 API 지원 안 되는 경우 툴바만 토글
+      // 전체 화면 API 지원 안 되는 경우 (iOS PWA 등) 툴바만 토글
       setHideToolbar(prev => !prev)
     }
   }, [])
@@ -210,19 +200,9 @@ export default function SheetMusicEditor({
   const rafIdRef = useRef<number | null>(null) // requestAnimationFrame ID
   const needsRenderRef = useRef(false) // 렌더링 필요 여부
 
-  // 저장 안 된 변경사항 추적
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const initialAnnotationsRef = useRef<string>(JSON.stringify(initialAnnotations))
-
-  // annotations가 변경될 때마다 ref 업데이트 및 변경사항 추적
+  // annotations가 변경될 때마다 ref 업데이트
   useEffect(() => {
     annotationsRef.current = annotations
-    // 초기 데이터와 비교하여 변경사항 있는지 확인
-    const currentAnnotationsStr = JSON.stringify(annotations)
-    if (currentAnnotationsStr !== initialAnnotationsRef.current) {
-      setHasUnsavedChanges(true)
-    }
   }, [annotations])
 
   // 모바일에서 기본 선 두께와 지우개 크기 조절
@@ -1913,10 +1893,6 @@ export default function SheetMusicEditor({
       // 송폼 정보와 피아노/드럼 악보도 함께 전달
       onSave?.(currentAnnotations, { songFormEnabled, songFormStyle, partTags, pianoScores, drumScores })
     }
-
-    // 저장 완료 후 변경사항 플래그 초기화
-    setHasUnsavedChanges(false)
-    initialAnnotationsRef.current = JSON.stringify(currentAnnotations)
   }, [isMultiSongMode, onSave, songs, allAnnotations, onSaveAll, currentSong, songFormEnabled, songFormStyle, partTags, pianoScores, drumScores])
 
   // ===== 내보내기 (PDF/이미지) - 캔버스 기반으로 화면 그대로 렌더링 =====
@@ -2891,15 +2867,6 @@ export default function SheetMusicEditor({
     }
   }
 
-  // 닫기 버튼 핸들러 - 저장 안 된 변경사항 있으면 확인 모달 표시
-  const handleCloseRequest = useCallback(() => {
-    if (hasUnsavedChanges) {
-      setShowCloseConfirm(true)
-    } else {
-      onClose()
-    }
-  }, [hasUnsavedChanges, onClose])
-
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
@@ -2910,7 +2877,7 @@ export default function SheetMusicEditor({
           {/* 왼쪽: 닫기 + 곡 정보 */}
           <div className={`flex items-center gap-2 ${isMobile ? 'flex-1 min-w-0' : 'flex-shrink-0'}`}>
             <button
-              onClick={handleCloseRequest}
+              onClick={onClose}
               className={`hover:bg-gray-100 rounded text-gray-700 ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
             >
               ✕
@@ -4129,61 +4096,6 @@ export default function SheetMusicEditor({
           setEditingDrumScoreId(null)
         }}
       />
-
-      {/* 저장 확인 모달 */}
-      {showCloseConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className={`bg-white rounded-2xl shadow-2xl mx-4 ${isMobile ? 'w-full max-w-sm' : 'max-w-md w-full'}`}>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <span className="text-amber-600 text-xl">!</span>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900">저장하지 않고 나가시겠어요?</h3>
-              </div>
-              <p className="text-gray-600 mb-6">
-                저장하지 않은 필기가 있습니다. 저장하지 않으면 변경 내용이 사라집니다.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowCloseConfirm(false)}
-                  className={`flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors ${
-                    isMobile ? 'text-base' : ''
-                  }`}
-                  style={{ touchAction: 'manipulation' }}
-                >
-                  취소
-                </button>
-                <button
-                  onClick={() => {
-                    handleSave()
-                    setShowCloseConfirm(false)
-                    onClose()
-                  }}
-                  className={`flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors ${
-                    isMobile ? 'text-base' : ''
-                  }`}
-                  style={{ touchAction: 'manipulation' }}
-                >
-                  저장하고 나가기
-                </button>
-              </div>
-              <button
-                onClick={() => {
-                  setShowCloseConfirm(false)
-                  onClose()
-                }}
-                className={`w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors ${
-                  isMobile ? 'py-3' : ''
-                }`}
-                style={{ touchAction: 'manipulation' }}
-              >
-                저장하지 않고 나가기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
