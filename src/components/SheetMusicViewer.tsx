@@ -41,17 +41,17 @@ export default function SheetMusicViewer({
   const lastTapX = useRef<number>(0)
   const lastTapY = useRef<number>(0)
 
-  // 화면에 맞추기
+  // 화면에 맞추기 (패딩 없이 꽉 채움)
   const fitToScreen = useCallback((cWidth: number, cHeight: number) => {
     const container = containerRef.current
     if (!container || cWidth === 0 || cHeight === 0) return
 
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
-    const padding = 20
 
-    const scaleX = (containerWidth - padding * 2) / cWidth
-    const scaleY = (containerHeight - padding * 2) / cHeight
+    // 화면에 꽉 차게 (패딩 없음)
+    const scaleX = containerWidth / cWidth
+    const scaleY = containerHeight / cHeight
     const newScale = Math.min(scaleX, scaleY)
 
     setMinScale(newScale)
