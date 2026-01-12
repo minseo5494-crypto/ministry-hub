@@ -15,128 +15,308 @@ export default function SheetMusicViewer({
   songName,
   onClose
 }: SheetMusicViewerProps) {
+  // 페이지 상태
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+
   // 줌/팬 상태
   const [scale, setScale] = useState(1)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [minScale, setMinScale] = useState(0.5)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+
+  // refs
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const pdfDocRef = useRef<any>(null)
+  const renderTaskRef = useRef<any>(null)
+  const hasInitializedScale = useRef(false)
 
   // 터치 관련
-  const containerRef = useRef<HTMLDivElement>(null)
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
+  const lastTouchDistance = useRef<number | null>(null)
+  const swipeStartX = useRef<number | null>(null)
+  const swipeStartY = useRef<number | null>(null)
+  const isSwiping = useRef<boolean>(false)
   const lastTapTime = useRef<number>(0)
   const lastTapX = useRef<number>(0)
   const lastTapY = useRef<number>(0)
-  const initialPinchDistance = useRef<number | null>(null)
-  const initialScale = useRef<number>(1)
-  const isPinching = useRef<boolean>(false)
-  const isSwiping = useRef<boolean>(false)
 
   // 화면에 맞추기
-  const fitToScreen = useCallback(() => {
-    setScale(1)
-    setPosition({ x: 0, y: 0 })
+  const fitToScreen = useCallback((cWidth: number, cHeight: number) => {
+    const container = containerRef.current
+    if (!container || cWidth === 0 || cHeight === 0) return
+
+    const containerWidth = container.clientWidth
+    const containerHeight = container.clientHeight
+    const padding = 20
+
+    const scaleX = (containerWidth - padding * 2) / cWidth
+    const scaleY = (containerHeight - padding * 2) / cHeight
+    const newScale = Math.min(scaleX, scaleY)
+
+    setMinScale(newScale)
+    setScale(newScale)
+    setOffset({ x: 0, y: 0 })
   }, [])
 
-  // 터치 이벤트 핸들러
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // PDF 렌더링
+  useEffect(() => {
+    if (fileType !== 'pdf') return
+
+    let isCancelled = false
+
+    const renderPDF = async () => {
+      try {
+        const pdfjsLib = (window as any).pdfjsLib
+        if (!pdfjsLib) {
+          console.error('PDF.js not loaded')
+          return
+        }
+
+        // 이전 렌더링 취소
+        if (renderTaskRef.current) {
+          try {
+            renderTaskRef.current.cancel()
+          } catch (e) {}
+          renderTaskRef.current = null
+        }
+
+        // PDF 문서 로드
+        if (!pdfDocRef.current) {
+          const loadingTask = pdfjsLib.getDocument(fileUrl)
+          pdfDocRef.current = await loadingTask.promise
+          if (isCancelled) return
+          setTotalPages(pdfDocRef.current.numPages)
+        }
+
+        const pdf = pdfDocRef.current
+        const page = await pdf.getPage(currentPage)
+        if (isCancelled) return
+
+        const viewport = page.getViewport({ scale: 2 }) // 고해상도
+
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const context = canvas.getContext('2d')
+        if (!context) return
+
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+
+        const renderTask = page.render({
+          canvasContext: context,
+          viewport: viewport,
+        })
+        renderTaskRef.current = renderTask
+
+        await renderTask.promise
+        if (isCancelled) return
+
+        setCanvasSize({ width: viewport.width, height: viewport.height })
+
+        // 초기 로드 시 화면에 맞추기
+        if (!hasInitializedScale.current) {
+          hasInitializedScale.current = true
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              fitToScreen(viewport.width, viewport.height)
+            }, 50)
+          })
+        }
+      } catch (error: any) {
+        if (error?.name === 'RenderingCancelledException') return
+        console.error('PDF 렌더링 오류:', error)
+      }
+    }
+
+    renderPDF()
+
+    return () => {
+      isCancelled = true
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch (e) {}
+      }
+    }
+  }, [fileUrl, fileType, currentPage, fitToScreen])
+
+  // 이미지 렌더링
+  useEffect(() => {
+    if (fileType !== 'image') return
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const context = canvas.getContext('2d')
+      if (!context) return
+
+      // 고해상도 렌더링
+      const scale = 2
+      canvas.width = img.width * scale
+      canvas.height = img.height * scale
+      context.scale(scale, scale)
+      context.drawImage(img, 0, 0)
+
+      setCanvasSize({ width: canvas.width, height: canvas.height })
+      setTotalPages(1)
+
+      if (!hasInitializedScale.current) {
+        hasInitializedScale.current = true
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            fitToScreen(canvas.width, canvas.height)
+          }, 50)
+        })
+      }
+    }
+    img.src = fileUrl
+  }, [fileUrl, fileType, fitToScreen])
+
+  // 페이지 변경 시 초기화
+  useEffect(() => {
+    hasInitializedScale.current = false
+  }, [currentPage])
+
+  // 줌 핸들러
+  const handleZoom = useCallback((delta: number) => {
+    setScale(prev => Math.max(minScale, Math.min(4, prev + delta)))
+  }, [minScale])
+
+  // 터치 시작
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       // 핀치 줌 시작
-      const touch1 = e.touches[0]
-      const touch2 = e.touches[1]
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY)
-      initialPinchDistance.current = distance
-      initialScale.current = scale
-      isPinching.current = true
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
+      isSwiping.current = false
     } else if (e.touches.length === 1) {
-      // 싱글 터치 시작
-      touchStartRef.current = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        time: Date.now()
-      }
+      swipeStartX.current = e.touches[0].clientX
+      swipeStartY.current = e.touches[0].clientY
+      isSwiping.current = true
+    }
+  }, [])
+
+  // 터치 이동
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      // 핀치 줌
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const delta = (distance - lastTouchDistance.current) * 0.005
+      handleZoom(delta)
+      lastTouchDistance.current = distance
       isSwiping.current = false
     }
-  }
+  }, [handleZoom])
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && initialPinchDistance.current) {
-      // 핀치 줌
-      const touch1 = e.touches[0]
-      const touch2 = e.touches[1]
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY)
-      const newScale = Math.min(Math.max(initialScale.current * (distance / initialPinchDistance.current), 0.5), 4)
-      setScale(newScale)
-    } else if (e.touches.length === 1 && touchStartRef.current && !isPinching.current) {
-      const deltaX = e.touches[0].clientX - touchStartRef.current.x
-      const deltaY = e.touches[0].clientY - touchStartRef.current.y
+  // 터치 종료
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    lastTouchDistance.current = null
 
-      if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-        isSwiping.current = true
-      }
+    if (isSwiping.current && swipeStartX.current !== null && swipeStartY.current !== null && e.changedTouches.length > 0) {
+      const endX = e.changedTouches[0].clientX
+      const endY = e.changedTouches[0].clientY
+      const deltaX = endX - swipeStartX.current
+      const deltaY = endY - swipeStartY.current
 
-      if (scale > 1) {
-        // 확대 상태에서 팬
-        setPosition(prev => ({
-          x: prev.x + deltaX * 0.5,
-          y: prev.y + deltaY * 0.5
-        }))
-        touchStartRef.current = {
-          x: e.touches[0].clientX,
-          y: e.touches[0].clientY,
-          time: touchStartRef.current.time
+      // 스와이프 감지
+      const isSwipe = Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50
+
+      if (isSwipe && scale <= minScale + 0.01) {
+        // 스와이프로 페이지 변경 (확대 안된 상태에서만)
+        if (deltaX > 0 && currentPage > 1) {
+          setCurrentPage(p => p - 1)
+        } else if (deltaX < 0 && currentPage < totalPages) {
+          setCurrentPage(p => p + 1)
         }
-      }
-    }
-  }
+      } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
+        // 탭 감지
+        const now = Date.now()
+        const tapDistance = Math.sqrt(
+          Math.pow(endX - lastTapX.current, 2) +
+          Math.pow(endY - lastTapY.current, 2)
+        )
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (isPinching.current) {
-      isPinching.current = false
-      initialPinchDistance.current = null
-      return
-    }
-
-    if (!touchStartRef.current) return
-
-    const endX = e.changedTouches[0].clientX
-    const endY = e.changedTouches[0].clientY
-    const deltaX = endX - touchStartRef.current.x
-    const deltaY = endY - touchStartRef.current.y
-
-    // 탭 감지 (스와이프 아닐 때)
-    if (!isSwiping.current && Math.abs(deltaX) < 20 && Math.abs(deltaY) < 20) {
-      const now = Date.now()
-      const tapDistance = Math.sqrt(
-        Math.pow(endX - lastTapX.current, 2) + Math.pow(endY - lastTapY.current, 2)
-      )
-
-      // 더블탭 감지
-      if (now - lastTapTime.current < 300 && tapDistance < 50) {
-        // 더블탭: 줌 토글
-        if (scale > 1.2) {
-          fitToScreen()
+        // 더블탭 감지
+        if (now - lastTapTime.current < 300 && tapDistance < 50) {
+          if (scale > minScale + 0.1) {
+            fitToScreen(canvasSize.width, canvasSize.height)
+          } else {
+            setScale(2.0)
+          }
+          lastTapTime.current = 0
         } else {
-          setScale(2.0)
+          // 싱글 탭: 영역별 동작
+          lastTapTime.current = now
+          lastTapX.current = endX
+          lastTapY.current = endY
+
+          const container = containerRef.current
+          if (container) {
+            const rect = container.getBoundingClientRect()
+            const tapX = endX - rect.left
+            const containerWidth = rect.width
+
+            // 화면을 3등분
+            const leftZone = containerWidth * 0.25
+            const rightZone = containerWidth * 0.75
+
+            if (tapX < leftZone && currentPage > 1) {
+              setCurrentPage(p => p - 1)
+            } else if (tapX > rightZone && currentPage < totalPages) {
+              setCurrentPage(p => p + 1)
+            }
+          }
         }
-        lastTapTime.current = 0
-      } else {
-        lastTapTime.current = now
-        lastTapX.current = endX
-        lastTapY.current = endY
       }
     }
 
-    touchStartRef.current = null
+    swipeStartX.current = null
+    swipeStartY.current = null
     isSwiping.current = false
-  }
+  }, [scale, minScale, currentPage, totalPages, canvasSize, fitToScreen])
 
-  // 마우스 더블클릭
-  const handleDoubleClick = () => {
-    if (scale > 1.2) {
-      fitToScreen()
+  // 마우스 클릭 (데스크톱)
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    const container = containerRef.current
+    if (!container) return
+
+    const rect = container.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const containerWidth = rect.width
+
+    const leftZone = containerWidth * 0.25
+    const rightZone = containerWidth * 0.75
+
+    if (clickX < leftZone && currentPage > 1) {
+      setCurrentPage(p => p - 1)
+    } else if (clickX > rightZone && currentPage < totalPages) {
+      setCurrentPage(p => p + 1)
+    }
+  }, [currentPage, totalPages])
+
+  // 마우스 더블클릭 (데스크톱 줌)
+  const handleDoubleClick = useCallback(() => {
+    if (scale > minScale + 0.1) {
+      fitToScreen(canvasSize.width, canvasSize.height)
     } else {
       setScale(2.0)
     }
-  }
+  }, [scale, minScale, canvasSize, fitToScreen])
+
+  // 마우스 휠 줌
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      handleZoom(delta)
+    }
+  }, [handleZoom])
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
@@ -163,54 +343,41 @@ export default function SheetMusicViewer({
         </svg>
       </button>
 
+      {/* 페이지 인디케이터 */}
+      {totalPages > 1 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+          {currentPage} / {totalPages}
+        </div>
+      )}
+
       {/* 메인 컨텐츠 */}
-      {fileType === 'pdf' ? (
-        // PDF: 아이패드에서 스크롤 가능하도록 별도 처리
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-hidden flex items-center justify-center"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onWheel={handleWheel}
+        style={{ touchAction: 'none' }}
+      >
         <div
-          ref={containerRef}
-          className="flex-1 overflow-auto -webkit-overflow-scrolling-touch"
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: 'transform 0.1s ease-out'
+          }}
         >
-          <iframe
-            src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
-            className="w-full border-0"
+          <canvas
+            ref={canvasRef}
             style={{
-              height: '100%',
-              minHeight: '100vh'
+              maxWidth: 'none',
+              maxHeight: 'none'
             }}
           />
         </div>
-      ) : (
-        // 이미지: 기존 줌/팬 동작 유지
-        <div
-          ref={containerRef}
-          className="flex-1 overflow-hidden flex items-center justify-center"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onDoubleClick={handleDoubleClick}
-          style={{ touchAction: scale > 1 ? 'none' : 'manipulation' }}
-        >
-          <div
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              transformOrigin: 'center center',
-              transition: isSwiping.current ? 'none' : 'transform 0.1s ease-out'
-            }}
-          >
-            <img
-              src={fileUrl}
-              alt={songName || '악보'}
-              className="max-w-full max-h-full object-contain"
-              draggable={false}
-              style={{ maxHeight: '100vh', maxWidth: '100vw' }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/placeholder-sheet.png'
-              }}
-            />
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
