@@ -63,6 +63,10 @@ export default function ContentManagementPage() {
   // 삭제 확인 모달
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // 다중 선택 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+
   // 토스트
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
@@ -297,6 +301,86 @@ export default function ContentManagementPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  // 다중 선택 토글
+  const toggleSelection = (songId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(songId)) {
+        next.delete(songId)
+      } else {
+        next.add(songId)
+      }
+      return next
+    })
+  }
+
+  // 전체 선택/해제
+  const toggleSelectAll = () => {
+    if (selectedIds.size === songs.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(songs.map(s => s.id)))
+    }
+  }
+
+  // 일괄 공식 악보로 변경
+  const bulkSetOfficial = async () => {
+    if (selectedIds.size === 0) return
+
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase
+      .from('songs')
+      .update({ is_official: true })
+      .in('id', ids)
+
+    if (!error) {
+      showToast(`${ids.length}개 곡이 공식 악보로 변경되었습니다.`, 'success')
+      setSelectedIds(new Set())
+      loadData()
+    } else {
+      showToast('변경 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 일괄 사용자 곡으로 변경
+  const bulkSetUser = async () => {
+    if (selectedIds.size === 0) return
+
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase
+      .from('songs')
+      .update({ is_official: false })
+      .in('id', ids)
+
+    if (!error) {
+      showToast(`${ids.length}개 곡이 사용자 곡으로 변경되었습니다.`, 'success')
+      setSelectedIds(new Set())
+      loadData()
+    } else {
+      showToast('변경 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 일괄 삭제
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return
+
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase
+      .from('songs')
+      .delete()
+      .in('id', ids)
+
+    if (!error) {
+      showToast(`${ids.length}개 곡이 삭제되었습니다.`, 'success')
+      setSelectedIds(new Set())
+      setShowBulkDeleteModal(false)
+      loadData()
+    } else {
+      showToast('삭제 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
   // 편집 모달 열기
   const openEditModal = (song: SongWithUploader) => {
     setEditingSong(song)
@@ -389,6 +473,7 @@ export default function ContentManagementPage() {
     setActiveTab(tab)
     setSearchQuery('')
     setPage(1)
+    setSelectedIds(new Set()) // 탭 변경 시 선택 초기화
     router.push(`/admin/content-management?tab=${tab}`, { scroll: false })
   }
 
@@ -480,6 +565,43 @@ export default function ContentManagementPage() {
           </div>
         )}
 
+        {/* 일괄 작업 바 (선택된 항목이 있을 때 표시) */}
+        {selectedIds.size > 0 && (
+          <div className="mb-4 p-3 bg-violet-50 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-violet-900">
+                {selectedIds.size}개 선택됨
+              </span>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-sm text-violet-600 hover:text-violet-800"
+              >
+                선택 해제
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={bulkSetOfficial}
+                className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition"
+              >
+                공식 악보로
+              </button>
+              <button
+                onClick={bulkSetUser}
+                className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition"
+              >
+                사용자 곡으로
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteModal(true)}
+                className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 곡 목록 */}
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           {songs.length === 0 ? (
@@ -492,12 +614,31 @@ export default function ContentManagementPage() {
           ) : activeTab === 'user-songs' ? (
             /* 사용자 곡 - 컴팩트 상세 정보 표시 */
             <div className="divide-y">
+              {/* 전체 선택 헤더 */}
+              {songs.length > 0 && (
+                <div className="px-3 py-2 bg-gray-50 border-b flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === songs.length && songs.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 accent-violet-600"
+                  />
+                  <span className="text-xs text-gray-500">전체 선택</span>
+                </div>
+              )}
               {songs.map(song => {
                 const visInfo = getVisibilityLabel(song.visibility)
                 const VisIcon = visInfo.icon
                 return (
-                  <div key={song.id} className="p-3 hover:bg-gray-50 transition">
+                  <div key={song.id} className={`p-3 hover:bg-gray-50 transition ${selectedIds.has(song.id) ? 'bg-violet-50' : ''}`}>
                     <div className="flex items-start justify-between gap-3">
+                      {/* 체크박스 */}
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(song.id)}
+                        onChange={() => toggleSelection(song.id)}
+                        className="w-4 h-4 mt-1 accent-violet-600 flex-shrink-0"
+                      />
                       {/* 곡 정보 */}
                       <div className="flex-1 min-w-0">
                         {/* 첫째 줄: 곡명 + 배지들 */}
@@ -587,9 +728,30 @@ export default function ContentManagementPage() {
           ) : (
             /* 기본 곡 목록 (다른 탭들) */
             <div className="divide-y">
+              {/* 공식 악보 탭에서 전체 선택 헤더 */}
+              {activeTab === 'official-songs' && songs.length > 0 && (
+                <div className="px-4 py-2 bg-gray-50 border-b flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === songs.length && songs.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 accent-violet-600"
+                  />
+                  <span className="text-xs text-gray-500">전체 선택</span>
+                </div>
+              )}
               {songs.map(song => (
-                <div key={song.id} className="p-4 hover:bg-gray-50 transition">
+                <div key={song.id} className={`p-4 hover:bg-gray-50 transition ${selectedIds.has(song.id) ? 'bg-violet-50' : ''}`}>
                   <div className="flex items-center justify-between gap-4">
+                    {/* 공식 악보 탭에서 체크박스 */}
+                    {activeTab === 'official-songs' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(song.id)}
+                        onChange={() => toggleSelection(song.id)}
+                        className="w-4 h-4 accent-violet-600 flex-shrink-0"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-gray-900 truncate">{song.song_name}</h3>
@@ -869,6 +1031,38 @@ export default function ContentManagementPage() {
                 className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
               >
                 {processingIds.has(deletingId) ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 삭제 확인 모달 */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">일괄 삭제</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                선택한 <span className="font-bold text-red-600">{selectedIds.size}개</span> 곡을 삭제하시겠습니까?<br />
+                삭제된 곡은 복구할 수 없습니다.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 border rounded-lg hover:bg-gray-50 transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={bulkDelete}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                삭제
               </button>
             </div>
           </div>

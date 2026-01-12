@@ -74,7 +74,9 @@ const [loading, setLoading] = useState(true)
 // 🎵 좋아요 관련 상태
 const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
 const [sortBy, setSortBy] = useState<'recent' | 'likes' | 'name'>('recent')
-const [showUserUploaded, setShowUserUploaded] = useState(true) // 사용자 추가 악보 표시 여부
+const [songFilter, setSongFilter] = useState<'all' | 'official' | 'user'>('all') // 전체/공식/사용자 필터
+const [showSongFilterDropdown, setShowSongFilterDropdown] = useState(false) // 필터 드롭다운 표시 여부
+const [showSortDropdown, setShowSortDropdown] = useState(false) // 정렬 드롭다운 표시 여부
 
   // 🆕 더보기 버튼을 위한 상태
 const [displayCount, setDisplayCount] = useState(20)
@@ -1172,8 +1174,10 @@ if (newSong.visibility === 'public') {
     }
 
     // 🛡️ 공식/사용자 악보 필터
-    if (!showUserUploaded) {
+    if (songFilter === 'official') {
       result = result.filter(song => song.is_official === true)
+    } else if (songFilter === 'user') {
+      result = result.filter(song => song.is_official !== true)
     }
 
     // 🎵 정렬 적용
@@ -1215,7 +1219,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy, showUserUploaded, mySheetNotes])
+  }, [songs, filters, user, sortBy, songFilter, mySheetNotes])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -2018,48 +2022,101 @@ const hasMore = displayCount < filteredSongs.length
 }
 </span>
 
-        {/* 🎵 정렬 드롭다운 - 데스크탑에서만 표시 */}
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-          className="hidden sm:block w-[88px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="recent">최신순</option>
-          <option value="likes">좋아요순</option>
-          <option value="name">이름순</option>
-        </select>
     </div>
 
-    <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-        {/* 🛡️ 공식/사용자 악보 토글 - 데스크탑에서만 표시 */}
-        <button
-          onClick={() => setShowUserUploaded(!showUserUploaded)}
-          className={`hidden sm:flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-            showUserUploaded
-              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-          }`}
-          title={showUserUploaded ? '공식 악보만 보기' : '모든 악보 보기'}
-        >
-          <Shield size={16} className="flex-shrink-0" />
-          <span>{showUserUploaded ? '전체' : '공식만'}</span>
-        </button>
+    <div className="flex items-center gap-1.5 flex-shrink-0">
+        {/* 🎵 정렬 드롭다운 - 데스크탑에서만 표시 */}
+        <div className="hidden sm:block relative">
+          <button
+            onClick={() => setShowSortDropdown(!showSortDropdown)}
+            className="flex items-center gap-1 h-7 px-2 bg-gray-100 text-gray-700 rounded-md text-[11px] font-medium hover:bg-gray-200 transition-all"
+          >
+            <span>{sortBy === 'recent' ? '최신순' : sortBy === 'likes' ? '좋아요순' : '이름순'}</span>
+            <ChevronDown size={10} className={`transition-transform ${showSortDropdown ? 'rotate-180' : ''}`} />
+          </button>
+          {showSortDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowSortDropdown(false)} />
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-md shadow-lg border py-1 z-20 min-w-[70px]">
+                <button
+                  onClick={() => { setSortBy('recent'); setShowSortDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'recent' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  최신순
+                </button>
+                <button
+                  onClick={() => { setSortBy('likes'); setShowSortDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'likes' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  좋아요순
+                </button>
+                <button
+                  onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'name' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  이름순
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 🛡️ 공식/사용자 악보 필터 - 데스크탑에서만 표시 */}
+        <div className="hidden sm:block relative">
+          <button
+            onClick={() => setShowSongFilterDropdown(!showSongFilterDropdown)}
+            className={`flex items-center gap-1 h-7 px-2 rounded-md text-[11px] font-medium transition-all ${
+              songFilter === 'official'
+                ? 'bg-blue-100 text-blue-700'
+                : songFilter === 'user'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <span>{songFilter === 'all' ? '전체' : songFilter === 'official' ? '공식' : '사용자'}</span>
+            <ChevronDown size={10} className={`transition-transform ${showSongFilterDropdown ? 'rotate-180' : ''}`} />
+          </button>
+          {showSongFilterDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowSongFilterDropdown(false)} />
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-md shadow-lg border py-1 z-20 min-w-[60px]">
+                <button
+                  onClick={() => { setSongFilter('all'); setShowSongFilterDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${songFilter === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  전체
+                </button>
+                <button
+                  onClick={() => { setSongFilter('official'); setShowSongFilterDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${songFilter === 'official' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  공식
+                </button>
+                <button
+                  onClick={() => { setSongFilter('user'); setShowSongFilterDropdown(false); }}
+                  className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${songFilter === 'user' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  사용자
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* 📝 내 필기 노트 포함 토글 - 데스크탑 */}
         {user && mySheetNotes.length > 0 && (
           <button
             onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
-            className={`hidden sm:flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`hidden sm:flex items-center h-7 px-2 rounded-md text-[11px] font-medium transition-all ${
               filters.includeMyNotes
                 ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             title={filters.includeMyNotes ? '내 필기 노트 포함됨' : '내 필기 노트 미포함'}
           >
-            <Pencil size={14} className="flex-shrink-0" />
             <span>내 필기</span>
             {filters.includeMyNotes && (
-              <span className="ml-1 text-xs bg-purple-200 px-1.5 py-0.5 rounded-full">{mySheetNotes.length}</span>
+              <span className="ml-1 text-[9px] bg-purple-200 px-1 py-0.5 rounded-full">{mySheetNotes.length}</span>
             )}
           </button>
         )}
@@ -2096,17 +2153,16 @@ const hasMore = displayCount < filteredSongs.length
         <option value="likes">좋아요순</option>
         <option value="name">이름순</option>
       </select>
-      <button
-        onClick={() => setShowUserUploaded(!showUserUploaded)}
-        className={`h-8 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium transition-all ${
-          showUserUploaded
-            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-        }`}
+      {/* 🛡️ 공식/사용자 악보 필터 - 모바일 */}
+      <select
+        value={songFilter}
+        onChange={(e) => setSongFilter(e.target.value as 'all' | 'official' | 'user')}
+        className="h-8 px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
       >
-        <Shield size={12} className="flex-shrink-0" />
-        <span>{showUserUploaded ? '전체' : '공식만'}</span>
-      </button>
+        <option value="all">전체</option>
+        <option value="official">공식</option>
+        <option value="user">사용자</option>
+      </select>
       {/* 📝 내 필기 노트 포함 토글 - 모바일 */}
       {user && mySheetNotes.length > 0 && (
         <button
