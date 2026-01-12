@@ -1060,6 +1060,7 @@ export default function SheetMusicEditor({
 
       if (tool === 'eraser') {
         isDrawingRef.current = true
+        wasDrawingWithPen.current = true // Apple Pencil/마우스 필기 추적
         setIsDrawing(true)
         eraseAtPosition(pos.x, pos.y)
         return
@@ -1073,6 +1074,7 @@ export default function SheetMusicEditor({
               pos.y >= bb.y && pos.y <= bb.y + bb.height) {
             setIsMovingSelection(true)
             setMoveStartPos({ x: pos.x, y: pos.y })
+            wasDrawingWithPen.current = true
             return
           }
         }
@@ -1084,6 +1086,7 @@ export default function SheetMusicEditor({
           selectedTextIds: [],
         })
         isDrawingRef.current = true
+        wasDrawingWithPen.current = true // Apple Pencil/마우스 필기 추적
         setIsDrawing(true)
         drawingToolRef.current = 'lasso'
         return
@@ -1092,6 +1095,7 @@ export default function SheetMusicEditor({
       // 펜/형광펜 드로잉 시작 - 시작 시점의 도구를 저장
       drawingToolRef.current = tool
       isDrawingRef.current = true
+      wasDrawingWithPen.current = true // Apple Pencil/마우스 필기 추적
       currentStrokeRef.current = [pos]
       setIsDrawing(true)
       setCurrentStroke([pos])
@@ -1550,6 +1554,7 @@ export default function SheetMusicEditor({
   const swipeStartTime = useRef<number>(0) // 스와이프 시작 시간 (속도 계산용)
   const isSwiping = useRef<boolean>(false)
   const touchTapHandled = useRef<boolean>(false) // 터치 탭 처리 후 클릭 이벤트 방지용
+  const wasDrawingWithPen = useRef<boolean>(false) // Apple Pencil 필기 추적
 
   // 더블탭 줌 감지용
   const lastTapTime = useRef<number>(0)
@@ -1559,6 +1564,9 @@ export default function SheetMusicEditor({
   const DOUBLE_TAP_DISTANCE = 50 // px
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Apple Pencil로 필기 중이면 터치 이벤트 무시 (포인터 이벤트에서 처리)
+    if (isDrawingRef.current) return
+
     if (e.touches.length === 2) {
       // 핀치 줌 시작
       const dx = e.touches[0].clientX - e.touches[1].clientX
@@ -1575,6 +1583,9 @@ export default function SheetMusicEditor({
   }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Apple Pencil로 필기 중이면 터치 이벤트 무시
+    if (isDrawingRef.current) return
+
     if (e.touches.length === 2 && lastTouchDistance.current !== null) {
       // 핀치 줌
       const dx = e.touches[0].clientX - e.touches[1].clientX
@@ -1590,6 +1601,15 @@ export default function SheetMusicEditor({
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     // 핀치 줌 종료
     lastTouchDistance.current = null
+
+    // Apple Pencil로 필기했으면 스와이프/탭 로직 건너뛰기
+    if (wasDrawingWithPen.current) {
+      wasDrawingWithPen.current = false
+      isSwiping.current = false
+      swipeStartX.current = null
+      swipeStartY.current = null
+      return
+    }
 
     // 스와이프/탭 감지 (보기 모드에서만)
     if (isSwiping.current && swipeStartX.current !== null && swipeStartY.current !== null && e.changedTouches.length > 0) {
