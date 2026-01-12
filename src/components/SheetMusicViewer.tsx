@@ -164,29 +164,40 @@ export default function SheetMusicViewer({
       </button>
 
       {/* 메인 컨텐츠 */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-hidden flex items-center justify-center"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onDoubleClick={handleDoubleClick}
-        style={{ touchAction: 'none' }}
-      >
+      {fileType === 'pdf' ? (
+        // PDF: 아이패드에서 스크롤 가능하도록 별도 처리
         <div
-          style={{
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            transformOrigin: 'center center',
-            transition: isSwiping.current ? 'none' : 'transform 0.1s ease-out'
-          }}
+          ref={containerRef}
+          className="flex-1 overflow-auto -webkit-overflow-scrolling-touch"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          {fileType === 'pdf' ? (
-            <iframe
-              src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
-              className="w-screen h-screen border-0"
-              style={{ pointerEvents: scale > 1 ? 'none' : 'auto' }}
-            />
-          ) : (
+          <iframe
+            src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+            className="w-full border-0"
+            style={{
+              height: '100%',
+              minHeight: '100vh'
+            }}
+          />
+        </div>
+      ) : (
+        // 이미지: 기존 줌/팬 동작 유지
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-hidden flex items-center justify-center"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onDoubleClick={handleDoubleClick}
+          style={{ touchAction: scale > 1 ? 'none' : 'manipulation' }}
+        >
+          <div
+            style={{
+              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+              transformOrigin: 'center center',
+              transition: isSwiping.current ? 'none' : 'transform 0.1s ease-out'
+            }}
+          >
             <img
               src={fileUrl}
               alt={songName || '악보'}
@@ -197,9 +208,9 @@ export default function SheetMusicViewer({
                 (e.target as HTMLImageElement).src = '/placeholder-sheet.png'
               }}
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -34,6 +34,8 @@ export default function DrumScoreRenderer({
   const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
   const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0)
   const scoreHeight = 85 // 5선지 높이
+  const staffMargin = 3 // 오선지 좌우 여백
+  const usableWidth = scoreWidth - staffMargin * 2 // 노트가 배치될 수 있는 실제 너비
 
   return (
     <div
@@ -131,15 +133,16 @@ export default function DrumScoreRenderer({
         <line x1={scoreWidth - 3} y1="22" x2={scoreWidth - 3} y2="62" stroke="#333" strokeWidth="1.5" />
 
         {/* Beam 연결선 렌더링 */}
-        {renderBeams(score.notes, scoreWidth)}
+        {renderBeams(score.notes, usableWidth, staffMargin)}
 
         {/* 드럼 음표 렌더링 */}
         {score.notes.map((note, idx) => (
           <DrumNoteElement
             key={idx}
             note={note}
-            x={(note.position / 100) * scoreWidth}
-            scoreWidth={scoreWidth}
+            x={staffMargin + (note.position / 100) * usableWidth}
+            usableWidth={usableWidth}
+            staffMargin={staffMargin}
             allNotes={score.notes}
           />
         ))}
@@ -174,7 +177,7 @@ const BEAMABLE_PARTS: DrumNote['part'][] = ['HH', 'SN']
 const MIN_NOTE_DISTANCE = 3
 
 // 개별 드럼 음표 렌더링
-function DrumNoteElement({ note, x, allNotes }: { note: DrumNote; x: number; scoreWidth: number; allNotes: DrumNote[] }) {
+function DrumNoteElement({ note, x, allNotes, usableWidth, staffMargin }: { note: DrumNote; x: number; usableWidth: number; staffMargin: number; allNotes: DrumNote[] }) {
   const y = DRUM_PART_Y[note.part] || 42
   const duration = note.duration || 8
 
@@ -336,7 +339,7 @@ function DrumNoteElement({ note, x, allNotes }: { note: DrumNote; x: number; sco
 }
 
 // Beam 연결선 렌더링
-function renderBeams(notes: DrumNote[], scoreWidth: number): React.ReactElement[] {
+function renderBeams(notes: DrumNote[], usableWidth: number, staffMargin: number): React.ReactElement[] {
   const beamGroups: { [key: string]: { note: DrumNote; idx: number }[] } = {}
 
   notes.forEach((note, idx) => {
@@ -359,8 +362,8 @@ function renderBeams(notes: DrumNote[], scoreWidth: number): React.ReactElement[
     const stemUp = true
     const stemLength = 22  // 빔 연결을 위해 약간 더 길게
 
-    const firstX = (firstNote.position / 100) * scoreWidth
-    const lastX = (lastNote.position / 100) * scoreWidth
+    const firstX = staffMargin + (firstNote.position / 100) * usableWidth
+    const lastX = staffMargin + (lastNote.position / 100) * usableWidth
 
     // 빔 높이: 그룹 내 가장 높은/낮은 음표 기준
     const allY = notesInGroup.map(n => DRUM_PART_Y[n.note.part] || 42)
@@ -373,7 +376,7 @@ function renderBeams(notes: DrumNote[], scoreWidth: number): React.ReactElement[
       <g key={`beam-${groupId}`}>
         {/* 각 음표의 기둥 */}
         {notesInGroup.map(({ note }, i) => {
-          const x = (note.position / 100) * scoreWidth
+          const x = staffMargin + (note.position / 100) * usableWidth
           const y = DRUM_PART_Y[note.part] || 42
 
           return (
