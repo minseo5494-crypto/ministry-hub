@@ -158,7 +158,8 @@ export default function SheetMusicEditor({
   const effectiveFileType = isMultiSongMode ? (currentSong?.file_type || 'image') : fileType
   const effectiveSongName = isMultiSongMode ? currentSong?.song_name || '' : songName
   const effectiveArtistName = isMultiSongMode ? currentSong?.team_name : artistName
-  const effectiveSongForms = isMultiSongMode ? (currentSong?.songForms || []) : songForms
+  // 기본 송폼 (커스텀 송폼은 상태 선언 후 합쳐짐)
+  const baseSongForms = isMultiSongMode ? (currentSong?.songForms || []) : songForms
 
   // 각 곡별 annotations 저장 (다중 곡 모드)
   const [allAnnotations, setAllAnnotations] = useState<{ [songId: string]: PageAnnotation[] }>(() => {
@@ -306,7 +307,8 @@ export default function SheetMusicEditor({
   }, [isAddingText, editingTextId])
 
   // ===== 송폼 & 파트 태그 상태 =====
-  const [showSongFormPanel, setShowSongFormPanel] = useState(false) // 설정 패널 표시
+  const [showSongFormPanel, setShowSongFormPanel] = useState(false) // 송폼 설정 패널 표시
+  const [showPartTagPanel, setShowPartTagPanel] = useState(false) // 파트태그 패널 표시
   // 송폼 활성화: initialSongFormEnabled가 true이거나, songForms가 있으면 자동 활성화
   const [songFormEnabled, setSongFormEnabled] = useState(initialSongFormEnabled || (songForms && songForms.length > 0))
   const [songFormStyle, setSongFormStyle] = useState<SongFormStyle>(
@@ -319,6 +321,12 @@ export default function SheetMusicEditor({
     }
   )
   const [partTags, setPartTags] = useState<PartTagStyle[]>(initialPartTags)
+  const [customSongForms, setCustomSongForms] = useState<string[]>([]) // 사용자가 직접 추가한 송폼
+  const [newSongFormInput, setNewSongFormInput] = useState('') // 새 송폼 입력값
+
+  // 기본 송폼 + 커스텀 송폼 합치기 (상태 선언 후)
+  const effectiveSongForms = [...baseSongForms, ...customSongForms]
+
   const [draggingFormItem, setDraggingFormItem] = useState<{ type: 'songForm' | 'partTag' | 'pianoScore' | 'drumScore', id?: string } | null>(null)
   const [draggingNewPartTag, setDraggingNewPartTag] = useState<string | null>(null)
 
@@ -342,6 +350,12 @@ export default function SheetMusicEditor({
   // 내보내기 상태
   const [showExportModal, setShowExportModal] = useState(false)
   const [exporting, setExporting] = useState(false)
+  // 내보내기 옵션
+  const [exportFileName, setExportFileName] = useState('') // 파일명
+  const [exportOptions, setExportOptions] = useState({
+    includeCover: true,        // 표지 포함
+    includeSongForms: true,    // 송폼 표시
+  })
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null)
@@ -2011,9 +2025,11 @@ export default function SheetMusicEditor({
             ctx.drawImage(img, 0, 0, baseWidth, baseHeight)
           }
 
-          // 2. 송폼 렌더링 (활성화된 경우, 첫 페이지에만)
-          if (pageNum === 1 && songFormEnabled && song.songForms && song.songForms.length > 0) {
-            const songFormText = song.songForms.join(' - ')
+          // 2. 송폼 렌더링 (활성화된 경우, 첫 페이지에만) - 옵션 체크
+          // 기본 송폼 + 커스텀 송폼 합치기
+          const exportSongForms = [...(song.songForms || []), ...customSongForms]
+          if (exportOptions.includeSongForms && pageNum === 1 && songFormEnabled && exportSongForms.length > 0) {
+            const songFormText = exportSongForms.join(' - ')
             const adjustedFontSize = (songFormStyle.fontSize / 36) * (baseHeight * 0.025)
             ctx.font = `900 ${adjustedFontSize}px Arial, sans-serif`
             ctx.fillStyle = songFormStyle.color
@@ -2028,10 +2044,11 @@ export default function SheetMusicEditor({
           }
 
           // 3. 파트 태그 렌더링 (해당 페이지의 태그만)
-          const pageTags = partTags.filter(tag =>
-            tag.pageIndex === undefined || tag.pageIndex === pageNum - 1
-          )
-          pageTags.forEach(tag => {
+          {
+            const pageTags = partTags.filter(tag =>
+              tag.pageIndex === undefined || tag.pageIndex === pageNum - 1
+            )
+            pageTags.forEach(tag => {
             const adjustedFontSize = (tag.fontSize / 36) * (baseHeight * 0.025)
             ctx.font = `bold ${adjustedFontSize}px Arial, sans-serif`
             ctx.fillStyle = tag.color
@@ -2039,14 +2056,16 @@ export default function SheetMusicEditor({
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
 
-            const tagX = (tag.x / 100) * baseWidth
-            const tagY = (tag.y / 100) * baseHeight
-            ctx.fillText(tag.label, tagX, tagY)
-            ctx.globalAlpha = 1
-          })
+              const tagX = (tag.x / 100) * baseWidth
+              const tagY = (tag.y / 100) * baseHeight
+              ctx.fillText(tag.label, tagX, tagY)
+              ctx.globalAlpha = 1
+            })
+          }
 
           // 3.5. 피아노 악보 렌더링 (해당 페이지의 악보만)
-          const pageScores = pianoScores.filter(score => score.pageIndex === pageNum - 1)
+          {
+            const pageScores = pianoScores.filter(score => score.pageIndex === pageNum - 1)
           pageScores.forEach(score => {
             // measureWidths가 있으면 합산, 없으면 기본값 사용
             const defaultWidth = score.measureCount === 1 ? 100 : 70
@@ -2339,10 +2358,12 @@ export default function SheetMusicEditor({
               }
             })
           })
+          }
 
           // 3.6. 드럼 악보 렌더링 (해당 페이지의 악보만)
-          const pageDrumScores = drumScores.filter(score => score.pageIndex === pageNum - 1)
-          pageDrumScores.forEach(score => {
+          {
+            const pageDrumScores = drumScores.filter(score => score.pageIndex === pageNum - 1)
+            pageDrumScores.forEach(score => {
             const defaultWidth = 100
             const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
             const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0)
@@ -2592,6 +2613,7 @@ export default function SheetMusicEditor({
               }
             })
           })
+          }
 
           // 4. 필기(스트로크) 렌더링
           const pageAnnotation = songAnnotations.find(a => a.pageNumber === pageNum)
@@ -2640,11 +2662,62 @@ export default function SheetMusicEditor({
         }
       }
 
-      // 파일명 생성
+      // 표지 페이지 생성 (옵션 활성화 시)
+      if (exportOptions.includeCover && allPages.length > 0) {
+        const coverCanvas = document.createElement('canvas')
+        const coverCtx = coverCanvas.getContext('2d')
+        if (coverCtx) {
+          // 첫 페이지와 같은 크기로 표지 생성
+          const firstPage = allPages[0]
+          coverCanvas.width = firstPage.width
+          coverCanvas.height = firstPage.height
+
+          // 배경 (흰색)
+          coverCtx.fillStyle = '#ffffff'
+          coverCtx.fillRect(0, 0, coverCanvas.width, coverCanvas.height)
+
+          // 제목 (곡명)
+          const titleText = effectiveSongName || '악보'
+          const titleFontSize = Math.min(coverCanvas.width * 0.08, 120)
+          coverCtx.font = `bold ${titleFontSize}px Arial, sans-serif`
+          coverCtx.fillStyle = '#1a1a1a'
+          coverCtx.textAlign = 'center'
+          coverCtx.textBaseline = 'middle'
+          coverCtx.fillText(titleText, coverCanvas.width / 2, coverCanvas.height * 0.4)
+
+          // 아티스트명
+          if (effectiveArtistName) {
+            const artistFontSize = titleFontSize * 0.5
+            coverCtx.font = `${artistFontSize}px Arial, sans-serif`
+            coverCtx.fillStyle = '#666666'
+            coverCtx.fillText(effectiveArtistName, coverCanvas.width / 2, coverCanvas.height * 0.5)
+          }
+
+          // 날짜
+          const dateFontSize = titleFontSize * 0.3
+          coverCtx.font = `${dateFontSize}px Arial, sans-serif`
+          coverCtx.fillStyle = '#999999'
+          const dateText = new Date().toLocaleDateString('ko-KR')
+          coverCtx.fillText(dateText, coverCanvas.width / 2, coverCanvas.height * 0.85)
+
+          // 표지를 첫 번째 페이지로 추가
+          allPages.unshift({
+            songName: '표지',
+            pageNum: 0,
+            imageDataUrl: coverCanvas.toDataURL('image/png'),
+            width: coverCanvas.width,
+            height: coverCanvas.height,
+          })
+        }
+      }
+
+      // 파일명 생성 (사용자 입력 우선)
       const dateStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '')
-      const baseName = isMultiSongMode && setlistTitle
-        ? `${setlistTitle}_필기_${dateStr}`
-        : `${effectiveSongName}_필기_${dateStr}`
+      const baseName = exportFileName.trim()
+        ? exportFileName.trim()
+        : isMultiSongMode && setlistTitle
+          ? `${setlistTitle}_필기_${dateStr}`
+          : `${effectiveSongName || '악보'}_필기_${dateStr}`
 
       if (format === 'image') {
         // 이미지: 각 페이지를 순차적으로 개별 PNG 파일로 다운로드
@@ -3478,6 +3551,40 @@ export default function SheetMusicEditor({
         >
           🥁 {isMobile ? '' : '드럼'}
         </button>
+
+        {/* 송폼 버튼 */}
+        <button
+          onClick={() => {
+            if (!songFormEnabled) setSongFormEnabled(true)
+            setShowPartTagPanel(false)
+            setShowSongFormPanel(!showSongFormPanel)
+          }}
+          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 ${
+            showSongFormPanel
+              ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300'
+              : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+          } ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
+          title="송폼 추가/설정"
+        >
+          🎵 {isMobile ? '' : '송폼'}
+        </button>
+
+        {/* 파트태그 버튼 */}
+        <button
+          onClick={() => {
+            if (!songFormEnabled) setSongFormEnabled(true)
+            setShowSongFormPanel(false)
+            setShowPartTagPanel(!showPartTagPanel)
+          }}
+          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 ${
+            showPartTagPanel
+              ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
+              : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+          } ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
+          title="파트태그 추가"
+        >
+          🏷️ {isMobile ? '' : '파트'}
+        </button>
       </div>
 
       {/* 캔버스 영역 */}
@@ -3644,118 +3751,115 @@ export default function SheetMusicEditor({
           {/* 텍스트 요소 선택은 캔버스에서 직접 처리 (handlePointerDown) */}
           {/* 선택된 텍스트는 캔버스에서 파란 테두리로 표시됨 */}
 
-          {/* 송폼 & 파트 태그 오버레이 - songFormEnabled일 때 항상 표시, 캔버스가 렌더링된 후에만 */}
+          {/* 송폼 텍스트 오버레이 - songFormEnabled이고 송폼이 있을 때만 */}
           {effectiveSongForms.length > 0 && songFormEnabled && canvasReady && canvasSize.height > 0 && (
-            <>
-              {/* 송폼 텍스트 - fontSize를 캔버스 높이 기준 퍼센트로 계산 */}
+            <div
+              className="absolute cursor-pointer select-none hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 rounded"
+              style={{
+                left: `${songFormStyle.x}%`,
+                top: `${songFormStyle.y}%`,
+                transform: 'translateX(-50%)',
+                // fontSize를 캔버스 높이의 퍼센트로 계산 (36pt = 약 2.5% 기준)
+                fontSize: `${(songFormStyle.fontSize / 36) * (canvasSize.height * 0.025)}px`,
+                color: songFormStyle.color,
+                opacity: songFormStyle.opacity,
+                fontWeight: 'bold',
+                textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)',
+                pointerEvents: 'auto',
+                whiteSpace: 'nowrap',  // 한 줄로 표시
+                touchAction: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation()
+                if (showSongFormPanel) {
+                  setDraggingFormItem({ type: 'songForm' })
+                }
+              }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!showSongFormPanel) {
+                  setShowSongFormPanel(true)
+                }
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation()
+                if (showSongFormPanel) {
+                  e.preventDefault()
+                  setDraggingFormItem({ type: 'songForm' })
+                } else {
+                  // 패널이 닫혀있으면 열기
+                  setShowSongFormPanel(true)
+                }
+              }}
+              onTouchMove={handleFormTouchMove}
+              onTouchEnd={handleFormTouchEnd}
+              title="클릭하여 설정 열기"
+            >
+              {effectiveSongForms.join(' - ')}
+            </div>
+          )}
+
+          {/* 파트 태그들 - 송폼 없이도 독립적으로 표시 */}
+          {songFormEnabled && canvasReady && canvasSize.height > 0 && partTags
+            .filter(tag => (tag.pageIndex || 0) === currentPage - 1)
+            .map(tag => (
               <div
+                key={tag.id}
                 className="absolute cursor-pointer select-none hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 rounded"
                 style={{
-                  left: `${songFormStyle.x}%`,
-                  top: `${songFormStyle.y}%`,
-                  transform: 'translateX(-50%)',
-                  // fontSize를 캔버스 높이의 퍼센트로 계산 (36pt = 약 2.5% 기준)
-                  fontSize: `${(songFormStyle.fontSize / 36) * (canvasSize.height * 0.025)}px`,
-                  color: songFormStyle.color,
-                  opacity: songFormStyle.opacity,
+                  left: `${tag.x}%`,
+                  top: `${tag.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: `${(tag.fontSize / 36) * (canvasSize.height * 0.025)}px`,
+                  color: tag.color,
+                  opacity: tag.opacity,
                   fontWeight: 'bold',
                   textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)',
                   pointerEvents: 'auto',
-                  whiteSpace: 'nowrap',  // 한 줄로 표시
                   touchAction: 'none',
                   WebkitUserSelect: 'none',
                   userSelect: 'none',
                 }}
                 onMouseDown={(e) => {
                   e.stopPropagation()
-                  if (showSongFormPanel) {
-                    setDraggingFormItem({ type: 'songForm' })
+                  if (showSongFormPanel || showPartTagPanel) {
+                    setDraggingFormItem({ type: 'partTag', id: tag.id })
                   }
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (!showSongFormPanel) {
-                    setShowSongFormPanel(true)
+                  if (!showSongFormPanel && !showPartTagPanel) {
+                    setShowPartTagPanel(true)
                   }
                 }}
                 onTouchStart={(e) => {
                   e.stopPropagation()
-                  if (showSongFormPanel) {
+                  if (showSongFormPanel || showPartTagPanel) {
                     e.preventDefault()
-                    setDraggingFormItem({ type: 'songForm' })
+                    setDraggingFormItem({ type: 'partTag', id: tag.id })
                   } else {
-                    // 패널이 닫혀있으면 열기
-                    setShowSongFormPanel(true)
+                    setShowPartTagPanel(true)
                   }
                 }}
                 onTouchMove={handleFormTouchMove}
                 onTouchEnd={handleFormTouchEnd}
                 title="클릭하여 설정 열기"
               >
-                {effectiveSongForms.join(' - ')}
+                {tag.label}
               </div>
+            ))}
 
-              {/* 파트 태그들 - fontSize도 캔버스 높이 기준으로 계산 */}
-              {partTags
-                .filter(tag => (tag.pageIndex || 0) === currentPage - 1)
-                .map(tag => (
-                  <div
-                    key={tag.id}
-                    className="absolute cursor-pointer select-none hover:ring-2 hover:ring-purple-400 hover:ring-offset-2 rounded"
-                    style={{
-                      left: `${tag.x}%`,
-                      top: `${tag.y}%`,
-                      transform: 'translate(-50%, -50%)',
-                      fontSize: `${(tag.fontSize / 36) * (canvasSize.height * 0.025)}px`,
-                      color: tag.color,
-                      opacity: tag.opacity,
-                      fontWeight: 'bold',
-                      textShadow: '2px 2px 4px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9)',
-                      pointerEvents: 'auto',
-                      touchAction: 'none',
-                      WebkitUserSelect: 'none',
-                      userSelect: 'none',
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation()
-                      if (showSongFormPanel) {
-                        setDraggingFormItem({ type: 'partTag', id: tag.id })
-                      }
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!showSongFormPanel) {
-                        setShowSongFormPanel(true)
-                      }
-                    }}
-                    onTouchStart={(e) => {
-                      e.stopPropagation()
-                      if (showSongFormPanel) {
-                        e.preventDefault()
-                        setDraggingFormItem({ type: 'partTag', id: tag.id })
-                      } else {
-                        setShowSongFormPanel(true)
-                      }
-                    }}
-                    onTouchMove={handleFormTouchMove}
-                    onTouchEnd={handleFormTouchEnd}
-                    title="클릭하여 설정 열기"
-                  >
-                    {tag.label}
-                  </div>
-                ))}
-
-              {/* 드롭 영역 (파트 태그 추가용) - 설정 패널이 열려있을 때만 */}
-              {showSongFormPanel && draggingNewPartTag && (
-                <div
-                  className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-center justify-center pointer-events-none z-10"
-                >
-                  <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                    여기에 드롭
-                  </span>
-                </div>
-              )}
-            </>
+          {/* 드롭 영역 (파트 태그 추가용) - 설정 패널이 열려있을 때만 */}
+          {(showSongFormPanel || showPartTagPanel) && draggingNewPartTag && canvasReady && canvasSize.height > 0 && (
+            <div
+              className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-center justify-center pointer-events-none z-10"
+            >
+              <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                여기에 드롭
+              </span>
+            </div>
           )}
 
           {/* 피아노 악보 렌더링 */}
@@ -3837,8 +3941,8 @@ export default function SheetMusicEditor({
         />
       )}
 
-      {/* 송폼 설정 사이드 패널 (모바일: 바닥 시트 스타일) - 편집 모드에서만 */}
-      {effectiveSongForms.length > 0 && showSongFormPanel && !isViewMode && (
+      {/* 송폼 설정 사이드 패널 - 편집 모드에서만 */}
+      {showSongFormPanel && !isViewMode && (
         <div className={`bg-white shadow-xl border border-gray-200 overflow-y-auto z-30 ${
           isMobile
             ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
@@ -3852,7 +3956,9 @@ export default function SheetMusicEditor({
           )}
           <div className={`border-b bg-purple-50 ${isMobile ? 'p-4' : 'p-3'}`}>
             <div className="flex items-center justify-between">
-              <h3 className={`font-bold text-purple-700 ${isMobile ? 'text-lg' : ''}`}>🎵 송폼 설정</h3>
+              <h3 className={`font-bold text-purple-700 ${isMobile ? 'text-lg' : ''}`}>
+                🎵 송폼 설정
+              </h3>
               <button
                 onClick={() => setShowSongFormPanel(false)}
                 className={`text-gray-500 hover:text-gray-700 ${isMobile ? 'p-2 -m-2' : ''}`}
@@ -3860,75 +3966,171 @@ export default function SheetMusicEditor({
                 ✕
               </button>
             </div>
-            <p className={`text-purple-600 mt-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>{effectiveSongForms.join(' - ')}</p>
-            {/* 송폼 켜기/끄기 토글 */}
-            <button
-              onClick={() => setSongFormEnabled(!songFormEnabled)}
-              className={`mt-2 w-full rounded font-medium transition-colors ${
-                isMobile ? 'py-3 text-base' : 'py-1.5 text-sm'
-              } ${
-                songFormEnabled
-                  ? 'bg-purple-600 text-white hover:bg-purple-700'
-                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-              }`}
-            >
-              {songFormEnabled ? '송폼 표시 중 (클릭하여 숨김)' : '송폼 숨김 (클릭하여 표시)'}
-            </button>
           </div>
 
-          {/* 송폼 스타일 설정 */}
+          {/* 송폼 추가 입력 */}
           <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
-            <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>송폼 스타일</h4>
-
-            {/* 크기 */}
-            <div className={isMobile ? 'mb-4' : 'mb-3'}>
-              <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
-                크기: <span className="font-bold">{songFormStyle.fontSize}pt</span>
-              </label>
+            <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>송폼 추가</h4>
+            <div className="flex gap-2">
               <input
-                type="range"
-                min="12"
-                max="96"
-                value={songFormStyle.fontSize}
-                onChange={(e) => setSongFormStyle(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
-                className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
+                type="text"
+                value={newSongFormInput}
+                onChange={(e) => setNewSongFormInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newSongFormInput.trim()) {
+                    setCustomSongForms(prev => [...prev, newSongFormInput.trim()])
+                    setNewSongFormInput('')
+                    if (!songFormEnabled) setSongFormEnabled(true)
+                  }
+                }}
+                placeholder="예: Intro, Verse, Chorus"
+                className={`flex-1 border border-gray-300 rounded px-2 ${isMobile ? 'py-2 text-base' : 'py-1 text-sm'}`}
               />
+              <button
+                onClick={() => {
+                  if (newSongFormInput.trim()) {
+                    setCustomSongForms(prev => [...prev, newSongFormInput.trim()])
+                    setNewSongFormInput('')
+                    if (!songFormEnabled) setSongFormEnabled(true)
+                  }
+                }}
+                className={`bg-purple-600 text-white rounded font-medium hover:bg-purple-700 ${isMobile ? 'px-4 py-2' : 'px-3 py-1 text-sm'}`}
+              >
+                추가
+              </button>
             </div>
+            <p className={`text-gray-500 mt-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+              Enter로 빠르게 추가
+            </p>
+          </div>
 
-            {/* 색상 */}
-            <div className={isMobile ? 'mb-4' : 'mb-3'}>
-              <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>색상</label>
-              <div className={`flex flex-wrap ${isMobile ? 'gap-2' : 'gap-1'}`}>
-                {FORM_COLOR_PRESETS.map(c => (
-                  <button
-                    key={c.value}
-                    onClick={() => setSongFormStyle(prev => ({ ...prev, color: c.value }))}
-                    className={`rounded-full border-2 aspect-square flex-shrink-0 ${
-                      isMobile ? 'w-9 h-9 min-w-[36px]' : 'w-6 h-6 min-w-[24px]'
-                    } ${
-                      songFormStyle.color === c.value ? 'border-gray-800 scale-110' : 'border-gray-300'
-                    }`}
-                    style={{ backgroundColor: c.value }}
-                    title={c.name}
-                  />
+          {/* 현재 송폼 목록 */}
+          {effectiveSongForms.length > 0 && (
+            <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
+              <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>
+                현재 송폼 ({effectiveSongForms.length}개)
+              </h4>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {effectiveSongForms.map((form, idx) => (
+                  <span
+                    key={idx}
+                    className={`inline-flex items-center gap-1 bg-purple-100 text-purple-700 rounded px-2 ${isMobile ? 'py-1 text-sm' : 'py-0.5 text-xs'}`}
+                  >
+                    {form}
+                    {customSongForms.includes(form) && (
+                      <button
+                        onClick={() => setCustomSongForms(prev => prev.filter((_, i) => i !== prev.indexOf(form)))}
+                        className="text-purple-500 hover:text-purple-700"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
                 ))}
               </div>
+              <p className={`text-purple-600 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+                {effectiveSongForms.join(' - ')}
+              </p>
+              {/* 송폼 켜기/끄기 토글 */}
+              <button
+                onClick={() => setSongFormEnabled(!songFormEnabled)}
+                className={`mt-2 w-full rounded font-medium transition-colors ${
+                  isMobile ? 'py-3 text-base' : 'py-1.5 text-sm'
+                } ${
+                  songFormEnabled
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                }`}
+              >
+                {songFormEnabled ? '송폼 표시 중 (클릭하여 숨김)' : '송폼 숨김 (클릭하여 표시)'}
+              </button>
             </div>
+          )}
 
-            {/* 투명도 */}
-            <div>
-              <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
-                투명도: <span className="font-bold">{Math.round(songFormStyle.opacity * 100)}%</span>
-              </label>
-              <input
-                type="range"
-                min="0.3"
-                max="1"
-                step="0.1"
-                value={songFormStyle.opacity}
-                onChange={(e) => setSongFormStyle(prev => ({ ...prev, opacity: Number(e.target.value) }))}
-                className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
-              />
+          {/* 송폼 스타일 설정 - 송폼이 있을 때만 표시 */}
+          {effectiveSongForms.length > 0 && (
+            <div className={isMobile ? 'p-4' : 'p-3'}>
+              <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>송폼 스타일</h4>
+
+              {/* 크기 */}
+              <div className={isMobile ? 'mb-4' : 'mb-3'}>
+                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+                  크기: <span className="font-bold">{songFormStyle.fontSize}pt</span>
+                </label>
+                <input
+                  type="range"
+                  min="12"
+                  max="96"
+                  value={songFormStyle.fontSize}
+                  onChange={(e) => setSongFormStyle(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
+                  className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
+                />
+              </div>
+
+              {/* 색상 */}
+              <div className={isMobile ? 'mb-4' : 'mb-3'}>
+                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>색상</label>
+                <div className={`flex flex-wrap ${isMobile ? 'gap-2' : 'gap-1'}`}>
+                  {FORM_COLOR_PRESETS.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => setSongFormStyle(prev => ({ ...prev, color: c.value }))}
+                      className={`rounded-full border-2 aspect-square flex-shrink-0 ${
+                        isMobile ? 'w-9 h-9 min-w-[36px]' : 'w-6 h-6 min-w-[24px]'
+                      } ${
+                        songFormStyle.color === c.value ? 'border-gray-800 scale-110' : 'border-gray-300'
+                      }`}
+                      style={{ backgroundColor: c.value }}
+                      title={c.name}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 투명도 */}
+              <div>
+                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+                  투명도: <span className="font-bold">{Math.round(songFormStyle.opacity * 100)}%</span>
+                </label>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="1"
+                  step="0.1"
+                  value={songFormStyle.opacity}
+                  onChange={(e) => setSongFormStyle(prev => ({ ...prev, opacity: Number(e.target.value) }))}
+                  className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 파트태그 설정 사이드 패널 - 편집 모드에서만 */}
+      {showPartTagPanel && !isViewMode && (
+        <div className={`bg-white shadow-xl border border-gray-200 overflow-y-auto z-30 ${
+          isMobile
+            ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
+            : 'absolute top-24 right-4 w-64 rounded-lg max-h-[70vh]'
+        }`}>
+          {/* 모바일 드래그 핸들 */}
+          {isMobile && (
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
+          )}
+          <div className={`border-b bg-orange-50 ${isMobile ? 'p-4' : 'p-3'}`}>
+            <div className="flex items-center justify-between">
+              <h3 className={`font-bold text-orange-700 ${isMobile ? 'text-lg' : ''}`}>
+                🏷️ 파트태그
+              </h3>
+              <button
+                onClick={() => setShowPartTagPanel(false)}
+                className={`text-gray-500 hover:text-gray-700 ${isMobile ? 'p-2 -m-2' : ''}`}
+              >
+                ✕
+              </button>
             </div>
           </div>
 
@@ -4024,68 +4226,106 @@ export default function SheetMusicEditor({
         </div>
       )}
 
-      {/* 내보내기 모달 (모바일: 바닥 시트 스타일) */}
+      {/* 다운로드 설정 모달 */}
       {showExportModal && (
-        <div className={`fixed inset-0 bg-black/30 z-50 ${isMobile ? 'flex items-end' : 'flex items-center justify-center'}`}>
-          <div className={`bg-white shadow-xl overflow-hidden border border-gray-200 ${
-            isMobile
-              ? 'w-full rounded-t-2xl'
-              : 'rounded-xl max-w-md w-full mx-4'
-          }`}>
-            {/* 모바일 드래그 핸들 */}
-            {isMobile && (
-              <div className="flex justify-center pt-2 pb-1">
-                <div className="w-10 h-1 bg-gray-300 rounded-full" />
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* 제목 */}
+              <h2 className="text-xl font-bold text-gray-900 mb-6">다운로드 설정</h2>
+
+              {/* 파일명 */}
+              <div className="mb-5">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  📁 파일명
+                </label>
+                <input
+                  type="text"
+                  value={exportFileName}
+                  onChange={(e) => setExportFileName(e.target.value)}
+                  placeholder={effectiveSongName || '악보'}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">확장자(.pdf, .jpg 등)는 자동으로 추가됩니다</p>
               </div>
-            )}
-            <div className={`border-b bg-gray-50 ${isMobile ? 'p-5' : 'p-4'}`}>
-              <h3 className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-lg'}`}>내보내기</h3>
-              <p className={`text-gray-500 mt-1 ${isMobile ? 'text-base' : 'text-sm'}`}>필기가 포함된 악보를 저장하세요</p>
-            </div>
 
-            <div className={`space-y-3 ${isMobile ? 'p-5' : 'p-4'}`}>
-              <p className={`text-gray-600 mb-4 ${isMobile ? 'text-base' : 'text-sm'}`}>
-                현재 페이지의 악보와 필기를 함께 내보냅니다.
-                {effectiveSongForms.length > 0 && showSongFormPanel && (
-                  <span className="block mt-1 text-purple-600">
-                    * 송폼 & 파트 태그도 함께 포함됩니다.
-                  </span>
-                )}
-              </p>
+              {/* 다운로드 옵션 */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">다운로드 옵션</h3>
 
-              <button
-                onClick={() => handleExport('image')}
-                className={`w-full bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg flex items-center gap-3 transition-all ${
-                  isMobile ? 'p-5' : 'p-4'
-                }`}
-              >
-                <span className={isMobile ? 'text-3xl' : 'text-2xl'}>🖼️</span>
-                <div className="text-left">
-                  <div className={`font-semibold ${isMobile ? 'text-lg' : ''}`}>이미지로 저장 (PNG)</div>
-                  <div className={`text-blue-500 ${isMobile ? 'text-base' : 'text-sm'}`}>고화질 이미지로 저장합니다</div>
-                </div>
-              </button>
+                <label className="flex items-start gap-3 cursor-pointer mb-4">
+                  <div
+                    onClick={() => setExportOptions(prev => ({ ...prev, includeCover: !prev.includeCover }))}
+                    className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
+                      exportOptions.includeCover
+                        ? 'bg-blue-500 border-blue-500'
+                        : 'bg-white border-gray-300'
+                    }`}
+                  >
+                    {exportOptions.includeCover && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-base text-gray-800">📄 표지 포함</span>
+                    <p className="text-sm text-gray-500">곡 제목이 포함된 표지</p>
+                  </div>
+                </label>
 
-              <button
-                onClick={() => handleExport('pdf')}
-                className={`w-full bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center gap-3 transition-all ${
-                  isMobile ? 'p-5' : 'p-4'
-                }`}
-              >
-                <span className={isMobile ? 'text-3xl' : 'text-2xl'}>📄</span>
-                <div className="text-left">
-                  <div className={`font-semibold ${isMobile ? 'text-lg' : ''}`}>PDF로 저장</div>
-                  <div className={`text-red-500 ${isMobile ? 'text-base' : 'text-sm'}`}>인쇄용 PDF 문서로 저장합니다</div>
-                </div>
-              </button>
-            </div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <div
+                    onClick={() => setExportOptions(prev => ({ ...prev, includeSongForms: !prev.includeSongForms }))}
+                    className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
+                      exportOptions.includeSongForms
+                        ? 'bg-blue-500 border-blue-500'
+                        : 'bg-white border-gray-300'
+                    }`}
+                  >
+                    {exportOptions.includeSongForms && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-base text-gray-800">🎵 송폼 표시</span>
+                    <p className="text-sm text-gray-500">악보에 송폼(V1-C-B 등) 오버레이</p>
+                  </div>
+                </label>
+              </div>
 
-            <div className={`bg-gray-50 border-t flex justify-end ${isMobile ? 'p-5 pb-8' : 'p-4'}`}>
+              {/* 다운로드 형식 */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">다운로드 형식</h3>
+
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="w-full border-2 border-blue-400 rounded-xl p-4 mb-3 text-left hover:bg-blue-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 font-semibold text-gray-800">
+                    📄 PDF 파일
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">모든 곡을 하나의 PDF 문서로 통합</p>
+                </button>
+
+                <button
+                  onClick={() => handleExport('image')}
+                  className="w-full border-2 border-green-500 rounded-xl p-4 text-left hover:bg-green-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 font-semibold text-gray-800">
+                    🖼️ 사진파일 (JPG/PNG)
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">각 곡을 개별 이미지 파일로 다운로드</p>
+                  <p className="text-xs text-gray-400 mt-1">※ PDF 악보는 JPG로 변환됩니다</p>
+                </button>
+              </div>
+
+              {/* 취소 버튼 */}
               <button
                 onClick={() => setShowExportModal(false)}
-                className={`text-gray-600 hover:bg-gray-200 rounded-lg transition-colors ${
-                  isMobile ? 'px-6 py-3 text-lg' : 'px-4 py-2'
-                }`}
+                className="w-full bg-gray-200 text-gray-700 rounded-xl py-3 font-medium hover:bg-gray-300 transition-colors"
               >
                 취소
               </button>
