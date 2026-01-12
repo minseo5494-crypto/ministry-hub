@@ -2022,7 +2022,7 @@ const hasMore = displayCount < filteredSongs.length
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-          className="hidden sm:block px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          className="hidden sm:block w-[88px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
         >
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
@@ -2090,7 +2090,7 @@ const hasMore = displayCount < filteredSongs.length
       <select
         value={sortBy}
         onChange={(e) => setSortBy(e.target.value as 'recent' | 'likes' | 'name')}
-        className="h-8 px-2.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
+        className="h-8 w-[76px] px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
       >
         <option value="recent">최신순</option>
         <option value="likes">좋아요순</option>
