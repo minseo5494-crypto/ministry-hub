@@ -87,9 +87,7 @@ export default function SheetMusicEditor({
   const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
   // ===== 보기 모드 전용: 툴바 숨기기 =====
-  // 보기 모드로 시작하면 상단바 숨긴 상태로 시작 (터치하면 표시)
-  const [hideToolbar, setHideToolbar] = useState(initialMode === 'view')
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [hideToolbar, setHideToolbar] = useState(false)
 
   // ===== 전체 화면 토글 =====
   const toggleFullscreen = useCallback(async () => {
@@ -102,7 +100,6 @@ export default function SheetMusicEditor({
         } else if ((elem as any).webkitRequestFullscreen) {
           await (elem as any).webkitRequestFullscreen()
         }
-        setIsFullscreen(true)
         setHideToolbar(true)
       } else {
         // 전체 화면 해제
@@ -111,7 +108,6 @@ export default function SheetMusicEditor({
         } else if ((document as any).webkitExitFullscreen) {
           await (document as any).webkitExitFullscreen()
         }
-        setIsFullscreen(false)
         setHideToolbar(false)
       }
     } catch (err) {
@@ -124,7 +120,6 @@ export default function SheetMusicEditor({
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
-      setIsFullscreen(isFs)
       if (!isFs) {
         setHideToolbar(false)
       }
@@ -2854,20 +2849,6 @@ export default function SheetMusicEditor({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* 전체화면 모드에서 닫기 버튼 (항상 표시) */}
-      {isViewMode && hideToolbar && (
-        <button
-          onClick={onClose}
-          className="fixed top-4 right-4 z-[60] p-3"
-          style={{ touchAction: 'manipulation' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}>
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      )}
-
       {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
       {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
       <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'p-1.5' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>

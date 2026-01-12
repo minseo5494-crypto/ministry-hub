@@ -257,12 +257,12 @@ function SortableSongItem({
               {isPreviewOpen ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
-          {/* 악보보기 버튼 */}
+          {/* 악보 에디터 버튼 */}
           {song.songs.file_url && (
             <button
               onClick={() => onOpenSheetViewer(song)}
               className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-              title="악보 보기/필기 모드"
+              title="악보 에디터"
             >
               <Presentation size={18} />
             </button>
@@ -400,7 +400,7 @@ export default function TeamSetlistDetailPage() {
   // PPT 다운로드 상태 (자체 PPT 생성 함수용)
   const [downloadingPPT, setDownloadingPPT] = useState(false)
 
-  // 🎵 SheetMusicEditor 상태 (다중 곡 악보 뷰어)
+  // 🎵 SheetMusicEditor 상태 (다중 곡 악보 에디터)
   const [showSheetMusicEditor, setShowSheetMusicEditor] = useState(false)
   const [sheetEditorSongs, setSheetEditorSongs] = useState<{
     song_id: string
@@ -1117,7 +1117,7 @@ const removeSongForm = (index: number) => {
 
   
 
-  // 🎵 악보 뷰어 열기 (SheetMusicEditor 사용)
+  // 🎵 악보 에디터 열기 (SheetMusicEditor 사용)
   const openSheetViewerForSong = (setlistSong: SetlistSong) => {
     console.log('🎵 악보보기 모드 열기:', setlistSong.songs.song_name)
 
@@ -1174,7 +1174,7 @@ const removeSongForm = (index: number) => {
     setShowSheetMusicEditor(true)
   }
 
-  // 🎵 악보 뷰어 닫기
+  // 🎵 악보 에디터 닫기
   const closeSheetMusicEditor = () => {
     if (sheetEditorSongs.length > 0) {
       if (!confirm('필기 내용이 저장되지 않을 수 있습니다. 정말 닫으시겠습니까?')) {
@@ -1185,7 +1185,7 @@ const removeSongForm = (index: number) => {
     setSheetEditorSongs([])
   }
 
-  // 📝 악보 뷰어에서 저장 핸들러 (다중 곡 모드)
+  // 📝 악보 에디터에서 저장 핸들러 (다중 곡 모드)
   const handleSaveSheetNotes = async (dataList: Array<{
     song: EditorSong
     annotations: any[]
@@ -1748,7 +1748,7 @@ const saveNote = async () => {
   </div>
 )}
 
-      {/* 🎵 SheetMusicEditor - 다중 곡 악보 뷰어/편집기 */}
+      {/* 🎵 SheetMusicEditor - 다중 곡 악보 에디터 */}
       {showSheetMusicEditor && sheetEditorSongs.length > 0 && (
         <SheetMusicEditor
           fileUrl=""

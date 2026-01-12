@@ -28,6 +28,7 @@ import ImagePreviewModal from '@/components/ImagePreviewModal'
 import FilterPanel from '@/components/FilterPanel'  // ← 이 줄 추가
 import SongFormModal from '@/components/SongFormModal'  // ← 이 줄 추가
 import SheetMusicEditor from '@/components/SheetMusicEditor'
+import SheetMusicViewer from '@/components/SheetMusicViewer'
 import ResponsiveImage from '@/components/ResponsiveImage'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 
@@ -149,7 +150,7 @@ const {
   // 📝 내 필기 노트 검색 결과
   const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])
 
-  // 📝 다중 곡 악보 뷰어 상태
+  // 📝 다중 곡 악보 에디터 상태
   const [multiSongEditorSongs, setMultiSongEditorSongs] = useState<{
     song_id: string
     song_name: string
@@ -159,6 +160,9 @@ const {
     songForms?: string[]
   }[]>([])
   const [showMultiSongEditor, setShowMultiSongEditor] = useState(false)
+
+  // 📷 간단 악보 뷰어 상태 (미리보기 더블탭용)
+  const [simpleViewerSong, setSimpleViewerSong] = useState<Song | null>(null)
 
   // 가사 입력 모달 상태
   const [showLyricsModal, setShowLyricsModal] = useState(false)
@@ -1249,7 +1253,7 @@ const hasMore = displayCount < filteredSongs.length
     setSelectedSongs(newSelected)
   }
 
-  // 📝 악보 뷰어 열기 (단일 곡 또는 선택된 여러 곡)
+  // 📝 악보 에디터 열기 (단일 곡 또는 선택된 여러 곡)
   const openSheetViewer = (clickedSong: Song) => {
     // 선택된 곡이 2개 이상이고, 클릭한 곡이 선택 목록에 있으면 다중 곡 모드
     const isClickedSongSelected = selectedSongs.some(s => s.id === clickedSong.id)
@@ -1280,14 +1284,20 @@ const hasMore = displayCount < filteredSongs.length
     }
   }
 
+  // 📷 간단 악보 뷰어 열기 (미리보기 더블탭용)
+  const openSimpleViewer = (song: Song) => {
+    if (!song.file_url) return
+    setSimpleViewerSong(song)
+  }
+
   // 📱 더블탭 핸들러 (터치 디바이스 지원)
   const handleDoubleTap = (song: Song) => {
     const now = Date.now()
     const DOUBLE_TAP_DELAY = 300 // 300ms 이내 두 번 탭
 
     if (lastTapSongIdRef.current === song.id && now - lastTapTimeRef.current < DOUBLE_TAP_DELAY) {
-      // 더블탭 감지 - 악보 뷰어 열기
-      openSheetViewer(song)
+      // 더블탭 감지 - 간단 악보 뷰어 열기
+      openSimpleViewer(song)
       lastTapTimeRef.current = 0
       lastTapSongIdRef.current = null
     } else {
@@ -1297,7 +1307,7 @@ const hasMore = displayCount < filteredSongs.length
     }
   }
 
-  // 📝 다중 곡 악보 뷰어 저장 핸들러
+  // 📝 다중 곡 악보 에디터 저장 핸들러
   const handleSaveMultiSongNotes = async (data: { song: EditorSong, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: SongFormStyle, partTags: PartTagStyle[], pianoScores?: PianoScoreElement[], drumScores?: DrumScoreElement[] } }[]) => {
     if (!user) {
       alert('로그인이 필요합니다.')
@@ -1339,7 +1349,7 @@ const hasMore = displayCount < filteredSongs.length
     }
   }
 
-  // 📝 다중 곡 악보 뷰어 닫기 핸들러
+  // 📝 다중 곡 악보 에디터 닫기 핸들러
   const handleCloseMultiSongEditor = () => {
     if (multiSongEditorSongs.length > 0) {
       if (!confirm('필기 내용이 저장되지 않습니다. 정말 닫으시겠습니까?')) {
@@ -2311,7 +2321,7 @@ const hasMore = displayCount < filteredSongs.length
                 className="mt-2 rounded cursor-pointer"
                 onDoubleClick={(e) => {
                   e.stopPropagation()
-                  openSheetViewer(song)
+                  openSimpleViewer(song)
                 }}
                 onTouchEnd={(e) => {
                   e.stopPropagation()
@@ -2473,7 +2483,7 @@ const hasMore = displayCount < filteredSongs.length
             </button>
           )}
 
-          {/* 📝 악보 뷰어 (보기 + 필기 통합) */}
+          {/* 📝 악보 에디터 (보기 + 필기 통합) */}
           {song.file_url && (
             <button
               onClick={(e) => {
@@ -2481,7 +2491,7 @@ const hasMore = displayCount < filteredSongs.length
                 openSheetViewer(song)
               }}
               className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-              title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 뷰어` : '악보 보기/필기 모드'}
+              title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 에디터` : '악보 에디터'}
             >
               <Presentation size={18} />
             </button>
@@ -2594,7 +2604,7 @@ const hasMore = displayCount < filteredSongs.length
                   className="relative w-full h-[80vh] sm:h-[600px] cursor-pointer"
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    openSheetViewer(song)
+                    openSimpleViewer(song)
                   }}
                   onTouchEnd={(e) => {
                     e.stopPropagation()
@@ -2615,7 +2625,7 @@ const hasMore = displayCount < filteredSongs.length
                   className="rounded shadow-sm cursor-pointer"
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    openSheetViewer(song)
+                    openSimpleViewer(song)
                   }}
                   onTouchEnd={(e) => {
                     e.stopPropagation()
@@ -3550,14 +3560,23 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
   />
 )}
 
-{/* 📝 악보 보기 & 필기 에디터 (통합) */}
+{/* 📷 간단 악보 뷰어 (미리보기 더블탭용) */}
+{simpleViewerSong && simpleViewerSong.file_url && (
+  <SheetMusicViewer
+    fileUrl={simpleViewerSong.file_url}
+    fileType={simpleViewerSong.file_type === 'pdf' ? 'pdf' : 'image'}
+    songName={simpleViewerSong.song_name}
+    onClose={() => setSimpleViewerSong(null)}
+  />
+)}
+
+{/* 📝 악보 에디터 (보기/필기 통합) */}
 {showNoteEditor && editingSong && editingSong.file_url && (
   <SheetMusicEditor
     fileUrl={editingSong.file_url}
     fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
     songName={editingSong.song_name}
     songForms={songForms[editingSong.id]}
-    initialMode="view"
     onSave={async (annotations, extra) => {
       if (!user) {
         alert('로그인이 필요합니다.')
@@ -3595,7 +3614,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
   />
 )}
 
-{/* 📝 다중 곡 악보 뷰어 (선택된 곡들) */}
+{/* 📝 다중 곡 악보 에디터 (선택된 곡들) */}
 {showMultiSongEditor && multiSongEditorSongs.length > 0 && (
   <SheetMusicEditor
     fileUrl=""
