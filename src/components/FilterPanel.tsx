@@ -186,7 +186,7 @@ export default function FilterPanel({
             <button
               key={key}
               onClick={() => onFilterChange('key', filters.key === key ? '' : key)}
-              className={`px-3 py-2 rounded text-sm font-medium transition ${
+              className={`py-2 rounded text-sm font-medium transition text-center ${
                 filters.key === key
                   ? 'bg-[#C5D7F2] text-white'
                   : 'bg-gray-100 hover:bg-gray-200'
