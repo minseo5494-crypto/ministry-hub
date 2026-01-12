@@ -40,6 +40,7 @@ export default function SheetMusicViewer({
   const lastTapTime = useRef<number>(0)
   const lastTapX = useRef<number>(0)
   const lastTapY = useRef<number>(0)
+  const touchTapHandled = useRef<boolean>(false) // 터치 탭 처리 후 클릭 이벤트 방지
 
   // 화면에 맞추기 (패딩 없이 꽉 채움)
   const fitToScreen = useCallback((cWidth: number, cHeight: number) => {
@@ -266,6 +267,9 @@ export default function SheetMusicViewer({
             const leftZone = containerWidth * 0.25
             const rightZone = containerWidth * 0.75
 
+            // 터치 탭 처리 플래그 설정 (onClick 중복 방지)
+            touchTapHandled.current = true
+
             if (tapX < leftZone && currentPage > 1) {
               setCurrentPage(p => p - 1)
             } else if (tapX > rightZone && currentPage < totalPages) {
@@ -283,6 +287,12 @@ export default function SheetMusicViewer({
 
   // 마우스 클릭 (데스크톱)
   const handleClick = useCallback((e: React.MouseEvent) => {
+    // 터치로 이미 처리된 경우 무시
+    if (touchTapHandled.current) {
+      touchTapHandled.current = false
+      return
+    }
+
     const container = containerRef.current
     if (!container) return
 
