@@ -183,7 +183,7 @@ export function usePersonalSetlistView(): UsePersonalSetlistViewReturn {
         // 새로 생성
         savedView = {
           ...viewData,
-          id: `view-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `view-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
           created_at: now,
           updated_at: now,
         }

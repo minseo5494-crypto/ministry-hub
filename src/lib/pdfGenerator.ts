@@ -539,8 +539,9 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
             }
           }
         }
-      } catch {
-        // 개별 곡 처리 실패 시 건너뜀
+      } catch (songError) {
+        // 개별 곡 처리 실패 시 로그 후 건너뜀
+        console.warn(`PDF 생성 중 곡 처리 실패 (${song.song_name}):`, songError)
       }
     }
 
@@ -690,8 +691,9 @@ export const generatePDFFromCanvas = async (options: {
           // 각 페이지 처리 후 UI 업데이트 시간 확보
           await new Promise(resolve => setTimeout(resolve, 30))
         }
-      } catch {
-        // 개별 곡 처리 실패 시 건너뜀
+      } catch (songError) {
+        // 개별 곡 처리 실패 시 로그 후 건너뜀
+        console.warn(`WYSIWYG PDF 생성 중 곡 처리 실패 (${song.song_name}):`, songError)
       }
     }
 

@@ -37,7 +37,7 @@ export function useSongSearch() {
   const fetchSongs = async (userId?: string, userTeamIds?: string[]) => {
     setLoading(true)
     try {
-      let allData: any[] = []
+      let allData: Song[] = []
       let from = 0
       const pageSize = 1000
 

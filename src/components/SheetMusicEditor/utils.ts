@@ -110,5 +110,5 @@ export const clamp = (value: number, min: number, max: number): number => {
  * UUID 생성 (간단한 버전)
  */
 export const generateId = (): string => {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 }
