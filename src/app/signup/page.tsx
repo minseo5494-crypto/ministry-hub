@@ -18,11 +18,19 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [agreeTerms, setAgreeTerms] = useState(false)
+  const [agreeCopyright, setAgreeCopyright] = useState(false)
 
   // 이메일/비밀번호 회원가입
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // 약관 동의 검사
+    if (!agreeTerms || !agreeCopyright) {
+      setError('약관에 동의해주세요.')
+      return
+    }
 
     // 유효성 검사
     if (formData.password !== formData.confirmPassword) {
@@ -43,8 +51,13 @@ export default function SignupPage() {
       router.push('/login?message=회원가입이 완료되었습니다. 로그인해주세요.')
     } catch (err: any) {
       console.error('Signup error:', err)
-      if (err.message?.includes('already registered')) {
-        setError('이미 등록된 이메일입니다.')
+      const errorMsg = err.message || ''
+      if (errorMsg.includes('already registered') || errorMsg.includes('Already registered')) {
+        setError('이미 등록된 이메일입니다. 로그인 페이지에서 로그인해주세요.')
+      } else if (errorMsg.includes('Invalid email')) {
+        setError('올바른 이메일 형식이 아닙니다.')
+      } else if (errorMsg.includes('Password')) {
+        setError('비밀번호가 조건에 맞지 않습니다.')
       } else {
         setError(err.message || '회원가입에 실패했습니다.')
       }
@@ -227,23 +240,49 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <div className="text-xs text-gray-600 space-y-2">
-            <label className="flex items-start">
-              <input type="checkbox" required className="mt-0.5 mr-2" />
+          <div className="text-xs text-gray-600 space-y-3">
+            <div
+              className="flex items-start cursor-pointer"
+              onClick={() => setAgreeTerms(!agreeTerms)}
+            >
+              <div
+                className={`w-5 h-5 mt-0.5 mr-2 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                  agreeTerms ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                }`}
+              >
+                {agreeTerms && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
               <span>
-                <Link href="/terms" className="text-blue-600 hover:text-blue-700">이용약관</Link>
+                <Link href="/terms" className="text-blue-600 hover:text-blue-700" onClick={(e) => e.stopPropagation()}>이용약관</Link>
                 {' '}및{' '}
-                <Link href="/privacy" className="text-blue-600 hover:text-blue-700">개인정보처리방침</Link>
+                <Link href="/privacy" className="text-blue-600 hover:text-blue-700" onClick={(e) => e.stopPropagation()}>개인정보처리방침</Link>
                 에 동의합니다. <span className="text-red-500">*</span>
               </span>
-            </label>
-            <label className="flex items-start">
-              <input type="checkbox" required className="mt-0.5 mr-2" />
+            </div>
+            <div
+              className="flex items-start cursor-pointer"
+              onClick={() => setAgreeCopyright(!agreeCopyright)}
+            >
+              <div
+                className={`w-5 h-5 mt-0.5 mr-2 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                  agreeCopyright ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                }`}
+              >
+                {agreeCopyright && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
               <span>
-                <Link href="/copyright" className="text-blue-600 hover:text-blue-700">저작권 정책</Link>
+                <Link href="/copyright" className="text-blue-600 hover:text-blue-700" onClick={(e) => e.stopPropagation()}>저작권 정책</Link>
                 을 읽었으며, 악보 업로드 시 저작권 관련 책임이 업로더에게 있음에 동의합니다. <span className="text-red-500">*</span>
               </span>
-            </label>
+            </div>
           </div>
 
           <button

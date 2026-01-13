@@ -20,22 +20,19 @@ export const signUp = async (email: string, password: string, name: string, chur
 
   if (error) throw error;
 
-  // users 테이블에 사용자 정보 저장
+  // users 테이블에 사용자 정보 저장 (트리거가 기본 정보를 이미 넣었으므로 UPDATE)
   if (data.user) {
-    const { error: insertError } = await supabase
+    const { error: updateError } = await supabase
       .from('users')
-      .insert({
-        id: data.user.id,
-        email: data.user.email,
-        name: name,
+      .update({
         church_name: churchName || null,
         auth_provider: 'email',
-        email_verified: false,
-        created_at: new Date().toISOString()
-      });
+        email_verified: false
+      })
+      .eq('id', data.user.id);
 
-    if (insertError) {
-      console.error('Error inserting user:', insertError);
+    if (updateError) {
+      console.error('Error updating user:', updateError);
     }
     
     // 📊 회원가입 로깅
