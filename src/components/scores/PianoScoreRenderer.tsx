@@ -247,24 +247,53 @@ function renderBeams(notes: PianoNote[], scoreWidth: number): React.ReactNode {
     const hasEighth = notesInGroup.some(n => (n.note.duration || 4) >= 8)
     const hasSixteenth = notesInGroup.some(n => (n.note.duration || 4) >= 16)
 
+    // 점8분음표 + 16분음표 패턴 감지 (부분 빔 필요)
+    const isDottedEighthPattern = notesInGroup.length === 2 &&
+      ((firstNote.duration === 8 && firstNote.dotted && lastNote.duration === 16) ||
+       (lastNote.duration === 8 && lastNote.dotted && firstNote.duration === 16))
+
+    const stemX1 = stemUp ? firstX + 4 : firstX - 4
+    const stemX2 = stemUp ? lastX + 4 : lastX - 4
+
     return (
       <g key={`beam-${groupId}`}>
+        {/* 메인 빔 (8분음표 빔) */}
         {hasEighth && (
           <line
-            x1={stemUp ? firstX + 4 : firstX - 4}
+            x1={stemX1}
             y1={firstBeamY}
-            x2={stemUp ? lastX + 4 : lastX - 4}
+            x2={stemX2}
             y2={lastBeamY}
             stroke="#000"
             strokeWidth="3"
           />
         )}
-        {hasSixteenth && (
+        {/* 16분음표 빔 - 점8분음표 패턴이면 부분 빔만 */}
+        {hasSixteenth && !isDottedEighthPattern && (
           <line
-            x1={stemUp ? firstX + 4 : firstX - 4}
+            x1={stemX1}
             y1={stemUp ? firstBeamY + 4 : firstBeamY - 4}
-            x2={stemUp ? lastX + 4 : lastX - 4}
+            x2={stemX2}
             y2={stemUp ? lastBeamY + 4 : lastBeamY - 4}
+            stroke="#000"
+            strokeWidth="3"
+          />
+        )}
+        {/* 점8분음표 + 16분음표: 16분음표 쪽에만 부분 빔 */}
+        {isDottedEighthPattern && (
+          <line
+            x1={firstNote.duration === 16
+              ? stemX1
+              : stemX2 - (stemX2 - stemX1) * 0.4}
+            y1={firstNote.duration === 16
+              ? (stemUp ? firstBeamY + 4 : firstBeamY - 4)
+              : (stemUp ? lastBeamY + 4 - (lastBeamY - firstBeamY) * 0.4 : lastBeamY - 4 - (lastBeamY - firstBeamY) * 0.4)}
+            x2={lastNote.duration === 16
+              ? stemX2
+              : stemX1 + (stemX2 - stemX1) * 0.4}
+            y2={lastNote.duration === 16
+              ? (stemUp ? lastBeamY + 4 : lastBeamY - 4)
+              : (stemUp ? firstBeamY + 4 + (lastBeamY - firstBeamY) * 0.4 : firstBeamY - 4 + (lastBeamY - firstBeamY) * 0.4)}
             stroke="#000"
             strokeWidth="3"
           />
@@ -366,12 +395,20 @@ function renderNotes(notes: PianoNote[], scoreWidth: number): React.ReactNode {
             : note.pitch === 'B3' ? 77
             : note.pitch === 'A3' ? 82 : y
 
+          // 점음표의 점 위치 계산 (선 위에 있으면 살짝 위로)
+          const isOnLine = ['A5', 'F5', 'D5', 'B4', 'G4', 'E4', 'C4', 'A3'].includes(note.pitch)
+          const dotY = isOnLine ? y - 2.5 : y
+
           return (
             <g key={idx}>
               {needsLedgerLine && (
                 <line x1={noteX - 8} y1={ledgerLineY} x2={noteX + 8} y2={ledgerLineY} stroke="#333" strokeWidth="0.8" />
               )}
               <ellipse cx={noteX} cy={y} rx="5" ry="3.5" fill={isFilled ? '#000' : 'none'} stroke="#000" strokeWidth="1" />
+              {/* 점음표 점 */}
+              {note.dotted && (
+                <circle cx={noteX + 8} cy={dotY} r="1.5" fill="#000" />
+              )}
             </g>
           )
         })}
@@ -388,12 +425,12 @@ function renderNotes(notes: PianoNote[], scoreWidth: number): React.ReactNode {
           />
         )}
 
-        {/* 깃발 */}
+        {/* 깃발 - 항상 오른쪽으로 */}
         {showFlag && (
           <path
             d={stemUp
               ? `M${stemX},${highestY - stemLength} Q${stemX + 8},${highestY - stemLength + 6} ${stemX + 3},${highestY - stemLength + 12}`
-              : `M${stemX},${lowestY + stemLength} Q${stemX - 8},${lowestY + stemLength - 6} ${stemX - 3},${lowestY + stemLength - 12}`}
+              : `M${stemX},${lowestY + stemLength} Q${stemX + 8},${lowestY + stemLength - 6} ${stemX + 3},${lowestY + stemLength - 12}`}
             stroke="#000"
             strokeWidth="1.5"
             fill="none"
@@ -403,7 +440,7 @@ function renderNotes(notes: PianoNote[], scoreWidth: number): React.ReactNode {
           <path
             d={stemUp
               ? `M${stemX},${highestY - stemLength + 5} Q${stemX + 8},${highestY - stemLength + 11} ${stemX + 3},${highestY - stemLength + 17}`
-              : `M${stemX},${lowestY + stemLength - 5} Q${stemX - 8},${lowestY + stemLength - 11} ${stemX - 3},${lowestY + stemLength - 17}`}
+              : `M${stemX},${lowestY + stemLength - 5} Q${stemX + 8},${lowestY + stemLength - 11} ${stemX + 3},${lowestY + stemLength - 17}`}
             stroke="#000"
             strokeWidth="1.5"
             fill="none"

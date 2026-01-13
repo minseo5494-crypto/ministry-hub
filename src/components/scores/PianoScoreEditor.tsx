@@ -525,6 +525,26 @@ export default function PianoScoreEditor({
                   <button onClick={() => setSelectedNotesForBeam([])} className="text-xs text-gray-500 hover:text-gray-700">선택 해제</button>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  {/* 점음표 토글 버튼 */}
+                  <button
+                    onClick={() => {
+                      setEditingState(prev => {
+                        if (!prev) return prev
+                        const newNotes = prev.notes.map((note, idx) =>
+                          selectedNotesForBeam.includes(idx) ? { ...note, dotted: !note.dotted } : note
+                        )
+                        saveHistory(newNotes, prev.chords)
+                        return { ...prev, notes: newNotes }
+                      })
+                    }}
+                    className={`px-3 py-1.5 text-sm rounded ${
+                      selectedNotesForBeam.some(idx => editingState.notes[idx]?.dotted)
+                        ? 'bg-purple-500 text-white hover:bg-purple-600'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    }`}
+                  >
+                    점 {selectedNotesForBeam.some(idx => editingState.notes[idx]?.dotted) ? '제거' : '추가'}
+                  </button>
                   {selectedNotesForBeam.length >= 2 && (
                     <button
                       onClick={() => {
@@ -834,13 +854,42 @@ function EditorBeams({ notes, measureWidths }: { notes: PianoNote[], measureWidt
         const hasEighth = notesInGroup.some(n => (n.note.duration || 4) >= 8)
         const hasSixteenth = notesInGroup.some(n => (n.note.duration || 4) >= 16)
 
+        // 점8분음표 + 16분음표 패턴 감지
+        const isDottedEighthPattern = notesInGroup.length === 2 &&
+          ((firstNote.duration === 8 && firstNote.dotted && lastNote.duration === 16) ||
+           (lastNote.duration === 8 && lastNote.dotted && firstNote.duration === 16))
+
+        const stemX1 = stemUp ? firstX + 6 : firstX - 6
+        const stemX2 = stemUp ? lastX + 6 : lastX - 6
+
         return (
           <g key={`beam-${groupId}`}>
+            {/* 메인 빔 (8분음표 빔) */}
             {hasEighth && (
-              <line x1={stemUp ? firstX + 6 : firstX - 6} y1={firstBeamY} x2={stemUp ? lastX + 6 : lastX - 6} y2={lastBeamY} stroke="#000" strokeWidth="4" />
+              <line x1={stemX1} y1={firstBeamY} x2={stemX2} y2={lastBeamY} stroke="#1d4ed8" strokeWidth="4" />
             )}
-            {hasSixteenth && (
-              <line x1={stemUp ? firstX + 6 : firstX - 6} y1={stemUp ? firstBeamY + 6 : firstBeamY - 6} x2={stemUp ? lastX + 6 : lastX - 6} y2={stemUp ? lastBeamY + 6 : lastBeamY - 6} stroke="#000" strokeWidth="4" />
+            {/* 16분음표 빔 - 점8분음표 패턴이면 부분 빔만 */}
+            {hasSixteenth && !isDottedEighthPattern && (
+              <line x1={stemX1} y1={stemUp ? firstBeamY + 6 : firstBeamY - 6} x2={stemX2} y2={stemUp ? lastBeamY + 6 : lastBeamY - 6} stroke="#1d4ed8" strokeWidth="4" />
+            )}
+            {/* 점8분음표 + 16분음표: 16분음표 쪽에만 부분 빔 */}
+            {isDottedEighthPattern && (
+              <line
+                x1={firstNote.duration === 16
+                  ? stemX1
+                  : stemX2 - (stemX2 - stemX1) * 0.4}
+                y1={firstNote.duration === 16
+                  ? (stemUp ? firstBeamY + 6 : firstBeamY - 6)
+                  : (stemUp ? lastBeamY + 6 - (lastBeamY - firstBeamY) * 0.4 : lastBeamY - 6 - (lastBeamY - firstBeamY) * 0.4)}
+                x2={lastNote.duration === 16
+                  ? stemX2
+                  : stemX1 + (stemX2 - stemX1) * 0.4}
+                y2={lastNote.duration === 16
+                  ? (stemUp ? lastBeamY + 6 : lastBeamY - 6)
+                  : (stemUp ? firstBeamY + 6 + (lastBeamY - firstBeamY) * 0.4 : firstBeamY - 6 + (lastBeamY - firstBeamY) * 0.4)}
+                stroke="#1d4ed8"
+                strokeWidth="4"
+              />
             )}
           </g>
         )
@@ -936,11 +985,19 @@ function EditorNotes({
               const isSelected = selectedNotesForBeam.includes(idx)
               const noteIsBeamed = !!note.beamGroup
 
+              // 점음표의 점 위치 계산 (선 위에 있으면 살짝 위로)
+              const isOnLine = ['A5', 'F5', 'D5', 'B4', 'G4', 'E4', 'C4', 'A3'].includes(note.pitch)
+              const dotY = isOnLine ? y - 3.5 : y
+
               return (
                 <g key={idx} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onNoteClick(idx) }}>
                   {isSelected && <circle cx={noteX} cy={y} r="12" fill="rgba(59, 130, 246, 0.3)" stroke="#3b82f6" strokeWidth="2" />}
                   {needsLedgerLine && <line x1={noteX - 15} y1={y} x2={noteX + 15} y2={y} stroke="#333" strokeWidth="1" />}
                   <ellipse cx={noteX} cy={y} rx="7" ry="5" fill={isFilled ? (noteIsBeamed ? '#1d4ed8' : '#000') : 'none'} stroke={noteIsBeamed ? '#1d4ed8' : '#000'} strokeWidth="1.5" />
+                  {/* 점음표 점 */}
+                  {note.dotted && (
+                    <circle cx={noteX + 11} cy={dotY} r="2" fill={noteIsBeamed ? '#1d4ed8' : '#000'} />
+                  )}
                 </g>
               )
             })}
@@ -949,11 +1006,12 @@ function EditorNotes({
               <line x1={stemX} y1={stemUp ? lowestY : highestY} x2={stemX} y2={stemUp ? highestY - stemLength : lowestY + stemLength} stroke={isBeamed ? '#1d4ed8' : '#000'} strokeWidth="1.5" />
             )}
 
+            {/* 깃발 - 항상 오른쪽으로 */}
             {showFlag && (
               <path
                 d={stemUp
                   ? `M${stemX},${highestY - stemLength} Q${stemX + 12},${highestY - stemLength + 10} ${stemX + 4},${highestY - stemLength + 18}`
-                  : `M${stemX},${lowestY + stemLength} Q${stemX - 12},${lowestY + stemLength - 10} ${stemX - 4},${lowestY + stemLength - 18}`}
+                  : `M${stemX},${lowestY + stemLength} Q${stemX + 12},${lowestY + stemLength - 10} ${stemX + 4},${lowestY + stemLength - 18}`}
                 stroke="#000"
                 strokeWidth="2"
                 fill="none"
@@ -963,7 +1021,7 @@ function EditorNotes({
               <path
                 d={stemUp
                   ? `M${stemX},${highestY - stemLength + 8} Q${stemX + 12},${highestY - stemLength + 18} ${stemX + 4},${highestY - stemLength + 26}`
-                  : `M${stemX},${lowestY + stemLength - 8} Q${stemX - 12},${lowestY + stemLength - 18} ${stemX - 4},${lowestY + stemLength - 26}`}
+                  : `M${stemX},${lowestY + stemLength - 8} Q${stemX + 12},${lowestY + stemLength - 18} ${stemX + 4},${lowestY + stemLength - 26}`}
                 stroke="#000"
                 strokeWidth="2"
                 fill="none"

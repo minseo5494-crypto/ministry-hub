@@ -30,6 +30,7 @@ export interface PianoNote {
   position: number    // 마디 내 위치 (0부터 시작)
   duration?: 1 | 2 | 4 | 8 | 16  // 음표 길이
   beamGroup?: string  // 잇단음표 그룹 ID
+  dotted?: boolean    // 점음표 여부
 }
 
 // 피아노 코드 타입
