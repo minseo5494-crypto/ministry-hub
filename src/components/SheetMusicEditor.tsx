@@ -3320,25 +3320,32 @@ export default function SheetMusicEditor({
         {/* 색상 선택 */}
         {(tool === 'pen' || tool === 'highlighter' || tool === 'text') && (
           <>
-            <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1'} relative`}>
+            <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1.5'} relative`}>
               {/* 모바일: 4개 색상 + 더보기 버튼, 데스크탑: 모든 색상 */}
               {(tool === 'highlighter' ? HIGHLIGHTER_COLORS : COLORS).slice(0, isMobile ? 4 : undefined).map((c) => (
                 <button
                   key={c}
                   onClick={() => { setColor(c); setShowColorPicker(false) }}
-                  className={`rounded-full border-2 aspect-square flex-shrink-0 ${
+                  className={`rounded-full border-2 flex-shrink-0 ${
                     color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
-                  } ${isMobile ? 'w-6 h-6 min-w-[24px]' : 'w-7 h-7 min-w-[28px]'}`}
-                  style={{ backgroundColor: c }}
+                  }`}
+                  style={{
+                    backgroundColor: c,
+                    width: isMobile ? 24 : 28,
+                    height: isMobile ? 24 : 28,
+                    minWidth: isMobile ? 24 : 28,
+                    minHeight: isMobile ? 24 : 28,
+                  }}
                 />
               ))}
               {/* 모바일에서 더보기 버튼 */}
               {isMobile && (
                 <button
                   onClick={() => setShowColorPicker(!showColorPicker)}
-                  className={`rounded-full border-2 aspect-square flex-shrink-0 w-6 h-6 min-w-[24px] flex items-center justify-center text-xs ${
+                  className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center text-xs ${
                     showColorPicker ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-gray-100'
                   }`}
+                  style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
                   title="더 많은 색상"
                 >
                   +
@@ -3352,10 +3359,10 @@ export default function SheetMusicEditor({
                       <button
                         key={c}
                         onClick={() => { setColor(c); setShowColorPicker(false) }}
-                        className={`rounded-full border-2 aspect-square w-8 h-8 ${
+                        className={`rounded-full border-2 ${
                           color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
                         }`}
-                        style={{ backgroundColor: c }}
+                        style={{ backgroundColor: c, width: 32, height: 32 }}
                       />
                     ))}
                   </div>
@@ -3419,34 +3426,40 @@ export default function SheetMusicEditor({
         {/* 굵기 조절 */}
         {(tool === 'pen' || tool === 'highlighter') && (
           <>
-            <div className="flex items-center gap-1.5">
-              {/* 굵기 미리보기 */}
+            <div className="flex items-center gap-2">
+              {/* 굵기 미리보기 - 작은 점 */}
               <div
-                className="flex items-center justify-center"
-                style={{ width: isMobile ? 20 : 24, height: isMobile ? 20 : 24 }}
-              >
-                <div
-                  className="rounded-full"
-                  style={{
-                    width: tool === 'highlighter' ? strokeSize * 3 : strokeSize + 2,
-                    height: tool === 'highlighter' ? strokeSize * 1.5 : strokeSize + 2,
-                    backgroundColor: color,
-                    opacity: tool === 'highlighter' ? 0.4 : 1,
-                    borderRadius: tool === 'highlighter' ? '20%' : '50%',
-                    maxWidth: isMobile ? 18 : 22,
-                    maxHeight: isMobile ? 16 : 20,
-                  }}
-                />
-              </div>
+                className="rounded-full flex-shrink-0"
+                style={{
+                  width: 4,
+                  height: 4,
+                  backgroundColor: '#666',
+                }}
+              />
+              {/* 슬라이더 */}
               <input
                 type="range"
                 min="1"
                 max="10"
                 value={strokeSize}
                 onChange={(e) => setStrokeSize(Number(e.target.value))}
-                className={isMobile ? 'w-12' : 'w-20'}
+                className={`${isMobile ? 'w-16' : 'w-24'} h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500`}
+                style={{
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(strokeSize - 1) / 9 * 100}%, #e5e7eb ${(strokeSize - 1) / 9 * 100}%, #e5e7eb 100%)`,
+                }}
               />
-              {!isMobile && <span className="text-sm text-gray-500 w-6">{strokeSize}</span>}
+              {/* 굵기 미리보기 - 큰 점 */}
+              <div
+                className="rounded-full flex-shrink-0"
+                style={{
+                  width: 12,
+                  height: 12,
+                  backgroundColor: color,
+                  opacity: tool === 'highlighter' ? 0.5 : 1,
+                }}
+              />
+              {/* 숫자 표시 */}
+              <span className="text-sm font-medium text-gray-600 w-5 text-center">{strokeSize}</span>
             </div>
             <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
           </>
