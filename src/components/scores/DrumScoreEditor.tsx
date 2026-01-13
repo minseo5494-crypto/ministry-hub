@@ -77,6 +77,9 @@ export default function DrumScoreEditor({
   // 드래그 선택
   const [dragSelection, setDragSelection] = useState<DragSelection | null>(null)
 
+  // 마디 너비 조절
+  const [resizingMeasure, setResizingMeasure] = useState<{ index: number, startX: number, startWidths: number[] } | null>(null)
+
   // Undo/Redo 히스토리
   const [history, setHistory] = useState<{ notes: DrumNote[] }[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -129,6 +132,50 @@ export default function DrumScoreEditor({
     }
   }, [isOpen, editingScoreId, existingScore])
 
+  // 마디 너비 조절 마우스 이벤트
+  // 중간 마디선: 인접한 두 마디 비율 조절 (전체 크기 유지)
+  // 마지막 마디선: 마지막 마디 크기 조절 (전체 악보 크기 변경)
+  React.useEffect(() => {
+    if (!resizingMeasure || !editingState) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizingMeasure.startX
+      const newWidths = [...resizingMeasure.startWidths]
+      const idx = resizingMeasure.index
+      const isLast = idx === editingState.measureCount - 1
+
+      if (isLast) {
+        // 마지막 마디선: 마지막 마디 크기만 조절 (전체 악보 크기 변경)
+        const currentWidth = resizingMeasure.startWidths[idx]
+        const newWidth = Math.max(60, Math.min(200, currentWidth + deltaX))
+        newWidths[idx] = newWidth
+      } else {
+        // 중간 마디선: 인접한 두 마디 비율만 조절 (전체 크기 유지)
+        const currentWidth = resizingMeasure.startWidths[idx]
+        const nextWidth = resizingMeasure.startWidths[idx + 1]
+
+        // 최소 너비 60, 두 마디 합계는 유지
+        const totalWidth = currentWidth + nextWidth
+        const newCurrentWidth = Math.max(60, Math.min(totalWidth - 60, currentWidth + deltaX))
+        const newNextWidth = totalWidth - newCurrentWidth
+
+        newWidths[idx] = newCurrentWidth
+        newWidths[idx + 1] = newNextWidth
+      }
+
+      setEditingState(prev => prev ? { ...prev, measureWidths: newWidths } : prev)
+    }
+
+    const handleMouseUp = () => setResizingMeasure(null)
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [resizingMeasure, editingState])
+
   const handleClose = () => {
     setStep('measure')
     setEditingState(null)
@@ -136,6 +183,7 @@ export default function DrumScoreEditor({
     setHistoryIndex(-1)
     setSelectedNotes([])
     setDragSelection(null)
+    setResizingMeasure(null)
     onClose()
   }
 
@@ -157,19 +205,31 @@ export default function DrumScoreEditor({
   const addHiHatPattern = () => {
     if (!editingState) return
 
-    const measureWidth = 100 / editingState.measureCount
+    // 실제 오선지 영역 계산 (x=20부터 svgWidth-5까지)
+    const svgWidth = editingState.measureWidths.reduce((sum, w) => sum + w, 0)
+    const staffStart = 20
+    const staffEnd = svgWidth - 5
+    const staffWidth = staffEnd - staffStart
+    const totalMeasureWidth = editingState.measureWidths.reduce((sum, w) => sum + w, 0)
+
     const newNotes: DrumNote[] = []
-    const startMargin = 5 // 마디 시작 여백
-    const endMargin = 5   // 마디 끝 여백
-    const usableWidth = measureWidth - startMargin - endMargin
+    const noteMargin = 3 // 마디 내 시작/끝 여백 (픽셀)
 
     for (let m = 0; m < editingState.measureCount; m++) {
       const beamGroup1 = `hh-beam-${Date.now()}-${m}-1`
       const beamGroup2 = `hh-beam-${Date.now()}-${m}-2`
 
+      // 이 마디의 시작/끝 위치 계산 (픽셀)
+      const measureStartX = staffStart + (editingState.measureWidths.slice(0, m).reduce((sum, w) => sum + w, 0) / totalMeasureWidth) * staffWidth
+      const measureEndX = staffStart + (editingState.measureWidths.slice(0, m + 1).reduce((sum, w) => sum + w, 0) / totalMeasureWidth) * staffWidth
+      const measureUsableWidth = measureEndX - measureStartX - noteMargin * 2
+
       // 각 마디에 8분음표 8개 (4개씩 2그룹으로 beam 연결)
       for (let i = 0; i < 8; i++) {
-        const position = m * measureWidth + startMargin + (i / 7) * usableWidth
+        // 픽셀 위치를 0-100 퍼센트로 변환
+        const noteX = measureStartX + noteMargin + (i / 7) * measureUsableWidth
+        const position = (noteX / svgWidth) * 100
+
         // 이미 해당 위치에 하이햇이 있는지 확인
         const exists = editingState.notes.some(n =>
           n.part === 'HH' && Math.abs(n.position - position) < 1
@@ -197,18 +257,33 @@ export default function DrumScoreEditor({
   const addBasicPattern = () => {
     if (!editingState) return
 
-    const measureWidth = 100 / editingState.measureCount
+    // 실제 오선지 영역 계산 (x=20부터 svgWidth-5까지)
+    const svgWidth = editingState.measureWidths.reduce((sum, w) => sum + w, 0)
+    const staffStart = 20
+    const staffEnd = svgWidth - 5
+    const staffWidth = staffEnd - staffStart
+    const totalMeasureWidth = editingState.measureWidths.reduce((sum, w) => sum + w, 0)
+
     const newNotes: DrumNote[] = []
-    const startMargin = 5 // 마디 시작 여백
-    const endMargin = 5   // 마디 끝 여백
-    const usableWidth = measureWidth - startMargin - endMargin
+    const noteMargin = 3 // 마디 내 시작/끝 여백 (픽셀)
 
     for (let m = 0; m < editingState.measureCount; m++) {
-      // 4분음표 4개 위치 (1박, 2박, 3박, 4박)
-      const beat1Pos = m * measureWidth + startMargin
-      const beat2Pos = m * measureWidth + startMargin + usableWidth * (2/7)  // 하이햇 패턴과 일치
-      const beat3Pos = m * measureWidth + startMargin + usableWidth * (4/7)
-      const beat4Pos = m * measureWidth + startMargin + usableWidth * (6/7)
+      // 이 마디의 시작/끝 위치 계산 (픽셀)
+      const measureStartX = staffStart + (editingState.measureWidths.slice(0, m).reduce((sum, w) => sum + w, 0) / totalMeasureWidth) * staffWidth
+      const measureEndX = staffStart + (editingState.measureWidths.slice(0, m + 1).reduce((sum, w) => sum + w, 0) / totalMeasureWidth) * staffWidth
+      const measureUsableWidth = measureEndX - measureStartX - noteMargin * 2
+
+      // 4분음표 4개 위치 (1박, 2박, 3박, 4박) - 하이햇 패턴과 일치
+      const beat1X = measureStartX + noteMargin
+      const beat2X = measureStartX + noteMargin + measureUsableWidth * (2/7)
+      const beat3X = measureStartX + noteMargin + measureUsableWidth * (4/7)
+      const beat4X = measureStartX + noteMargin + measureUsableWidth * (6/7)
+
+      // 픽셀 위치를 0-100 퍼센트로 변환
+      const beat1Pos = (beat1X / svgWidth) * 100
+      const beat2Pos = (beat2X / svgWidth) * 100
+      const beat3Pos = (beat3X / svgWidth) * 100
+      const beat4Pos = (beat4X / svgWidth) * 100
 
       // 킥: 1박, 3박
       if (!editingState.notes.some(n => n.part === 'KK' && Math.abs(n.position - beat1Pos) < 1)) {
@@ -500,6 +575,26 @@ export default function DrumScoreEditor({
                   {selectedNotes.length}개 음표 선택됨
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {/* 점음표 토글 버튼 */}
+                  <button
+                    onClick={() => {
+                      setEditingState(prev => {
+                        if (!prev) return prev
+                        const newNotes = prev.notes.map((note, idx) =>
+                          selectedNotes.includes(idx) ? { ...note, dotted: !note.dotted } : note
+                        )
+                        saveHistory(newNotes)
+                        return { ...prev, notes: newNotes }
+                      })
+                    }}
+                    className={`px-3 py-1.5 text-sm rounded ${
+                      selectedNotes.some(idx => editingState.notes[idx]?.dotted)
+                        ? 'bg-purple-500 text-white hover:bg-purple-600'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    }`}
+                  >
+                    점 {selectedNotes.some(idx => editingState.notes[idx]?.dotted) ? '제거' : '추가'}
+                  </button>
                   {selectedNotes.length >= 2 && (
                     <button
                       onClick={connectSelectedNotes}
@@ -551,16 +646,6 @@ export default function DrumScoreEditor({
 
                   return (
                     <>
-                      {/* 파트 레이블 (왼쪽) */}
-                      <text x="2" y={DRUM_PART_Y_EDIT['CY'] + 3} fontSize="7" fill="#999">CY</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['RD'] + 3} fontSize="7" fill="#999">RD</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['HH'] + 3} fontSize="7" fill="#666">HH</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['TH'] + 3} fontSize="7" fill="#999">TH</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['TM'] + 3} fontSize="7" fill="#999">TM</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['SN'] + 3} fontSize="7" fill="#666">SN</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['TL'] + 3} fontSize="7" fill="#999">TL</text>
-                      <text x="2" y={DRUM_PART_Y_EDIT['KK'] + 3} fontSize="7" fill="#666">KK</text>
-
                       {/* 5선 오선지 (Y: 50~90, 간격 10) */}
                       {[0, 1, 2, 3, 4].map(i => (
                         <line
@@ -576,17 +661,37 @@ export default function DrumScoreEditor({
 
                       {/* 마디 구분선 */}
                       <line x1="20" y1="50" x2="20" y2="90" stroke="#333" strokeWidth="1" />
-                      {(() => {
-                        const lines: React.ReactElement[] = []
-                        let accX = 20
-                        const measureWidth = (svgWidth - 25) / editingState.measureCount
-                        for (let i = 0; i < editingState.measureCount - 1; i++) {
-                          accX += measureWidth
-                          lines.push(<line key={i} x1={accX} y1="50" x2={accX} y2="90" stroke="#666" strokeWidth="0.8" />)
-                        }
-                        return lines
-                      })()}
-                      <line x1={svgWidth - 5} y1="50" x2={svgWidth - 5} y2="90" stroke="#333" strokeWidth="1.5" />
+                      {editingState.measureWidths.map((_, i) => {
+                        const totalWidth = editingState.measureWidths.reduce((sum, w) => sum + w, 0)
+                        const staffStart = 20
+                        const staffEnd = svgWidth - 5
+                        const staffWidth = staffEnd - staffStart
+                        const fraction = editingState.measureWidths.slice(0, i + 1).reduce((sum, w) => sum + w, 0) / totalWidth
+                        const endX = staffStart + fraction * staffWidth
+                        const isLast = i === editingState.measureCount - 1
+                        return (
+                          <g key={i}>
+                            <line x1={endX} y1="50" x2={endX} y2="90" stroke="#333" strokeWidth={isLast ? 1.5 : 0.8} />
+                            {/* 마디 너비 조절 핸들 */}
+                            <rect
+                              x={endX - 7}
+                              y="45"
+                              width="14"
+                              height="50"
+                              fill="transparent"
+                              className="cursor-ew-resize"
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                setResizingMeasure({ index: i, startX: e.clientX, startWidths: [...editingState.measureWidths] })
+                              }}
+                              onTouchStart={(e) => {
+                                e.stopPropagation()
+                                setResizingMeasure({ index: i, startX: e.touches[0].clientX, startWidths: [...editingState.measureWidths] })
+                              }}
+                            />
+                          </g>
+                        )
+                      })}
 
                       {/* 드래그 선택 영역 표시 */}
                       {dragSelection && (
@@ -670,6 +775,11 @@ export default function DrumScoreEditor({
                               <ellipse cx={x} cy={y} rx="5" ry="4" fill={strokeColor} />
                             )}
 
+                            {/* 점음표 점 */}
+                            {note.dotted && (
+                              <circle cx={x + 9} cy={y} r="1.5" fill={strokeColor} />
+                            )}
+
                             {/* 기둥 렌더링 */}
                             {!note.beamGroup && (
                               <>
@@ -719,7 +829,7 @@ export default function DrumScoreEditor({
                                   />
                                 )}
 
-                                {/* 8분음표 깃발 (beam 연결 안 된 경우만) */}
+                                {/* 8분음표 깃발 (beam 연결 안 된 경우만) - 항상 오른쪽으로 */}
                                 {(note.duration || 8) >= 8 && (() => {
                                   const stemUp = isCymbal || isHH || DRUM_STEM_UP[note.part]
                                   const stemX = stemUp ? x + 5 : x - 5
@@ -728,7 +838,7 @@ export default function DrumScoreEditor({
                                     <path
                                       d={stemUp
                                         ? `M${stemX},${stemEndY} Q${stemX + 8},${stemEndY + 6} ${stemX + 3},${stemEndY + 12}`
-                                        : `M${stemX},${stemEndY} Q${stemX - 8},${stemEndY - 6} ${stemX - 3},${stemEndY - 12}`
+                                        : `M${stemX},${stemEndY} Q${stemX + 8},${stemEndY - 6} ${stemX + 3},${stemEndY - 12}`
                                       }
                                       stroke={strokeColor}
                                       strokeWidth="1.5"
@@ -737,7 +847,7 @@ export default function DrumScoreEditor({
                                   )
                                 })()}
 
-                                {/* 16분음표 두 번째 깃발 */}
+                                {/* 16분음표 두 번째 깃발 - 항상 오른쪽으로 */}
                                 {(note.duration || 8) >= 16 && (() => {
                                   const stemUp = isCymbal || isHH || DRUM_STEM_UP[note.part]
                                   const stemX = stemUp ? x + 5 : x - 5
@@ -746,7 +856,7 @@ export default function DrumScoreEditor({
                                     <path
                                       d={stemUp
                                         ? `M${stemX},${stemEndY + 5} Q${stemX + 8},${stemEndY + 11} ${stemX + 3},${stemEndY + 17}`
-                                        : `M${stemX},${stemEndY - 5} Q${stemX - 8},${stemEndY - 11} ${stemX - 3},${stemEndY - 17}`
+                                        : `M${stemX},${stemEndY - 5} Q${stemX + 8},${stemEndY - 11} ${stemX + 3},${stemEndY - 17}`
                                       }
                                       stroke={strokeColor}
                                       strokeWidth="1.5"
@@ -851,6 +961,18 @@ function renderBeamsEdit(notes: DrumNote[], svgWidth: number): React.ReactElemen
     const allY = sorted.map(n => DRUM_PART_Y_EDIT[n.part] || 70)
     const beamBaseY = stemUp ? Math.min(...allY) - stemLength : Math.max(...allY) + stemLength
 
+    // 8분음표와 16분음표 확인
+    const hasEighth = sorted.some(n => (n.duration || 8) >= 8)
+    const hasSixteenth = sorted.some(n => (n.duration || 8) >= 16)
+
+    // 점8분음표 + 16분음표 패턴 감지
+    const isDottedEighthPattern = sorted.length === 2 &&
+      ((firstNote.duration === 8 && firstNote.dotted && lastNote.duration === 16) ||
+       (lastNote.duration === 8 && lastNote.dotted && firstNote.duration === 16))
+
+    const stemX1 = stemUp ? firstX + 5 : firstX - 5
+    const stemX2 = stemUp ? lastX + 5 : lastX - 5
+
     return (
       <g key={`beam-${groupId}`}>
         {/* 각 음표의 기둥 */}
@@ -871,15 +993,61 @@ function renderBeamsEdit(notes: DrumNote[], svgWidth: number): React.ReactElemen
           )
         })}
 
-        {/* Beam 줄 (수평선) */}
-        <line
-          x1={stemUp ? firstX + 5 : firstX - 5}
-          y1={beamBaseY}
-          x2={stemUp ? lastX + 5 : lastX - 5}
-          y2={beamBaseY}
-          stroke="#000"
-          strokeWidth="3"
-        />
+        {/* 점음표 점 렌더링 */}
+        {sorted.map((note, i) => {
+          if (!note.dotted) return null
+          const x = (note.position / 100) * svgWidth
+          const y = DRUM_PART_Y_EDIT[note.part] || 70
+          return (
+            <circle
+              key={`dot-${i}`}
+              cx={x + 9}
+              cy={y}
+              r="1.5"
+              fill="#000"
+            />
+          )
+        })}
+
+        {/* 메인 Beam 줄 (8분음표 빔) */}
+        {hasEighth && (
+          <line
+            x1={stemX1}
+            y1={beamBaseY}
+            x2={stemX2}
+            y2={beamBaseY}
+            stroke="#000"
+            strokeWidth="3"
+          />
+        )}
+
+        {/* 16분음표 빔 - 점8분음표 패턴이면 부분 빔만 */}
+        {hasSixteenth && !isDottedEighthPattern && (
+          <line
+            x1={stemX1}
+            y1={stemUp ? beamBaseY + 5 : beamBaseY - 5}
+            x2={stemX2}
+            y2={stemUp ? beamBaseY + 5 : beamBaseY - 5}
+            stroke="#000"
+            strokeWidth="3"
+          />
+        )}
+
+        {/* 점8분음표 + 16분음표: 16분음표 쪽에만 부분 빔 */}
+        {isDottedEighthPattern && (
+          <line
+            x1={firstNote.duration === 16
+              ? stemX1
+              : stemX2 - (stemX2 - stemX1) * 0.4}
+            y1={stemUp ? beamBaseY + 5 : beamBaseY - 5}
+            x2={lastNote.duration === 16
+              ? stemX2
+              : stemX1 + (stemX2 - stemX1) * 0.4}
+            y2={stemUp ? beamBaseY + 5 : beamBaseY - 5}
+            stroke="#000"
+            strokeWidth="3"
+          />
+        )}
       </g>
     )
   }).filter(Boolean) as React.ReactElement[]

@@ -33,7 +33,9 @@ export default function DrumScoreRenderer({
   const defaultWidth = 100
   const measureWidths = score.measureWidths || Array(score.measureCount).fill(defaultWidth)
   const scoreWidth = measureWidths.reduce((sum, w) => sum + w * 0.7, 0)
-  const scoreHeight = 85 // 5선지 높이
+  const scoreHeight = 115 // 전체 높이 (기둥/깃발 포함)
+  const viewBoxY = -20 // viewBox 시작 Y (상단 여백)
+  const viewBoxHeight = 115 // viewBox 높이
   const staffMargin = 3 // 오선지 좌우 여백
   const usableWidth = scoreWidth - staffMargin * 2 // 노트가 배치될 수 있는 실제 너비
 
@@ -94,7 +96,7 @@ export default function DrumScoreRenderer({
       <svg
         width={scoreWidth * scaleFactor}
         height={scoreHeight * scaleFactor}
-        viewBox={`0 0 ${scoreWidth} ${scoreHeight}`}
+        viewBox={`0 ${viewBoxY} ${scoreWidth} ${viewBoxHeight}`}
       >
         {/* 5선 (오선) */}
         {[0, 1, 2, 3, 4].map(i => (
@@ -260,6 +262,11 @@ function DrumNoteElement({ note, x, allNotes, usableWidth, staffMargin }: { note
         <ellipse cx={x} cy={y} rx="4" ry="3" fill="#000" />
       )}
 
+      {/* 점음표 점 */}
+      {note.dotted && (
+        <circle cx={x + 7} cy={y} r="1.2" fill="#000" />
+      )}
+
       {/* 기둥 렌더링 (페어링 로직 적용) */}
       {duration >= 4 && !isBeamed && (
         <>
@@ -311,12 +318,12 @@ function DrumNoteElement({ note, x, allNotes, usableWidth, staffMargin }: { note
         </>
       )}
 
-      {/* 깃발 (8분음표 이상, beam이 없을 때) */}
+      {/* 깃발 (8분음표 이상, beam이 없을 때) - 항상 오른쪽으로 */}
       {duration >= 8 && !isBeamed && !hasPairedCymbal && (
         <path
           d={stemUp
             ? `M${x + 4},${y - stemLength} Q${x + 12},${y - stemLength + 6} ${x + 7},${y - stemLength + 12}`
-            : `M${x - 4},${y + stemLength} Q${x - 12},${y + stemLength - 6} ${x - 7},${y + stemLength - 12}`
+            : `M${x - 4},${y + stemLength} Q${x + 4},${y + stemLength - 6} ${x - 1},${y + stemLength - 12}`
           }
           stroke="#000"
           strokeWidth="1.5"
@@ -327,7 +334,7 @@ function DrumNoteElement({ note, x, allNotes, usableWidth, staffMargin }: { note
         <path
           d={stemUp
             ? `M${x + 4},${y - stemLength + 5} Q${x + 12},${y - stemLength + 11} ${x + 7},${y - stemLength + 17}`
-            : `M${x - 4},${y + stemLength - 5} Q${x - 12},${y + stemLength - 11} ${x - 7},${y + stemLength - 17}`
+            : `M${x - 4},${y + stemLength - 5} Q${x + 4},${y + stemLength - 11} ${x - 1},${y + stemLength - 17}`
           }
           stroke="#000"
           strokeWidth="1.5"
@@ -372,6 +379,14 @@ function renderBeams(notes: DrumNote[], usableWidth: number, staffMargin: number
     const hasEighth = notesInGroup.some(n => (n.note.duration || 8) >= 8)
     const hasSixteenth = notesInGroup.some(n => (n.note.duration || 8) >= 16)
 
+    // 점8분음표 + 16분음표 패턴 감지
+    const isDottedEighthPattern = notesInGroup.length === 2 &&
+      ((firstNote.duration === 8 && firstNote.dotted && lastNote.duration === 16) ||
+       (lastNote.duration === 8 && lastNote.dotted && firstNote.duration === 16))
+
+    const stemX1 = stemUp ? firstX + 4 : firstX - 4
+    const stemX2 = stemUp ? lastX + 4 : lastX - 4
+
     return (
       <g key={`beam-${groupId}`}>
         {/* 각 음표의 기둥 */}
@@ -392,22 +407,56 @@ function renderBeams(notes: DrumNote[], usableWidth: number, staffMargin: number
           )
         })}
 
-        {/* Beam 줄 (수평선) */}
+        {/* 점음표 점 렌더링 */}
+        {notesInGroup.map(({ note }, i) => {
+          if (!note.dotted) return null
+          const x = staffMargin + (note.position / 100) * usableWidth
+          const y = DRUM_PART_Y[note.part] || 42
+          return (
+            <circle
+              key={`dot-${i}`}
+              cx={x + 7}
+              cy={y}
+              r="1.2"
+              fill="#000"
+            />
+          )
+        })}
+
+        {/* 메인 Beam 줄 (8분음표 빔) */}
         {hasEighth && (
           <line
-            x1={stemUp ? firstX + 4 : firstX - 4}
+            x1={stemX1}
             y1={beamBaseY}
-            x2={stemUp ? lastX + 4 : lastX - 4}
+            x2={stemX2}
             y2={beamBaseY}
             stroke="#000"
             strokeWidth="3"
           />
         )}
-        {hasSixteenth && (
+
+        {/* 16분음표 빔 - 점8분음표 패턴이면 부분 빔만 */}
+        {hasSixteenth && !isDottedEighthPattern && (
           <line
-            x1={stemUp ? firstX + 4 : firstX - 4}
+            x1={stemX1}
             y1={stemUp ? beamBaseY + 4 : beamBaseY - 4}
-            x2={stemUp ? lastX + 4 : lastX - 4}
+            x2={stemX2}
+            y2={stemUp ? beamBaseY + 4 : beamBaseY - 4}
+            stroke="#000"
+            strokeWidth="3"
+          />
+        )}
+
+        {/* 점8분음표 + 16분음표: 16분음표 쪽에만 부분 빔 */}
+        {isDottedEighthPattern && (
+          <line
+            x1={firstNote.duration === 16
+              ? stemX1
+              : stemX2 - (stemX2 - stemX1) * 0.4}
+            y1={stemUp ? beamBaseY + 4 : beamBaseY - 4}
+            x2={lastNote.duration === 16
+              ? stemX2
+              : stemX1 + (stemX2 - stemX1) * 0.4}
             y2={stemUp ? beamBaseY + 4 : beamBaseY - 4}
             stroke="#000"
             strokeWidth="3"

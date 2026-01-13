@@ -10,6 +10,7 @@ export interface DrumNote {
   duration?: 4 | 8 | 16  // 음표 길이
   noteType?: 'normal' | 'x' | 'ghost'  // 음표 타입
   beamGroup?: string  // 잇단음표 그룹 ID
+  dotted?: boolean    // 점음표 여부
 }
 
 // 드럼 악보 요소 타입

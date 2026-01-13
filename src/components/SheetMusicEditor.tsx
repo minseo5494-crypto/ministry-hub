@@ -2676,14 +2676,50 @@ export default function SheetMusicEditor({
           coverCtx.fillStyle = '#ffffff'
           coverCtx.fillRect(0, 0, coverCanvas.width, coverCanvas.height)
 
-          // 제목 (곡명)
+          // 제목 (곡명) - 긴 제목은 두 줄로 분할
           const titleText = effectiveSongName || '악보'
           const titleFontSize = Math.min(coverCanvas.width * 0.08, 120)
           coverCtx.font = `bold ${titleFontSize}px Arial, sans-serif`
           coverCtx.fillStyle = '#1a1a1a'
           coverCtx.textAlign = 'center'
           coverCtx.textBaseline = 'middle'
-          coverCtx.fillText(titleText, coverCanvas.width / 2, coverCanvas.height * 0.4)
+
+          const maxTitleWidth = coverCanvas.width * 0.85
+          const titleWidth = coverCtx.measureText(titleText).width
+
+          if (titleWidth > maxTitleWidth && titleText.includes(' ')) {
+            // 띄어쓰기 위치들을 찾아서 가장 균등하게 나눌 수 있는 위치 찾기
+            const spaces: number[] = []
+            for (let i = 0; i < titleText.length; i++) {
+              if (titleText[i] === ' ') spaces.push(i)
+            }
+
+            // 각 분할 지점에서 두 줄의 길이 차이 계산
+            let bestSplitIdx = spaces[Math.floor(spaces.length / 2)]
+            let minDiff = Infinity
+
+            for (const spaceIdx of spaces) {
+              const line1 = titleText.substring(0, spaceIdx)
+              const line2 = titleText.substring(spaceIdx + 1)
+              const width1 = coverCtx.measureText(line1).width
+              const width2 = coverCtx.measureText(line2).width
+              const diff = Math.abs(width1 - width2)
+
+              if (diff < minDiff) {
+                minDiff = diff
+                bestSplitIdx = spaceIdx
+              }
+            }
+
+            const line1 = titleText.substring(0, bestSplitIdx)
+            const line2 = titleText.substring(bestSplitIdx + 1)
+            const lineHeight = titleFontSize * 1.3
+
+            coverCtx.fillText(line1, coverCanvas.width / 2, coverCanvas.height * 0.4 - lineHeight / 2)
+            coverCtx.fillText(line2, coverCanvas.width / 2, coverCanvas.height * 0.4 + lineHeight / 2)
+          } else {
+            coverCtx.fillText(titleText, coverCanvas.width / 2, coverCanvas.height * 0.4)
+          }
 
           // 아티스트명
           if (effectiveArtistName) {

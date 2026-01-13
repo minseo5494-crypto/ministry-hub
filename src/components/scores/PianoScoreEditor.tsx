@@ -139,14 +139,36 @@ export default function PianoScoreEditor({
   }, [isOpen, editingState, selectedNotesForBeam, chordPickerIndex, saveHistory])
 
   // 마디 너비 조절 마우스 이벤트
+  // 중간 마디선: 인접한 두 마디 비율 조절 (전체 크기 유지)
+  // 마지막 마디선: 마지막 마디 크기 조절 (전체 악보 크기 변경)
   useEffect(() => {
     if (!resizingMeasure || !editingState) return
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - resizingMeasure.startX
       const newWidths = [...resizingMeasure.startWidths]
-      const newWidth = Math.max(60, Math.min(200, newWidths[resizingMeasure.index] + deltaX))
-      newWidths[resizingMeasure.index] = newWidth
+      const idx = resizingMeasure.index
+      const isLast = idx === editingState.measureCount - 1
+
+      if (isLast) {
+        // 마지막 마디선: 마지막 마디 크기만 조절 (전체 악보 크기 변경)
+        const currentWidth = resizingMeasure.startWidths[idx]
+        const newWidth = Math.max(60, Math.min(200, currentWidth + deltaX))
+        newWidths[idx] = newWidth
+      } else {
+        // 중간 마디선: 인접한 두 마디 비율만 조절 (전체 크기 유지)
+        const currentWidth = resizingMeasure.startWidths[idx]
+        const nextWidth = resizingMeasure.startWidths[idx + 1]
+
+        // 최소 너비 60, 두 마디 합계는 유지
+        const totalWidth = currentWidth + nextWidth
+        const newCurrentWidth = Math.max(60, Math.min(totalWidth - 60, currentWidth + deltaX))
+        const newNextWidth = totalWidth - newCurrentWidth
+
+        newWidths[idx] = newCurrentWidth
+        newWidths[idx + 1] = newNextWidth
+      }
+
       setEditingState(prev => prev ? { ...prev, measureWidths: newWidths } : prev)
     }
 
@@ -427,6 +449,7 @@ export default function PianoScoreEditor({
                     return (
                       <g key={i}>
                         <line x1={endX - 5} y1="35" x2={endX - 5} y2="91" stroke="#333" strokeWidth={isLast ? 2 : 1} />
+                        {/* 마디 너비 조절 핸들 */}
                         <rect
                           x={endX - 12}
                           y="25"
