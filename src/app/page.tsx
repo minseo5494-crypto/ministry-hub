@@ -2006,8 +2006,8 @@ const hasMore = displayCount < filteredSongs.length
 <div className="flex-1">
   {/* 툴바 */}
   <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 mb-4">
-    {/* 첫 번째 줄: 필터 버튼, 곡 수, 뷰 모드 */}
-    <div className="flex items-center justify-between gap-2">
+    {/* 첫 번째 줄: 필터 버튼, 곡 수, 뷰 모드 - flex-wrap으로 좁은 화면에서 줄바꿈 */}
+    <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <button
           onClick={() => setShowFilterPanel(!showFilterPanel)}
@@ -2024,7 +2024,7 @@ const hasMore = displayCount < filteredSongs.length
 
     </div>
 
-    <div className="flex items-center gap-1.5 flex-shrink-0">
+    <div className="flex flex-wrap items-center gap-1.5">
         {/* 🎵 정렬 드롭다운 - 데스크탑에서만 표시 */}
         <div className="hidden sm:block relative">
           <button
@@ -2438,9 +2438,9 @@ const hasMore = displayCount < filteredSongs.length
           : 'hover:bg-gray-50'
       }`}
     >
-      {/* 상단: 곡 정보 + 버튼 (모바일에서는 세로 배치) */}
+      {/* 상단: 곡 정보 + 버튼 (모바일에서는 세로 배치, 필터 패널 열림 시 lg에서 전환) */}
       <div
-        className="flex flex-col sm:flex-row sm:items-start sm:justify-between"
+        className={`flex flex-col ${showFilterPanel ? 'lg:flex-row lg:items-start lg:justify-between' : 'sm:flex-row sm:items-start sm:justify-between'}`}
         onClick={() => {
           toggleSongSelection(song)
           setFocusedSongIndex(index)
@@ -2502,8 +2502,8 @@ const hasMore = displayCount < filteredSongs.length
           </div>
         </div>
 
-        {/* 버튼들 - 모바일에서는 아래에, 데스크탑에서는 오른쪽에 */}
-        <div className="flex gap-1 md:gap-2 mt-1 sm:mt-0 sm:ml-4 flex-shrink-0 ml-7 sm:ml-4">
+        {/* 버튼들 - 모바일에서는 아래에, 데스크탑에서는 오른쪽에 (필터 패널 열림 시 lg에서 전환) */}
+        <div className={`flex gap-1 md:gap-2 mt-1 flex-shrink-0 ml-7 ${showFilterPanel ? 'lg:mt-0 lg:ml-4' : 'sm:mt-0 sm:ml-4'}`}>
           {/* 송폼 설정 버튼 - 선택 시에만 표시 */}
           {selectedSongs.find(s => s.id === song.id) && (
             <button
