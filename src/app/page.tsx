@@ -10,7 +10,7 @@ import {
   Search, Music, FileText, Presentation, FolderOpen, Plus, X,
   ChevronLeft, ChevronRight, Eye, EyeOff, Upload, Users, UserPlus, MoreVertical,
   Grid, List, Filter, Tag, Calendar, Clock, Activity, ChevronDown,
-  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2
+  BarChart3, Youtube, Trash2, Menu, Heart, Pencil, Shield, Building2, MessageSquare
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
@@ -1593,6 +1593,16 @@ const hasMore = displayCount < filteredSongs.length
                     <BarChart3 className="mr-2" size={18} />
                     통계 대시보드
                   </button>
+                  <button
+                    onClick={() => {
+                      router.push('/admin/feedbacks')
+                      setShowMenu(false)
+                    }}
+                    className="w-full px-4 py-2 text-left text-orange-700 hover:bg-orange-50 flex items-center font-medium"
+                  >
+                    <MessageSquare className="mr-2" size={18} />
+                    피드백 관리
+                  </button>
                 </>
               )}
             </div>
@@ -1771,6 +1781,17 @@ const hasMore = displayCount < filteredSongs.length
                 >
                   <BarChart3 size={20} />
                   <span>통계 대시보드</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push('/admin/feedbacks')
+                    setShowMobileMenu(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-orange-700 hover:bg-orange-50 rounded-lg transition"
+                >
+                  <MessageSquare size={20} />
+                  <span>피드백 관리</span>
                 </button>
               </>
             )}
