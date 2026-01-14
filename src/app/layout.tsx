@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import Footer from '@/components/Footer'
+import FeedbackButtonWrapper from '@/components/FeedbackButtonWrapper'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body className={`${inter.className} flex flex-col min-h-screen`}>
         <main className="flex-grow">{children}</main>
         <Footer />
+        <FeedbackButtonWrapper />
       </body>
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </html>
