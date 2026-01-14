@@ -2476,16 +2476,12 @@ const hasMore = displayCount < filteredSongs.length
                   </span>
                 )}
               </div>
-              {/* 모바일: 팀명과 음악정보 분리, 데스크톱: 한 줄 */}
+              {/* 2번째 줄: 팀명 */}
               {song.team_name && (
-                <p className="text-sm text-gray-600 mt-1 md:hidden">{song.team_name}</p>
+                <p className="text-sm text-gray-600 mt-1">{song.team_name}</p>
               )}
-              <p className="text-sm text-gray-500 mt-0.5 md:hidden">
-                Key: {song.key || '-'} | 박자: {song.time_signature || '-'} | 템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
-              </p>
-              {/* 데스크톱: 한 줄로 표시 */}
-              <p className="text-sm text-gray-600 mt-1 hidden md:block">
-                {song.team_name && `${song.team_name} | `}
+              {/* 3번째 줄: Key, 박자, 템포 */}
+              <p className="text-sm text-gray-500 mt-0.5">
                 Key: {song.key || '-'} | 박자: {song.time_signature || '-'} | 템포: {song.bpm ? `${song.bpm}BPM` : (song.tempo || '-')}
               </p>
               
