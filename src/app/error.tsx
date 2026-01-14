@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import * as Sentry from '@sentry/nextjs';
 
 export default function Error({
   error,
@@ -11,6 +12,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Sentry에 에러 전송
+    Sentry.captureException(error);
     // 에러 로깅 (콘솔)
     console.error('Page Error:', error);
   }, [error]);
