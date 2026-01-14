@@ -429,6 +429,16 @@ const [noteModal, setNoteModal] = useState<{
 })
 const [savingNote, setSavingNote] = useState(false)
 
+// 🆕 끼워넣기 모달 상태
+const [insertModal, setInsertModal] = useState<{
+  show: boolean
+  afterOrder: number
+}>({
+  show: false,
+  afterOrder: 0
+})
+const [insertSearchQuery, setInsertSearchQuery] = useState('')
+
 // 🆕 useDownload 훅용 데이터 변환 (songs 상태 이후에 위치해야 함)
 const downloadSongs = songs.map(s => s.songs)
 const downloadSongForms: { [key: string]: string[] } = {}
@@ -490,6 +500,7 @@ const {
   personalView,
   fetchPersonalView,
   replaceSongWithNote,
+  insertNoteAfter,
   removeCustomization
 } = usePersonalSetlistView()
 
@@ -516,6 +527,47 @@ const handleSelectPersonalNote = async (songId: string, noteId: string | null) =
   // 개인 뷰 다시 로드
   await fetchPersonalView(user.id, setlistId)
 }
+
+// 🆕 끼워넣기 핸들러
+const handleInsertNote = async (noteId: string) => {
+  if (!user?.id || !setlistId) return
+
+  await insertNoteAfter(user.id, setlistId, insertModal.afterOrder, noteId)
+  setInsertModal({ show: false, afterOrder: 0 })
+  setInsertSearchQuery('')
+  // 개인 뷰 다시 로드
+  await fetchPersonalView(user.id, setlistId)
+}
+
+// 🆕 끼워넣은 노트 제거 핸들러
+const handleRemoveInsertedNote = async (noteId: string) => {
+  if (!user?.id || !setlistId) return
+
+  await removeCustomization(user.id, setlistId, noteId)
+  await fetchPersonalView(user.id, setlistId)
+}
+
+// 🆕 끼워넣은 노트 목록 계산
+const getInsertedNotesAfter = (orderNumber: number) => {
+  if (!personalView?.customizations) return []
+
+  return personalView.customizations
+    .filter(c => c.type === 'insert' && c.afterOrder === orderNumber)
+    .map(c => {
+      const note = userSheetNotes.find(n => n.id === c.noteId)
+      return note ? { ...note, customization: c } : null
+    })
+    .filter(Boolean) as (LocalSheetMusicNote & { customization: { noteId: string } })[]
+}
+
+// 🆕 끼워넣기 모달에서 노트 필터링
+const filteredInsertNotes = insertSearchQuery.trim()
+  ? userSheetNotes.filter(note =>
+      note.song_name.toLowerCase().includes(insertSearchQuery.toLowerCase()) ||
+      note.title.toLowerCase().includes(insertSearchQuery.toLowerCase()) ||
+      (note.team_name && note.team_name.toLowerCase().includes(insertSearchQuery.toLowerCase()))
+    )
+  : userSheetNotes
 
 useEffect(() => {
   checkUser()
@@ -1448,36 +1500,82 @@ const saveNote = async () => {
       disabled={!canEdit()}
     >
       <div className="divide-y">
-        {songs.map((song, index) => (
-  <SortableSongItem
-    key={song.id}
-    song={song}
-    index={index}
-    canEdit={canEdit()}
-    onRemove={removeSongFromSetlist}
-    onMoveUp={() => moveSong(index, 'up')}
-    onMoveDown={() => moveSong(index, 'down')}
-    onTogglePreview={togglePreview}
-    onOpenSongForm={openSongFormModal}
-    onOpenSheetViewer={openSheetViewerForSong}
-    onOpenYoutubeModal={setYoutubeModalSong}
-    onOpenNoteModal={openNoteModal}  // ✅ 추가
-    isPreviewOpen={previewStates[song.id] || false}
-    totalSongs={songs.length}
-    // 개인화 관련 props
-    userNotes={songNotesMap[song.songs.id] || []}
-    personalNote={
-      personalView?.customizations.find(
-        c => c.type === 'replace' && c.originalSongId === song.songs.id
-      )?.noteId
-        ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
-            c => c.type === 'replace' && c.originalSongId === song.songs.id
-          )?.noteId)
-        : undefined
-    }
-    onSelectPersonalNote={handleSelectPersonalNote}
-  />
-))}
+        {songs.map((song, index) => {
+          const insertedNotes = getInsertedNotesAfter(song.order_number)
+
+          return (
+            <div key={song.id}>
+              <SortableSongItem
+                song={song}
+                index={index}
+                canEdit={canEdit()}
+                onRemove={removeSongFromSetlist}
+                onMoveUp={() => moveSong(index, 'up')}
+                onMoveDown={() => moveSong(index, 'down')}
+                onTogglePreview={togglePreview}
+                onOpenSongForm={openSongFormModal}
+                onOpenSheetViewer={openSheetViewerForSong}
+                onOpenYoutubeModal={setYoutubeModalSong}
+                onOpenNoteModal={openNoteModal}
+                isPreviewOpen={previewStates[song.id] || false}
+                totalSongs={songs.length}
+                userNotes={songNotesMap[song.songs.id] || []}
+                personalNote={
+                  personalView?.customizations.find(
+                    c => c.type === 'replace' && c.originalSongId === song.songs.id
+                  )?.noteId
+                    ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
+                        c => c.type === 'replace' && c.originalSongId === song.songs.id
+                      )?.noteId)
+                    : undefined
+                }
+                onSelectPersonalNote={handleSelectPersonalNote}
+              />
+
+              {/* 🆕 끼워넣은 노트 표시 */}
+              {insertedNotes.map((note) => (
+                <div
+                  key={`inserted-${note.id}`}
+                  className="p-4 bg-amber-50 border-l-4 border-amber-400"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">📝</span>
+                      <div>
+                        <h4 className="font-semibold text-amber-900">
+                          {note.title || note.song_name}
+                        </h4>
+                        <p className="text-sm text-amber-700">
+                          나만 보임 · {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveInsertedNote(note.customization.noteId)}
+                      className="px-3 py-1 text-sm text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded"
+                    >
+                      제거
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* 🆕 끼워넣기 버튼 (hover 시 표시) */}
+              {userSheetNotes.length > 0 && (
+                <div className="group relative h-0">
+                  <div className="absolute left-0 right-0 top-0 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      onClick={() => setInsertModal({ show: true, afterOrder: song.order_number })}
+                      className="px-4 py-1 text-sm bg-amber-100 text-amber-700 rounded-full border border-amber-300 hover:bg-amber-200 shadow-sm"
+                    >
+                      + 끼워넣기
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </SortableContext>
   </DndContext>
@@ -1747,6 +1845,70 @@ const saveNote = async () => {
     </div>
   </div>
 )}
+
+      {/* 🆕 끼워넣기 노트 선택 모달 */}
+      {insertModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">끼워넣을 노트 선택</h3>
+              <button
+                onClick={() => {
+                  setInsertModal({ show: false, afterOrder: 0 })
+                  setInsertSearchQuery('')
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 border-b">
+              <input
+                type="text"
+                value={insertSearchQuery}
+                onChange={(e) => setInsertSearchQuery(e.target.value)}
+                placeholder="노트 검색..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {filteredInsertNotes.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {userSheetNotes.length === 0
+                    ? '아직 저장된 필기 노트가 없습니다.'
+                    : '검색 결과가 없습니다.'
+                  }
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredInsertNotes.map((note) => (
+                    <button
+                      key={note.id}
+                      onClick={() => handleInsertNote(note.id)}
+                      className="w-full p-4 border rounded-lg hover:bg-amber-50 hover:border-amber-300 text-left transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">📝</span>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">
+                            {note.title || note.song_name}
+                          </h4>
+                          <p className="text-sm text-gray-500 truncate">
+                            {note.team_name || '빈 노트'} · 수정: {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                          </p>
+                        </div>
+                        <span className="text-amber-600 text-sm font-medium">선택</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🎵 SheetMusicEditor - 다중 곡 악보 에디터 */}
       {showSheetMusicEditor && sheetEditorSongs.length > 0 && (

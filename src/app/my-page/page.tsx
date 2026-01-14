@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, User, parseThemes, ThemeCount, fetchThemeCounts } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
   Music, Settings, Edit, Trash2, Eye, EyeOff, Globe,
-  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Pencil, Image, Download
+  Lock, Users, Share2, Upload, ChevronRight, X, Save, Search, Filter, Plus, Heart, FileText, Pencil, Image, Download,
+  Grid, List, CheckSquare, Square
 } from 'lucide-react'
 import { SEASONS, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
@@ -14,6 +15,7 @@ import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import SheetMusicEditor from '@/components/SheetMusicEditor'
+import SheetMusicViewer from '@/components/SheetMusicViewer'
 
 interface UploadedSong {
   id: string
@@ -69,6 +71,12 @@ const {
 const [editingNote, setEditingNote] = useState<LocalSheetMusicNote | null>(null)
 const [showNoteEditor, setShowNoteEditor] = useState(false)
 
+// 📝 필기 노트 뷰 및 선택 상태
+const [notesViewMode, setNotesViewMode] = useState<'grid' | 'list'>('grid')
+const [notesSelectMode, setNotesSelectMode] = useState(false)
+const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
+const [deletingNotes, setDeletingNotes] = useState(false)
+
 // 📝 파일명 수정 및 공유 모달 상태
 const [showRenameModal, setShowRenameModal] = useState(false)
 const [renameNote, setRenameNote] = useState<LocalSheetMusicNote | null>(null)
@@ -111,6 +119,11 @@ const [sharing, setSharing] = useState(false)
 
   // 곡 미리보기 (인라인)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
+
+  // 📷 악보 뷰어 상태
+  const [viewerSong, setViewerSong] = useState<UploadedSong | null>(null)
+  const lastTapTimeRef = useRef<number>(0)
+  const lastTapSongIdRef = useRef<string | null>(null)
 
   // 검색 및 필터
   const [searchText, setSearchText] = useState('')
@@ -307,6 +320,27 @@ const handleTeamNameChange = (value: string) => {
       [songId]: !prev[songId]
     }))
   }
+
+  // 📷 악보 뷰어 열기
+  const openViewer = useCallback((song: UploadedSong) => {
+    if (!song.file_url) return
+    setViewerSong(song)
+  }, [])
+
+  // 📱 더블탭 핸들러 (터치 디바이스 지원)
+  const handleDoubleTap = useCallback((song: UploadedSong) => {
+    const now = Date.now()
+    const DOUBLE_TAP_DELAY = 300
+
+    if (lastTapSongIdRef.current === song.id && now - lastTapTimeRef.current < DOUBLE_TAP_DELAY) {
+      openViewer(song)
+      lastTapTimeRef.current = 0
+      lastTapSongIdRef.current = null
+    } else {
+      lastTapTimeRef.current = now
+      lastTapSongIdRef.current = song.id
+    }
+  }, [openViewer])
 
   // ✏️ 곡 수정 모달 열기
   const openEditModal = (song: UploadedSong) => {
@@ -1119,17 +1153,32 @@ setNewSong({ ...newSong, tempo: tempoValue })
                       {/* 인라인 미리보기 */}
                       {previewStates[song.id] && song.file_url && (
                         <div className="mt-4 border-t pt-4">
-                          <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-gray-700 text-sm">악보</h4>
+                            <span className="text-xs text-gray-400">더블클릭하여 확대</span>
+                          </div>
                           {song.file_type === 'pdf' ? (
                             <iframe
                               src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                              className="w-full h-[500px] border rounded"
+                              className="w-full h-[500px] border rounded cursor-pointer"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                openViewer(song)
+                              }}
                             />
                           ) : (
                             <img
                               src={song.file_url}
                               alt={`${song.song_name} 악보`}
-                              className="max-w-full h-auto rounded shadow-sm"
+                              className="max-w-full h-auto rounded shadow-sm cursor-pointer"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                openViewer(song)
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation()
+                                handleDoubleTap(song)
+                              }}
                             />
                           )}
                         </div>
@@ -1198,17 +1247,32 @@ setNewSong({ ...newSong, tempo: tempoValue })
                       {/* 인라인 미리보기 */}
                       {previewStates[song.id] && song.file_url && (
                         <div className="mt-4 border-t pt-4">
-                          <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보</h4>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-gray-700 text-sm">악보</h4>
+                            <span className="text-xs text-gray-400">더블클릭하여 확대</span>
+                          </div>
                           {song.file_type === 'pdf' ? (
                             <iframe
                               src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                              className="w-full h-[500px] border rounded"
+                              className="w-full h-[500px] border rounded cursor-pointer"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                openViewer(song)
+                              }}
                             />
                           ) : (
                             <img
                               src={song.file_url}
                               alt={`${song.song_name} 악보`}
-                              className="max-w-full h-auto rounded shadow-sm"
+                              className="max-w-full h-auto rounded shadow-sm cursor-pointer"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation()
+                                openViewer(song)
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation()
+                                handleDoubleTap(song)
+                              }}
                             />
                           )}
                         </div>
@@ -1241,104 +1305,371 @@ setNewSong({ ...newSong, tempo: tempoValue })
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-                  {sheetMusicNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="bg-white border rounded-lg shadow-sm hover:shadow-md transition overflow-hidden"
-                    >
-                      {/* 썸네일 영역 */}
-                      <div
-                        className="h-40 bg-gray-100 flex items-center justify-center cursor-pointer relative"
-                        onClick={() => {
-                          setEditingNote(note)
-                          setShowNoteEditor(true)
-                        }}
-                      >
-                        {note.thumbnail_url ? (
-                          <img
-                            src={note.thumbnail_url}
-                            alt={note.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="text-gray-400 text-center">
-                            <FileText size={48} className="mx-auto mb-2" />
-                            <span className="text-sm">미리보기</span>
-                          </div>
-                        )}
-                        {/* 파일 타입 배지 */}
-                        <span className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${
-                          note.file_type === 'pdf'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
-                        </span>
+                <>
+                  {/* 🆕 상단 툴바 */}
+                  <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      {/* 뷰 전환 버튼 */}
+                      <div className="flex border rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => setNotesViewMode('grid')}
+                          className={`p-2 ${notesViewMode === 'grid' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                          title="그리드 뷰"
+                        >
+                          <Grid size={18} />
+                        </button>
+                        <button
+                          onClick={() => setNotesViewMode('list')}
+                          className={`p-2 ${notesViewMode === 'list' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                          title="리스트 뷰"
+                        >
+                          <List size={18} />
+                        </button>
                       </div>
 
-                      {/* 정보 영역 */}
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 truncate">{note.title}</h3>
-                        <p className="text-sm text-gray-600 truncate">{note.song_name}</p>
-                        {note.team_name && (
-                          <p className="text-xs text-gray-500 truncate">{note.team_name}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-2">
-                          수정일: {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                        </p>
+                      {/* 선택 모드 토글 */}
+                      <button
+                        onClick={() => {
+                          setNotesSelectMode(!notesSelectMode)
+                          if (notesSelectMode) {
+                            setSelectedNoteIds(new Set())
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                          notesSelectMode
+                            ? 'bg-green-600 text-white'
+                            : 'bg-white border text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {notesSelectMode ? '선택 취소' : '선택'}
+                      </button>
+                    </div>
 
-                        {/* 버튼 영역 */}
-                        <div className="flex gap-2 mt-3">
-                          <button
+                    {/* 선택 모드일 때 표시 */}
+                    {notesSelectMode && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          {selectedNoteIds.size}개 선택됨
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (selectedNoteIds.size === sheetMusicNotes.length) {
+                              setSelectedNoteIds(new Set())
+                            } else {
+                              setSelectedNoteIds(new Set(sheetMusicNotes.map(n => n.id)))
+                            }
+                          }}
+                          className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
+                        >
+                          {selectedNoteIds.size === sheetMusicNotes.length ? '전체 해제' : '전체 선택'}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (selectedNoteIds.size === 0) {
+                              alert('삭제할 노트를 선택해주세요.')
+                              return
+                            }
+                            if (!confirm(`선택한 ${selectedNoteIds.size}개의 노트를 삭제하시겠습니까?`)) return
+
+                            setDeletingNotes(true)
+                            let successCount = 0
+                            for (const noteId of selectedNoteIds) {
+                              const success = await deleteSheetMusicNote(noteId)
+                              if (success) successCount++
+                            }
+                            setDeletingNotes(false)
+                            setSelectedNoteIds(new Set())
+                            setNotesSelectMode(false)
+                            alert(`${successCount}개의 노트가 삭제되었습니다.`)
+                          }}
+                          disabled={selectedNoteIds.size === 0 || deletingNotes}
+                          className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {deletingNotes ? '삭제 중...' : `삭제 (${selectedNoteIds.size})`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🆕 그리드 뷰 */}
+                  {notesViewMode === 'grid' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                      {sheetMusicNotes.map((note) => (
+                        <div
+                          key={note.id}
+                          className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition overflow-hidden relative ${
+                            selectedNoteIds.has(note.id) ? 'ring-2 ring-green-500' : ''
+                          }`}
+                        >
+                          {/* 선택 체크박스 */}
+                          {notesSelectMode && (
+                            <button
+                              onClick={() => {
+                                const newSet = new Set(selectedNoteIds)
+                                if (newSet.has(note.id)) {
+                                  newSet.delete(note.id)
+                                } else {
+                                  newSet.add(note.id)
+                                }
+                                setSelectedNoteIds(newSet)
+                              }}
+                              className="absolute top-2 left-2 z-10 p-1 bg-white rounded shadow"
+                            >
+                              {selectedNoteIds.has(note.id) ? (
+                                <CheckSquare size={20} className="text-green-600" />
+                              ) : (
+                                <Square size={20} className="text-gray-400" />
+                              )}
+                            </button>
+                          )}
+
+                          {/* 썸네일 영역 */}
+                          <div
+                            className="h-40 bg-gray-100 flex items-center justify-center cursor-pointer relative"
                             onClick={() => {
-                              setEditingNote(note)
-                              setShowNoteEditor(true)
-                            }}
-                            className="flex-1 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center justify-center gap-1"
-                          >
-                            <Edit size={14} />
-                            편집
-                          </button>
-                          <button
-                            onClick={() => {
-                              setRenameNote(note)
-                              setNewTitle(note.title)
-                              setShowRenameModal(true)
-                            }}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
-                            title="파일명 변경"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShareNote(note)
-                              setShareFileName(note.title)
-                              setShowShareModal2(true)
-                            }}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
-                            title="내보내기"
-                          >
-                            <Upload size={14} />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
-                              const success = await deleteSheetMusicNote(note.id)
-                              if (success) {
-                                alert('삭제되었습니다.')
+                              if (notesSelectMode) {
+                                const newSet = new Set(selectedNoteIds)
+                                if (newSet.has(note.id)) {
+                                  newSet.delete(note.id)
+                                } else {
+                                  newSet.add(note.id)
+                                }
+                                setSelectedNoteIds(newSet)
+                              } else {
+                                setEditingNote(note)
+                                setShowNoteEditor(true)
                               }
                             }}
-                            className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-red-100 hover:text-red-600"
                           >
-                            <Trash2 size={14} />
-                          </button>
+                            {note.thumbnail_url ? (
+                              <img
+                                src={note.thumbnail_url}
+                                alt={note.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="text-gray-400 text-center">
+                                <FileText size={48} className="mx-auto mb-2" />
+                                <span className="text-sm">미리보기</span>
+                              </div>
+                            )}
+                            {/* 파일 타입 배지 */}
+                            <span className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${
+                              note.file_type === 'pdf'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
+                            </span>
+                          </div>
+
+                          {/* 정보 영역 */}
+                          <div className="p-4">
+                            <h3 className="font-bold text-gray-900 truncate">{note.title}</h3>
+                            <p className="text-sm text-gray-600 truncate">{note.song_name}</p>
+                            {note.team_name && (
+                              <p className="text-xs text-gray-500 truncate">{note.team_name}</p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-2">
+                              수정일: {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                            </p>
+
+                            {/* 버튼 영역 - 선택 모드가 아닐 때만 표시 */}
+                            {!notesSelectMode && (
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  onClick={() => {
+                                    setEditingNote(note)
+                                    setShowNoteEditor(true)
+                                  }}
+                                  className="flex-1 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center justify-center gap-1"
+                                >
+                                  <Edit size={14} />
+                                  편집
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRenameNote(note)
+                                    setNewTitle(note.title)
+                                    setShowRenameModal(true)
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                                  title="파일명 변경"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setShareNote(note)
+                                    setShareFileName(note.title)
+                                    setShowShareModal2(true)
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                                  title="내보내기"
+                                >
+                                  <Upload size={14} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
+                                    const success = await deleteSheetMusicNote(note.id)
+                                    if (success) {
+                                      alert('삭제되었습니다.')
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-red-100 hover:text-red-600"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+
+                  {/* 🆕 리스트 뷰 */}
+                  {notesViewMode === 'list' && (
+                    <div className="divide-y">
+                      {sheetMusicNotes.map((note) => (
+                        <div
+                          key={note.id}
+                          className={`flex items-center gap-4 p-4 hover:bg-gray-50 ${
+                            selectedNoteIds.has(note.id) ? 'bg-green-50' : ''
+                          }`}
+                        >
+                          {/* 선택 체크박스 */}
+                          {notesSelectMode && (
+                            <button
+                              onClick={() => {
+                                const newSet = new Set(selectedNoteIds)
+                                if (newSet.has(note.id)) {
+                                  newSet.delete(note.id)
+                                } else {
+                                  newSet.add(note.id)
+                                }
+                                setSelectedNoteIds(newSet)
+                              }}
+                              className="flex-shrink-0"
+                            >
+                              {selectedNoteIds.has(note.id) ? (
+                                <CheckSquare size={24} className="text-green-600" />
+                              ) : (
+                                <Square size={24} className="text-gray-400" />
+                              )}
+                            </button>
+                          )}
+
+                          {/* 썸네일 */}
+                          <div
+                            className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center cursor-pointer overflow-hidden"
+                            onClick={() => {
+                              if (notesSelectMode) {
+                                const newSet = new Set(selectedNoteIds)
+                                if (newSet.has(note.id)) {
+                                  newSet.delete(note.id)
+                                } else {
+                                  newSet.add(note.id)
+                                }
+                                setSelectedNoteIds(newSet)
+                              } else {
+                                setEditingNote(note)
+                                setShowNoteEditor(true)
+                              }
+                            }}
+                          >
+                            {note.thumbnail_url ? (
+                              <img
+                                src={note.thumbnail_url}
+                                alt={note.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <FileText size={24} className="text-gray-400" />
+                            )}
+                          </div>
+
+                          {/* 정보 */}
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => {
+                              if (notesSelectMode) {
+                                const newSet = new Set(selectedNoteIds)
+                                if (newSet.has(note.id)) {
+                                  newSet.delete(note.id)
+                                } else {
+                                  newSet.add(note.id)
+                                }
+                                setSelectedNoteIds(newSet)
+                              } else {
+                                setEditingNote(note)
+                                setShowNoteEditor(true)
+                              }
+                            }}
+                          >
+                            <h3 className="font-bold text-gray-900 truncate">{note.title}</h3>
+                            <p className="text-sm text-gray-600 truncate">
+                              {note.song_name} {note.team_name && `· ${note.team_name}`}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                            </p>
+                          </div>
+
+                          {/* 타입 배지 */}
+                          <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
+                            note.file_type === 'pdf'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
+                          </span>
+
+                          {/* 버튼 - 선택 모드가 아닐 때만 표시 */}
+                          {!notesSelectMode && (
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => {
+                                  setEditingNote(note)
+                                  setShowNoteEditor(true)
+                                }}
+                                className="p-2 text-green-600 hover:bg-green-100 rounded"
+                                title="편집"
+                              >
+                                <Edit size={18} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRenameNote(note)
+                                  setNewTitle(note.title)
+                                  setShowRenameModal(true)
+                                }}
+                                className="p-2 text-gray-600 hover:bg-gray-100 rounded"
+                                title="이름 변경"
+                              >
+                                <Pencil size={18} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
+                                  const success = await deleteSheetMusicNote(note.id)
+                                  if (success) {
+                                    alert('삭제되었습니다.')
+                                  }
+                                }}
+                                className="p-2 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded"
+                                title="삭제"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -2748,6 +3079,16 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
             </div>
           </div>
         </div>
+      )}
+
+      {/* 📷 악보 뷰어 */}
+      {viewerSong && viewerSong.file_url && (
+        <SheetMusicViewer
+          fileUrl={viewerSong.file_url}
+          fileType={viewerSong.file_type === 'pdf' ? 'pdf' : 'image'}
+          songName={viewerSong.song_name}
+          onClose={() => setViewerSong(null)}
+        />
       )}
 
     </div>

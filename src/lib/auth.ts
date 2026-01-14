@@ -63,9 +63,37 @@ export const signIn = async (email: string, password: string) => {
       .update({ last_login: new Date().toISOString() })
       .eq('id', data.user.id);
   // 📊 로그인 로깅
-    logActivity({ 
-      actionType: 'user_login', 
-      userId: data.user.id 
+    logActivity({
+      actionType: 'user_login',
+      userId: data.user.id
+    }).catch(err => console.error('로그인 로깅 실패:', err));
+  }
+
+  return data;
+};
+
+// 로그인 (CAPTCHA 포함)
+export const signInWithCaptcha = async (email: string, password: string, captchaToken: string) => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+    options: {
+      captchaToken,
+    }
+  });
+
+  if (error) throw error;
+
+  // last_login 업데이트
+  if (data.user) {
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', data.user.id);
+    // 📊 로그인 로깅
+    logActivity({
+      actionType: 'user_login',
+      userId: data.user.id
     }).catch(err => console.error('로그인 로깅 실패:', err));
   }
 
