@@ -143,11 +143,31 @@ input[type="file"]::file-selector-button {
 /* iOS Safari에서 입력 필드 확대 방지 (font-size 16px 이상 필요) */
 input, textarea, select {
   font-size: 16px !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 텍스트 입력 필드만 appearance: none 적용 (체크박스/라디오 제외) */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+textarea,
+select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+}
+
+/* 체크박스와 라디오 버튼은 기본 스타일 유지 */
+input[type="checkbox"],
+input[type="radio"] {
+  -webkit-appearance: checkbox;
+  -moz-appearance: checkbox;
+  appearance: checkbox;
 }
 
 /* iOS에서 버튼 터치 최적화 */

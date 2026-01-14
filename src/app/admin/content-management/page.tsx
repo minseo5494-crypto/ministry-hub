@@ -707,26 +707,28 @@ export default function ContentManagementPage() {
             <div className="divide-y">
               {/* 전체 선택 헤더 */}
               <div className="px-3 py-2 bg-violet-100 border-b flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === songs.length && songs.length > 0}
-                  onChange={toggleSelectAll}
-                  className="w-5 h-5 accent-violet-600 cursor-pointer"
-                />
-                <span className="text-sm font-medium text-violet-700">전체 선택 ({songs.length}곡)</span>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === songs.length && songs.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-violet-700">전체 선택 ({songs.length}곡)</span>
+                </label>
               </div>
               {songs.map(song => {
                 const visInfo = getVisibilityLabel(song.visibility)
                 const VisIcon = visInfo.icon
                 return (
                   <div key={song.id} className={`p-3 hover:bg-gray-50 transition ${selectedIds.has(song.id) ? 'bg-violet-50' : ''}`}>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
                       {/* 체크박스 */}
                       <input
                         type="checkbox"
                         checked={selectedIds.has(song.id)}
                         onChange={() => toggleSelection(song.id)}
-                        className="w-5 h-5 mt-0.5 accent-violet-600 flex-shrink-0 cursor-pointer"
+                        className="w-4 h-4 mt-1 flex-shrink-0 cursor-pointer"
                       />
                       {/* 곡 정보 */}
                       <div className="flex-1 min-w-0">
