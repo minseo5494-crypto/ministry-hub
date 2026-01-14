@@ -6,7 +6,7 @@ import { logActivity } from './activityLogger';
 // ============================================
 
 // 회원가입
-export const signUp = async (email: string, password: string, name: string, churchName?: string) => {
+export const signUp = async (email: string, password: string, name: string, churchName?: string, captchaToken?: string) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -14,7 +14,8 @@ export const signUp = async (email: string, password: string, name: string, chur
       data: {
         name: name,
       },
-      emailRedirectTo: `${window.location.origin}/auth/callback`
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+      captchaToken: captchaToken,
     }
   });
 

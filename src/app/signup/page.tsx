@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { signUp, signInWithGoogle } from '@/lib/auth'
 import { Mail, Lock, User, AlertCircle, Chrome, Building, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
+
+const TURNSTILE_SITE_KEY = '0x4AAAAAACMZcDVS_OETU_9t'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -20,6 +23,8 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [agreeCopyright, setAgreeCopyright] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance>(null)
 
   // 이메일/비밀번호 회원가입
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,6 +34,12 @@ export default function SignupPage() {
     // 약관 동의 검사
     if (!agreeTerms || !agreeCopyright) {
       setError('약관에 동의해주세요.')
+      return
+    }
+
+    // CAPTCHA 검사
+    if (!captchaToken) {
+      setError('보안 확인을 완료해주세요.')
       return
     }
 
@@ -46,9 +57,9 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      await signUp(formData.email, formData.password, formData.name, formData.churchName)
-      // 회원가입 성공 시 바로 로그인 페이지로 이동
-      router.push('/login?message=회원가입이 완료되었습니다. 로그인해주세요.')
+      await signUp(formData.email, formData.password, formData.name, formData.churchName, captchaToken)
+      // 회원가입 성공 시 이메일 인증 안내 페이지로 이동
+      router.push('/login?message=회원가입이 완료되었습니다. 이메일로 발송된 인증 링크를 클릭해주세요.')
     } catch (err: any) {
       console.error('Signup error:', err)
       const errorMsg = err.message || ''
@@ -61,6 +72,9 @@ export default function SignupPage() {
       } else {
         setError(err.message || '회원가입에 실패했습니다.')
       }
+      // CAPTCHA 리셋
+      turnstileRef.current?.reset()
+      setCaptchaToken(null)
       setLoading(false)
     }
   }
@@ -290,6 +304,24 @@ export default function SignupPage() {
                 을 읽었으며, 악보 업로드 시 저작권 관련 책임이 업로더에게 있음에 동의합니다. <span className="text-red-500">*</span>
               </span>
             </div>
+          </div>
+
+          {/* CAPTCHA */}
+          <div className="flex justify-center">
+            <Turnstile
+              ref={turnstileRef}
+              siteKey={TURNSTILE_SITE_KEY}
+              onSuccess={(token) => setCaptchaToken(token)}
+              onError={() => {
+                setCaptchaToken(null)
+                setError('보안 확인에 실패했습니다. 다시 시도해주세요.')
+              }}
+              onExpire={() => setCaptchaToken(null)}
+              options={{
+                theme: 'light',
+                size: 'normal',
+              }}
+            />
           </div>
 
           <button
