@@ -209,7 +209,7 @@ export default function AdminFeedbacks() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.push('/admin/dashboard')}
+                onClick={() => router.push('/')}
                 className="p-2 hover:bg-gray-100 rounded-lg"
               >
                 <ArrowLeft size={20} />
