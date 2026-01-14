@@ -1,13 +1,10 @@
 'use client'
 
-import { useState, Suspense, useRef } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { signInWithCaptcha, signInWithGoogle } from '@/lib/auth'
+import { signIn, signInWithGoogle } from '@/lib/auth'
 import { Mail, Lock, AlertCircle, Chrome, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
-
-const TURNSTILE_SITE_KEY = '0x4AAAAAACMZcDVS_OETU_9t'
 
 // useSearchParams를 사용하는 컴포넌트를 분리
 function LoginForm() {
@@ -21,8 +18,6 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const turnstileRef = useRef<TurnstileInstance>(null)
 
   // URL에서 메시지 확인 (이메일 인증 완료 등)
   const message = searchParams.get('message')
@@ -31,29 +26,18 @@ function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (!captchaToken) {
-      setError('보안 확인을 완료해주세요.')
-      return
-    }
-
     setLoading(true)
 
     try {
-      await signInWithCaptcha(formData.email, formData.password, captchaToken)
+      await signIn(formData.email, formData.password)
       router.push('/')
     } catch (err: any) {
       console.error('Login error:', err)
-      // CAPTCHA 리셋
-      turnstileRef.current?.reset()
-      setCaptchaToken(null)
 
       if (err.message?.includes('Email not confirmed')) {
         setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
       } else if (err.message?.includes('Invalid login credentials')) {
         setError('이메일 또는 비밀번호가 올바르지 않습니다.')
-      } else if (err.message?.includes('captcha')) {
-        setError('보안 확인에 실패했습니다. 다시 시도해주세요.')
       } else {
         setError(err.message || '로그인에 실패했습니다.')
       }
@@ -207,27 +191,9 @@ function LoginForm() {
             </Link>
           </div>
 
-          {/* CAPTCHA */}
-          <div className="flex justify-center">
-            <Turnstile
-              ref={turnstileRef}
-              siteKey={TURNSTILE_SITE_KEY}
-              onSuccess={(token) => setCaptchaToken(token)}
-              onError={() => {
-                setCaptchaToken(null)
-                setError('보안 확인 로드에 실패했습니다. 페이지를 새로고침해주세요.')
-              }}
-              onExpire={() => setCaptchaToken(null)}
-              options={{
-                theme: 'light',
-                size: 'normal',
-              }}
-            />
-          </div>
-
           <button
             type="submit"
-            disabled={loading || googleLoading || !captchaToken}
+            disabled={loading || googleLoading}
             className="w-full bg-[#C5D7F2] text-white py-3 rounded-lg font-medium hover:bg-[#A8C4E8] disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {loading ? '로그인 중...' : '로그인'}
