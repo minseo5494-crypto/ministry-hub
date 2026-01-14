@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
@@ -40,7 +40,7 @@ const normalizeText = (text: string): string => {
     .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (한글, 영문, 숫자만 유지)
 }
 
-export default function ContentManagementPage() {
+function ContentManagementContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -1175,5 +1175,21 @@ export default function ContentManagementPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Suspense 래퍼
+export default function ContentManagementPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    }>
+      <ContentManagementContent />
+    </Suspense>
   )
 }
