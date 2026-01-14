@@ -31,6 +31,15 @@ const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: 'lyrics-themes', label: '가사/테마', icon: Tag },
 ]
 
+// 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/\([a-g][#b]?m?\)/gi, '')  // 키 표시 제거 (C), (D#), (Am), (Bb) 등
+    .replace(/\s+/g, '')  // 모든 공백 제거
+    .replace(/[^\w가-힣]/g, '')  // 특수문자 제거 (한글, 영문, 숫자만 유지)
+}
+
 export default function ContentManagementPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -129,103 +138,193 @@ export default function ContentManagementPage() {
     }
   }
 
+  // 클라이언트 측 검색 필터 함수
+  const filterBySearch = (data: SongWithUploader[], query: string): SongWithUploader[] => {
+    if (!query.trim()) return data
+
+    const normalizedQuery = normalizeText(query)
+    const queryLower = query.toLowerCase()
+
+    return data.filter(song => {
+      const normalizedSongName = normalizeText(song.song_name || '')
+      const normalizedTeamName = normalizeText(song.team_name || '')
+      const songNameLower = (song.song_name || '').toLowerCase()
+      const teamNameLower = (song.team_name || '').toLowerCase()
+
+      // 정규화된 검색 (띄어쓰기 무시)
+      const normalizedMatch = normalizedSongName.includes(normalizedQuery) ||
+                              normalizedTeamName.includes(normalizedQuery)
+
+      // 일반 검색 (원본 텍스트)
+      const regularMatch = songNameLower.includes(queryLower) ||
+                           teamNameLower.includes(queryLower)
+
+      return normalizedMatch || regularMatch
+    })
+  }
+
   const loadPendingSongs = async () => {
-    let query = supabase
-      .from('songs')
-      .select('*', { count: 'exact' })
-      .eq('upload_status', 'pending')
-      .order('created_at', { ascending: false })
-
+    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
     if (searchQuery.trim()) {
-      query = query.or(`song_name.ilike.%${searchQuery}%,team_name.ilike.%${searchQuery}%`)
-    }
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('upload_status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-    const { data, count, error } = await query
-      .range((page - 1) * pageSize, page * pageSize - 1)
+      if (!error && data) {
+        const filtered = filterBySearch(data, searchQuery)
+        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
+        setSongs(paginated)
+        setTotalCount(filtered.length)
+      }
+    } else {
+      // 검색어가 없을 때는 기존 방식
+      const { data, count, error } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact' })
+        .eq('upload_status', 'pending')
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1)
 
-    if (!error) {
-      setSongs(data || [])
-      setTotalCount(count || 0)
+      if (!error) {
+        setSongs(data || [])
+        setTotalCount(count || 0)
+      }
     }
   }
 
   const loadUserSongs = async () => {
-    // 먼저 곡 목록 가져오기
-    let query = supabase
-      .from('songs')
-      .select('*', { count: 'exact' })
-      .eq('is_user_uploaded', true)
-      .order('created_at', { ascending: false })
-
+    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
     if (searchQuery.trim()) {
-      query = query.or(`song_name.ilike.%${searchQuery}%,team_name.ilike.%${searchQuery}%`)
-    }
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('is_user_uploaded', true)
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-    const { data, count, error } = await query
-      .range((page - 1) * pageSize, page * pageSize - 1)
+      if (!error && data) {
+        const filtered = filterBySearch(data, searchQuery)
+        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
-    if (!error && data) {
-      // 업로더 정보 가져오기
-      const uploaderIds = [...new Set(data.map(s => s.uploaded_by).filter(Boolean))]
+        // 업로더 정보 가져오기
+        const uploaderIds = [...new Set(paginated.map(s => s.uploaded_by).filter(Boolean))]
 
-      if (uploaderIds.length > 0) {
-        const { data: users } = await supabase
-          .from('users')
-          .select('id, email, name')
-          .in('id', uploaderIds)
+        if (uploaderIds.length > 0) {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, email, name')
+            .in('id', uploaderIds)
 
-        const userMap = new Map(users?.map(u => [u.id, u]) || [])
+          const userMap = new Map(users?.map(u => [u.id, u]) || [])
 
-        const songsWithUploader = data.map(song => ({
-          ...song,
-          uploader: song.uploaded_by ? userMap.get(song.uploaded_by) : undefined
-        }))
+          const songsWithUploader = paginated.map(song => ({
+            ...song,
+            uploader: song.uploaded_by ? userMap.get(song.uploaded_by) : undefined
+          }))
 
-        setSongs(songsWithUploader)
-      } else {
-        setSongs(data)
+          setSongs(songsWithUploader)
+        } else {
+          setSongs(paginated)
+        }
+        setTotalCount(filtered.length)
       }
-      setTotalCount(count || 0)
+    } else {
+      // 검색어가 없을 때는 기존 방식
+      const { data, count, error } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact' })
+        .eq('is_user_uploaded', true)
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1)
+
+      if (!error && data) {
+        // 업로더 정보 가져오기
+        const uploaderIds = [...new Set(data.map(s => s.uploaded_by).filter(Boolean))]
+
+        if (uploaderIds.length > 0) {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, email, name')
+            .in('id', uploaderIds)
+
+          const userMap = new Map(users?.map(u => [u.id, u]) || [])
+
+          const songsWithUploader = data.map(song => ({
+            ...song,
+            uploader: song.uploaded_by ? userMap.get(song.uploaded_by) : undefined
+          }))
+
+          setSongs(songsWithUploader)
+        } else {
+          setSongs(data)
+        }
+        setTotalCount(count || 0)
+      }
     }
   }
 
   const loadOfficialSongs = async () => {
-    let query = supabase
-      .from('songs')
-      .select('*', { count: 'exact' })
-      .eq('is_official', true)
-      .order('created_at', { ascending: false })
-
+    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
     if (searchQuery.trim()) {
-      query = query.or(`song_name.ilike.%${searchQuery}%,team_name.ilike.%${searchQuery}%`)
-    }
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('is_official', true)
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-    const { data, count, error } = await query
-      .range((page - 1) * pageSize, page * pageSize - 1)
+      if (!error && data) {
+        const filtered = filterBySearch(data, searchQuery)
+        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
+        setSongs(paginated)
+        setTotalCount(filtered.length)
+      }
+    } else {
+      const { data, count, error } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact' })
+        .eq('is_official', true)
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1)
 
-    if (!error) {
-      setSongs(data || [])
-      setTotalCount(count || 0)
+      if (!error) {
+        setSongs(data || [])
+        setTotalCount(count || 0)
+      }
     }
   }
 
   const loadSongsWithoutThemes = async () => {
-    let query = supabase
-      .from('songs')
-      .select('*', { count: 'exact' })
-      .is('themes', null)
-      .order('song_name', { ascending: true })
-
+    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
     if (searchQuery.trim()) {
-      query = query.or(`song_name.ilike.%${searchQuery}%,team_name.ilike.%${searchQuery}%`)
-    }
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .is('themes', null)
+        .order('song_name', { ascending: true })
+        .limit(500)
 
-    const { data, count, error } = await query
-      .range((page - 1) * pageSize, page * pageSize - 1)
+      if (!error && data) {
+        const filtered = filterBySearch(data, searchQuery)
+        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
+        setSongs(paginated)
+        setTotalCount(filtered.length)
+      }
+    } else {
+      const { data, count, error } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact' })
+        .is('themes', null)
+        .order('song_name', { ascending: true })
+        .range((page - 1) * pageSize, page * pageSize - 1)
 
-    if (!error) {
-      setSongs(data || [])
-      setTotalCount(count || 0)
+      if (!error) {
+        setSongs(data || [])
+        setTotalCount(count || 0)
+      }
     }
   }
 
