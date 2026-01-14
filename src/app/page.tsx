@@ -1679,18 +1679,6 @@ const hasMore = displayCount < filteredSongs.length
               <span>My Page</span>
             </button>
 
-            {/* 📝 내 필기 */}
-            <button
-              onClick={() => {
-                router.push('/my-notes')
-                setShowMobileMenu(false)
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-            >
-              <FileText size={20} />
-              <span>내 필기</span>
-            </button>
-
             <div className="border-t my-2"></div>
 
             {/* 곡 추가 */}
