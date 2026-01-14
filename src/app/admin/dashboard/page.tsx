@@ -8,7 +8,7 @@ import {
   TrendingUp, Users, Music, FileText, Download,
   BarChart3, Calendar, Award, Activity, ArrowLeft,
   Building, UserCheck, FileSpreadsheet, Settings, Tag,
-  Shield, CheckCircle, Upload
+  Shield, CheckCircle, Upload, MessageSquare
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -527,7 +527,7 @@ export default function AdminDashboard() {
         {/* 관리 도구 바로가기 */}
         <div className="bg-white rounded-lg shadow mb-8 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">관리 도구</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               onClick={() => router.push('/admin/content-management')}
               className="flex items-center gap-4 p-6 bg-blue-50 hover:bg-blue-100 rounded-xl transition text-left"
@@ -550,6 +550,18 @@ export default function AdminDashboard() {
               <div>
                 <span className="text-lg font-semibold text-violet-900">계정 관리</span>
                 <p className="text-sm text-violet-600">팀, 업로더, 퍼블리셔, 관리자</p>
+              </div>
+            </button>
+            <button
+              onClick={() => router.push('/admin/feedbacks')}
+              className="flex items-center gap-4 p-6 bg-green-50 hover:bg-green-100 rounded-xl transition text-left"
+            >
+              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <span className="text-lg font-semibold text-green-900">피드백 관리</span>
+                <p className="text-sm text-green-600">사용자 피드백 확인 및 관리</p>
               </div>
             </button>
           </div>
