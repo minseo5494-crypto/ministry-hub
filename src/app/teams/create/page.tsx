@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activityLogger'
 import { ArrowLeft, Users } from 'lucide-react'
+import { trackTeamCreate } from '@/lib/analytics'
 
 export default function CreateTeamPage() {
   const router = useRouter()
@@ -83,11 +84,14 @@ export default function CreateTeamPage() {
       if (memberError) throw memberError
 
       // 📊 팀 생성 로깅
-    logActivity({ 
-      actionType: 'team_create', 
-      userId: user.id,
-      teamId: teamData.id 
-    }).catch(err => console.error('팀 생성 로깅 실패:', err))
+      logActivity({
+        actionType: 'team_create',
+        userId: user.id,
+        teamId: teamData.id
+      }).catch(err => console.error('팀 생성 로깅 실패:', err))
+
+      // GA4 트래킹
+      trackTeamCreate()
 
       alert('✅ 팀이 생성되었습니다!')
       router.push(`/my-team/${teamData.id}`)

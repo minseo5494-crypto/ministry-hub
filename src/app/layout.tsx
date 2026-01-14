@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import Footer from '@/components/Footer'
+
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -57,6 +60,7 @@ export default function RootLayout({
         <main className="flex-grow">{children}</main>
         <Footer />
       </body>
+      {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </html>
   )
 }

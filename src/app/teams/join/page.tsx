@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activityLogger'
 import { ArrowLeft, UserPlus } from 'lucide-react'
+import { trackTeamJoin } from '@/lib/analytics'
 
 export default function JoinTeamPage() {
   const router = useRouter()
@@ -92,11 +93,14 @@ export default function JoinTeamPage() {
       if (updateError) throw updateError
 
       // 📊 팀 가입 로깅
-    logActivity({ 
-      actionType: 'team_join', 
-      userId: user.id,
-      teamId: teamData.id 
-    }).catch(err => console.error('팀 가입 로깅 실패:', err))
+      logActivity({
+        actionType: 'team_join',
+        userId: user.id,
+        teamId: teamData.id
+      }).catch(err => console.error('팀 가입 로깅 실패:', err))
+
+      // GA4 트래킹
+      trackTeamJoin()
 
       alert(`✅ "${teamData.name}" 팀에 참여했습니다!`)
       router.push(`/my-team/${teamData.id}`)

@@ -8,6 +8,7 @@ import { logPDFDownload, logPPTDownload } from '@/lib/activityLogger'
 import { SECTION_ABBREVIATIONS } from '@/lib/supabase'
 import { SongFormStyle, PartTagStyle } from '@/components/SongFormPositionModal'
 import { DownloadProgress } from '@/components/DownloadLoadingModal'
+import { trackSongDownload } from '@/lib/analytics'
 
 // 모바일 기기 감지
 const isMobileDevice = () => {
@@ -556,6 +557,11 @@ export function useDownload({
         }
       }
 
+      // GA4 트래킹
+      currentSongs.forEach(song => {
+        trackSongDownload(song.id, 'image')
+      })
+
       // 모바일에서 미리보기 모달 표시
       if (isMobile && collectedImages.length > 0) {
         setPreviewImages(collectedImages)
@@ -571,7 +577,7 @@ export function useDownload({
       setDownloadProgress(null)
     }
   }
-  
+
   // PNG 데이터를 JPG로 변환
   const convertToJpg = (dataUrl: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -687,6 +693,11 @@ export function useDownload({
         )
       }
 
+      // GA4 트래킹
+      currentSongs.forEach(song => {
+        trackSongDownload(song.id, 'pdf')
+      })
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('WYSIWYG PDF 생성 오류:', error)
@@ -748,6 +759,11 @@ export function useDownload({
         )
       }
 
+      // GA4 트래킹
+      currentSongs.forEach(song => {
+        trackSongDownload(song.id, 'pdf')
+      })
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('PDF 생성 오류:', error)
@@ -757,7 +773,7 @@ export function useDownload({
       setDownloadProgress(null)
     }
   }
-  
+
   // ========================================
   // 레거시: 기존 방식 PDF 생성 (fallback)
   // ========================================
@@ -813,6 +829,11 @@ export function useDownload({
         )
       }
 
+      // GA4 트래킹
+      currentSongs.forEach(song => {
+        trackSongDownload(song.id, 'pdf')
+      })
+
       alert('✅ PDF가 생성되었습니다!')
     } catch (error) {
       console.error('PDF 생성 오류:', error)
@@ -822,7 +843,7 @@ export function useDownload({
       setDownloadProgress(null)
     }
   }
-  
+
   // ========================================
   // 송폼 없이 이미지 다운로드 (모바일 미리보기 지원)
   // ========================================
@@ -888,6 +909,11 @@ export function useDownload({
           await new Promise(resolve => setTimeout(resolve, 300))
         }
       }
+
+      // GA4 트래킹
+      currentSongs.forEach(song => {
+        trackSongDownload(song.id, 'image')
+      })
 
       // 모바일에서 미리보기 모달 표시
       if (isMobile && collectedImages.length > 0) {
@@ -1104,7 +1130,12 @@ export function useDownload({
           console.error('Error logging PPT download:', error)
         })
       }
-      
+
+      // GA4 트래킹
+      selectedSongs.forEach(song => {
+        trackSongDownload(song.id, 'ppt')
+      })
+
       alert('✅ PPT가 생성되었습니다!')
     } catch (error) {
       console.error('PPT 생성 오류:', error)

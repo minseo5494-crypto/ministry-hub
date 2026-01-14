@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
 // 🆕 로깅 함수 import
 import { logSongSearch, logPPTDownload, logSongView, logPDFDownload } from '@/lib/activityLogger'
+import { trackSetlistCreate, trackSongView, trackSongLike } from '@/lib/analytics'
 import { getErrorMessage } from '@/lib/errorMessages'
 // 🆕 추가
 import SongFormPositionModal from '@/components/SongFormPositionModal'
@@ -632,7 +633,10 @@ const toggleLike = async (e: React.MouseEvent, songId: string) => {
       await supabase
         .from('song_likes')
         .insert({ song_id: songId, user_id: user.id })
-      
+
+      // GA4 트래킹
+      trackSongLike(songId)
+
       setLikedSongs(prev => new Set([...prev, songId]))
       
       // songs 상태에서 like_count 업데이트
@@ -649,6 +653,16 @@ const toggleLike = async (e: React.MouseEvent, songId: string) => {
 
   // 🆕 미리보기 토글
   const togglePreview = (songId: string) => {
+    const isCurrentlyOpen = previewStates[songId]
+
+    // GA4 트래킹 (열 때만)
+    if (!isCurrentlyOpen) {
+      const song = songs.find(s => s.id === songId)
+      if (song) {
+        trackSongView(songId, song.song_name)
+      }
+    }
+
     setPreviewStates(prev => ({
       ...prev,
       [songId]: !prev[songId]
@@ -1051,8 +1065,11 @@ if (newSong.visibility === 'public') {
 
       if (songsError) throw songsError
 
+      // GA4 트래킹
+      trackSetlistCreate(selectedSongs.length)
+
       alert('✅ 콘티가 저장되었습니다!')
-    
+
       // 🆕 초기화
       setShowSaveModal(false)
       setSetlistTitle('')

@@ -3,6 +3,7 @@
 import { useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signInWithCaptcha, signInWithGoogle } from '@/lib/auth'
+import { trackLogin } from '@/lib/analytics'
 import { Mail, Lock, AlertCircle, Chrome, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
@@ -41,6 +42,7 @@ function LoginForm() {
 
     try {
       await signInWithCaptcha(formData.email, formData.password, captchaToken)
+      trackLogin('email')
       router.push('/')
     } catch (err: any) {
       console.error('Login error:', err)
