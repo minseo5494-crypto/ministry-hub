@@ -85,6 +85,7 @@ export interface LocalSheetMusicNote {
   thumbnail_url?: string
   created_at: string
   updated_at: string
+  deleted_at?: string | null  // Soft delete 지원
   // 송폼 관련 필드
   songForms?: string[]
   songFormEnabled?: boolean
@@ -179,6 +180,7 @@ const convertFromSupabase = (data: Record<string, unknown>): LocalSheetMusicNote
   thumbnail_url: data.thumbnail_url as string | undefined,
   created_at: data.created_at as string,
   updated_at: data.updated_at as string,
+  deleted_at: data.deleted_at as string | null | undefined,
   songForms: (data.song_forms as string[]) || undefined,
   songFormEnabled: data.song_form_enabled as boolean | undefined,
   songFormStyle: data.song_form_style as SavedSongFormStyle | undefined,
@@ -199,6 +201,7 @@ const convertToSupabase = (note: LocalSheetMusicNote) => ({
   title: note.title,
   annotations: note.annotations,
   thumbnail_url: note.thumbnail_url,
+  deleted_at: note.deleted_at,
   song_forms: note.songForms,
   song_form_enabled: note.songFormEnabled,
   song_form_style: note.songFormStyle,
@@ -212,13 +215,10 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // 컴포넌트 마운트 시 로컬 스토리지에서 로드
-  useEffect(() => {
-    const stored = getStoredNotes()
-    setNotes(stored)
-  }, [])
+  // 컴포넌트 마운트 시 로컬 스토리지에서 로드하지 않음
+  // fetchNotes 호출 시에만 Supabase에서 가져옴 (Supabase가 source of truth)
 
-  // 사용자의 모든 노트 가져오기 (Supabase 동기화 포함)
+  // 사용자의 모든 노트 가져오기 (Supabase 동기화 포함, Soft Delete 지원)
   const fetchNotes = useCallback(async (userId: string) => {
     setLoading(true)
     setError(null)
@@ -239,16 +239,26 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
           console.error('❌ Supabase 조회 실패:', fetchError.message, fetchError.details, fetchError.hint)
         }
 
-        if (!fetchError && data && data.length > 0) {
+        if (!fetchError && data) {
           const supabaseNotes = data.map(convertFromSupabase)
           const localNotes = getStoredNotes()
           const otherUserNotes = localNotes.filter(n => n.user_id !== userId)
 
+          // 삭제된 노트 ID 수집 (다른 기기에서 삭제된 것들)
+          const deletedNoteIds = new Set(
+            supabaseNotes.filter(n => n.deleted_at).map(n => n.id)
+          )
+
+          // 활성 노트만 필터링 (deleted_at이 null인 것)
+          const activeSupabaseNotes = supabaseNotes.filter(n => !n.deleted_at)
+
+          console.log(`📊 활성 노트: ${activeSupabaseNotes.length}개, 삭제된 노트: ${deletedNoteIds.size}개`)
+
           const mergedNotes = [...otherUserNotes]
           const processedIds = new Set<string>()
 
-          // Supabase 노트와 로컬 노트 병합 (최신 버전 유지)
-          for (const supabaseNote of supabaseNotes) {
+          // Supabase 활성 노트와 로컬 노트 병합 (최신 버전 유지)
+          for (const supabaseNote of activeSupabaseNotes) {
             const localNote = localNotes.find(n => n.id === supabaseNote.id)
 
             if (!localNote || new Date(supabaseNote.updated_at) >= new Date(localNote.updated_at)) {
@@ -259,26 +269,31 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
             processedIds.add(supabaseNote.id)
           }
 
-          // 로컬에만 있는 노트도 유지 (아직 동기화 안 된 것들)
+          // 로컬에만 있는 노트 처리
           for (const localNote of localNotes.filter(n => n.user_id === userId)) {
-            if (!processedIds.has(localNote.id)) {
-              mergedNotes.push(localNote)
-              // 로컬에만 있는 노트를 Supabase에 업로드 (fire and forget)
-              void supabase.from('sheet_music_notes').upsert(convertToSupabase(localNote))
+            // Supabase에서 삭제된 노트면 로컬에서도 제거
+            if (deletedNoteIds.has(localNote.id)) {
+              console.log(`🗑️ 다른 기기에서 삭제된 노트 로컬에서 제거: ${localNote.id}`)
+              continue
             }
+            // 이미 처리된 노트는 스킵
+            if (processedIds.has(localNote.id)) {
+              continue
+            }
+            // Supabase에 없는 로컬 노트는 삭제된 것으로 간주 (source of truth)
           }
 
           setStoredNotes(mergedNotes)
-          console.log(`✅ Supabase에서 ${supabaseNotes.length}개 노트 동기화 완료`)
+          console.log(`✅ Supabase에서 ${activeSupabaseNotes.length}개 활성 노트 동기화 완료`)
         }
       } catch (syncErr) {
         console.warn('Supabase 동기화 실패, 로컬 데이터 사용:', syncErr)
       }
 
-      // 2. 병합된 로컬 데이터에서 사용자 노트 반환
+      // 2. 병합된 로컬 데이터에서 사용자 노트 반환 (deleted_at이 없는 것만)
       const allNotes = getStoredNotes()
       const userNotes = allNotes
-        .filter(note => note.user_id === userId)
+        .filter(note => note.user_id === userId && !note.deleted_at)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
 
       setNotes(userNotes)
@@ -482,24 +497,36 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     }
   }, [])
 
-  // 노트 삭제
+  // 노트 삭제 (Soft Delete - 다중 기기 동기화 지원)
   const deleteNote = useCallback(async (id: string): Promise<boolean> => {
     setLoading(true)
     setError(null)
 
     try {
+      const now = new Date().toISOString()
+
+      // 1. Supabase에서 soft delete (deleted_at 업데이트)
+      console.log('🗑️ Supabase에서 노트 soft delete 시도:', id)
+      const { error: updateError, status } = await supabase
+        .from('sheet_music_notes')
+        .update({ deleted_at: now })
+        .eq('id', id)
+
+      console.log('🗑️ Supabase soft delete 응답:', { status, error: updateError?.message })
+
+      if (updateError) {
+        console.error('❌ Supabase soft delete 실패:', updateError.message, updateError.details, updateError.code)
+      } else {
+        console.log('✅ Supabase에서 노트 soft delete 완료')
+      }
+
+      // 2. 로컬 스토리지에서도 삭제 (UI에서 즉시 사라지도록)
       const allNotes = getStoredNotes()
       const updatedNotes = allNotes.filter(n => n.id !== id)
       setStoredNotes(updatedNotes)
 
+      // 3. React 상태 업데이트
       setNotes(prev => prev.filter(n => n.id !== id))
-
-      // Supabase에서도 삭제
-      try {
-        await supabase.from('sheet_music_notes').delete().eq('id', id)
-      } catch (supabaseErr) {
-        console.warn('Supabase 삭제 실패:', supabaseErr)
-      }
 
       return true
     } catch (err) {
@@ -536,18 +563,19 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     }
   }, [])
 
-  // Supabase로 동기화 (로컬 → Supabase)
+  // Supabase로 동기화 (로컬 → Supabase, 활성 노트만)
   const syncToSupabase = useCallback(async (userId: string) => {
     setLoading(true)
     try {
       const allNotes = getStoredNotes()
-      const userNotes = allNotes.filter(n => n.user_id === userId)
+      // 활성 노트만 동기화 (deleted_at이 없는 것)
+      const userNotes = allNotes.filter(n => n.user_id === userId && !n.deleted_at)
 
       for (const note of userNotes) {
         await supabase.from('sheet_music_notes').upsert(convertToSupabase(note))
       }
 
-      console.log(`✅ ${userNotes.length}개 노트를 Supabase에 동기화했습니다.`)
+      console.log(`✅ ${userNotes.length}개 활성 노트를 Supabase에 동기화했습니다.`)
     } catch (err) {
       console.error('Supabase 동기화 오류:', err)
       setError('Supabase 동기화에 실패했습니다.')
@@ -556,7 +584,7 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     }
   }, [])
 
-  // Supabase에서 동기화 (Supabase → 로컬)
+  // Supabase에서 동기화 (Supabase → 로컬, Soft Delete 지원)
   const syncFromSupabase = useCallback(async (userId: string) => {
     setLoading(true)
     try {
@@ -568,16 +596,24 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
 
       if (fetchError) throw fetchError
 
-      if (data && data.length > 0) {
+      if (data) {
         const supabaseNotes = data.map(convertFromSupabase)
 
-        // 로컬 노트와 병합 (Supabase가 더 최신이면 덮어쓰기)
+        // 삭제된 노트 ID 수집
+        const deletedNoteIds = new Set(
+          supabaseNotes.filter(n => n.deleted_at).map(n => n.id)
+        )
+
+        // 활성 노트만 필터링
+        const activeSupabaseNotes = supabaseNotes.filter(n => !n.deleted_at)
+
+        // 로컬 노트와 병합 (Supabase가 source of truth)
         const localNotes = getStoredNotes()
         const otherUserNotes = localNotes.filter(n => n.user_id !== userId)
 
         const mergedNotes = [...otherUserNotes]
 
-        for (const supabaseNote of supabaseNotes) {
+        for (const supabaseNote of activeSupabaseNotes) {
           const localNote = localNotes.find(n => n.id === supabaseNote.id)
 
           if (!localNote || new Date(supabaseNote.updated_at) > new Date(localNote.updated_at)) {
@@ -587,17 +623,13 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
           }
         }
 
-        // 로컬에만 있는 노트도 유지
-        for (const localNote of localNotes.filter(n => n.user_id === userId)) {
-          if (!supabaseNotes.find(s => s.id === localNote.id)) {
-            mergedNotes.push(localNote)
-          }
-        }
+        // Supabase가 source of truth이므로 로컬에만 있는 노트는 삭제된 것으로 간주
+        // 삭제된 노트(deleted_at이 있는 것)는 로컬에서도 제거됨
 
         setStoredNotes(mergedNotes)
-        setNotes(mergedNotes.filter(n => n.user_id === userId))
+        setNotes(mergedNotes.filter(n => n.user_id === userId && !n.deleted_at))
 
-        console.log(`✅ Supabase에서 ${supabaseNotes.length}개 노트를 동기화했습니다.`)
+        console.log(`✅ Supabase에서 ${activeSupabaseNotes.length}개 활성 노트를 동기화했습니다.`)
       }
     } catch (err) {
       console.error('Supabase에서 동기화 오류:', err)
