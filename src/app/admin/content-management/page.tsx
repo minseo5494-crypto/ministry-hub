@@ -22,11 +22,11 @@ interface SongWithUploader extends Song {
   shared_with_teams?: string[]
 }
 
-type TabType = 'approvals' | 'user-songs' | 'official-songs' | 'lyrics-themes'
+type TabType = 'approvals' | 'all-songs' | 'official-songs' | 'lyrics-themes'
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: 'approvals', label: '곡 승인', icon: CheckCircle },
-  { id: 'user-songs', label: '사용자 곡', icon: FileText },
+  { id: 'all-songs', label: '전체 곡', icon: FileText },
   { id: 'official-songs', label: '공식 악보', icon: Shield },
   { id: 'lyrics-themes', label: '가사/테마', icon: Tag },
 ]
@@ -126,8 +126,8 @@ export default function ContentManagementPage() {
       case 'approvals':
         await loadPendingSongs()
         break
-      case 'user-songs':
-        await loadUserSongs()
+      case 'all-songs':
+        await loadAllSongs()
         break
       case 'official-songs':
         await loadOfficialSongs()
@@ -195,15 +195,14 @@ export default function ContentManagementPage() {
     }
   }
 
-  const loadUserSongs = async () => {
+  const loadAllSongs = async () => {
     // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
     if (searchQuery.trim()) {
       const { data, error } = await supabase
         .from('songs')
         .select('*')
-        .eq('is_user_uploaded', true)
         .order('created_at', { ascending: false })
-        .limit(500)
+        .limit(1000)
 
       if (!error && data) {
         const filtered = filterBySearch(data, searchQuery)
@@ -236,7 +235,6 @@ export default function ContentManagementPage() {
       const { data, count, error } = await supabase
         .from('songs')
         .select('*', { count: 'exact' })
-        .eq('is_user_uploaded', true)
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1)
 
@@ -706,12 +704,12 @@ export default function ContentManagementPage() {
           {songs.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               {activeTab === 'approvals' && '승인 대기 중인 곡이 없습니다.'}
-              {activeTab === 'user-songs' && '사용자 업로드 곡이 없습니다.'}
+              {activeTab === 'all-songs' && '등록된 곡이 없습니다.'}
               {activeTab === 'official-songs' && '공식 곡이 없습니다.'}
               {activeTab === 'lyrics-themes' && '모든 곡에 테마가 입력되어 있습니다!'}
             </div>
-          ) : activeTab === 'user-songs' ? (
-            /* 사용자 곡 - 컴팩트 상세 정보 표시 */
+          ) : activeTab === 'all-songs' ? (
+            /* 전체 곡 - 컴팩트 상세 정보 표시 */
             <div className="divide-y">
               {/* 전체 선택 헤더 */}
               {songs.length > 0 && (
@@ -747,8 +745,10 @@ export default function ContentManagementPage() {
                             <VisIcon size={10} />
                             {visInfo.label}
                           </span>
-                          {song.is_official && (
-                            <span className="px-1.5 py-0.5 text-[11px] bg-blue-100 text-blue-700 rounded">공식</span>
+                          {song.is_official ? (
+                            <span className="px-1.5 py-0.5 text-[11px] bg-blue-100 text-blue-700 rounded font-medium">공식</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 text-[11px] bg-gray-100 text-gray-600 rounded">사용자</span>
                           )}
                           {song.upload_status && (
                             <span className={`px-1.5 py-0.5 text-[11px] rounded ${
