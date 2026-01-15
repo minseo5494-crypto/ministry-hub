@@ -9,7 +9,7 @@ import {
   ArrowLeft, Music, CheckCircle, Shield, Tag,
   Search, Check, X, ChevronLeft, ChevronRight,
   FileText, Eye, Edit2, User, Calendar, Lock, Globe, Users,
-  Save, Trash2
+  Save, Trash2, ExternalLink
 } from 'lucide-react'
 
 // 사용자 정보가 포함된 확장 Song 타입
@@ -22,13 +22,13 @@ interface SongWithUploader extends Song {
   shared_with_teams?: string[]
 }
 
-type TabType = 'approvals' | 'all-songs' | 'official-songs' | 'lyrics-themes'
+type TabType = 'approvals' | 'all-songs' | 'official-songs' | 'song-editor'
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: 'approvals', label: '곡 승인', icon: CheckCircle },
   { id: 'all-songs', label: '전체 곡', icon: FileText },
   { id: 'official-songs', label: '공식 악보', icon: Shield },
-  { id: 'lyrics-themes', label: '가사/테마', icon: Tag },
+  { id: 'song-editor', label: '곡 데이터 편집', icon: Tag },
 ]
 
 // 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
@@ -78,6 +78,17 @@ export default function ContentManagementPage() {
   // 토스트
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  // 곡 데이터 편집 탭 상태
+  const [editorSongs, setEditorSongs] = useState<Song[]>([])
+  const [editorSearchQuery, setEditorSearchQuery] = useState('')
+  const [editorPage, setEditorPage] = useState(1)
+  const [selectedSongId, setSelectedSongId] = useState<string>('')
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null)
+  const [fullLyrics, setFullLyrics] = useState('')
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [editorSaving, setEditorSaving] = useState(false)
+  const editorItemsPerPage = 15
+
   useEffect(() => {
     checkAdminAndLoad()
   }, [])
@@ -126,8 +137,8 @@ export default function ContentManagementPage() {
       case 'official-songs':
         await loadOfficialSongs()
         break
-      case 'lyrics-themes':
-        await loadSongsWithoutThemes()
+      case 'song-editor':
+        await loadEditorSongs()
         break
     }
   }
@@ -289,34 +300,116 @@ export default function ContentManagementPage() {
     }
   }
 
-  const loadSongsWithoutThemes = async () => {
-    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
-    if (searchQuery.trim()) {
+  // 곡 데이터 편집 - 전체 곡 로드
+  const loadEditorSongs = async () => {
+    const allSongs: Song[] = []
+    let offset = 0
+    const batchSize = 1000
+
+    while (true) {
       const { data, error } = await supabase
         .from('songs')
-        .select('*')
-        .is('themes', null)
+        .select('id, song_name, team_name, lyrics, themes, youtube_url')
         .order('song_name', { ascending: true })
-        .limit(500)
+        .range(offset, offset + batchSize - 1)
 
-      if (!error && data) {
-        const filtered = filterBySearch(data, searchQuery)
-        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
-        setSongs(paginated)
-        setTotalCount(filtered.length)
-      }
-    } else {
-      const { data, count, error } = await supabase
+      if (error) break
+      if (!data || data.length === 0) break
+
+      allSongs.push(...data)
+      if (data.length < batchSize) break
+      offset += batchSize
+    }
+
+    setEditorSongs(allSongs)
+
+    // 첫 번째 곡 자동 선택
+    if (allSongs.length > 0 && !selectedSongId) {
+      setSelectedSongId(allSongs[0].id)
+      loadSongDetails(allSongs[0])
+    }
+  }
+
+  // 곡 상세 정보 로드
+  const loadSongDetails = (song: Song) => {
+    setSelectedSong(song)
+    setFullLyrics(song.lyrics || '')
+    setYoutubeUrl((song as any).youtube_url || '')
+  }
+
+  // 곡 데이터 저장
+  const handleEditorSave = async () => {
+    if (!selectedSongId || editorSaving) return
+
+    setEditorSaving(true)
+
+    try {
+      const { error } = await supabase
         .from('songs')
-        .select('*', { count: 'exact' })
-        .is('themes', null)
-        .order('song_name', { ascending: true })
-        .range((page - 1) * pageSize, page * pageSize - 1)
+        .update({
+          lyrics: fullLyrics.trim() || null,
+          youtube_url: youtubeUrl.trim() || null
+        })
+        .eq('id', selectedSongId)
 
-      if (!error) {
-        setSongs(data || [])
-        setTotalCount(count || 0)
-      }
+      if (error) throw error
+
+      showToast('저장되었습니다!', 'success')
+
+      // 목록 새로고침 및 다음 곡으로 이동
+      setTimeout(() => {
+        goToNextEditorSong()
+        loadEditorSongs()
+      }, 500)
+
+    } catch (error) {
+      console.error('Error saving:', error)
+      showToast('저장 중 오류가 발생했습니다.', 'error')
+    } finally {
+      setEditorSaving(false)
+    }
+  }
+
+  // 곡 선택
+  const handleEditorSongSelect = (songId: string) => {
+    const song = editorSongs.find(s => s.id === songId)
+    if (song) {
+      setSelectedSongId(songId)
+      loadSongDetails(song)
+    }
+  }
+
+  // 필터링된 에디터 곡 목록
+  const filteredEditorSongs = editorSongs.filter(song => {
+    if (!editorSearchQuery.trim()) return true
+    const query = editorSearchQuery.replace(/\s/g, '').toLowerCase()
+    const songName = (song.song_name || '').replace(/\s/g, '').toLowerCase()
+    const teamName = (song.team_name || '').replace(/\s/g, '').toLowerCase()
+    return songName.includes(query) || teamName.includes(query)
+  })
+
+  // 에디터 페이지네이션
+  const editorTotalPages = Math.ceil(filteredEditorSongs.length / editorItemsPerPage)
+  const editorStartIndex = (editorPage - 1) * editorItemsPerPage
+  const paginatedEditorSongs = filteredEditorSongs.slice(editorStartIndex, editorStartIndex + editorItemsPerPage)
+
+  // 현재 곡 인덱스
+  const currentEditorIndex = filteredEditorSongs.findIndex(s => s.id === selectedSongId)
+
+  // 이전/다음 곡
+  const goToPrevEditorSong = () => {
+    if (currentEditorIndex > 0) {
+      const prevSong = filteredEditorSongs[currentEditorIndex - 1]
+      setSelectedSongId(prevSong.id)
+      loadSongDetails(prevSong)
+    }
+  }
+
+  const goToNextEditorSong = () => {
+    if (currentEditorIndex < filteredEditorSongs.length - 1) {
+      const nextSong = filteredEditorSongs[currentEditorIndex + 1]
+      setSelectedSongId(nextSong.id)
+      loadSongDetails(nextSong)
     }
   }
 
@@ -623,40 +716,206 @@ export default function ContentManagementPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* 검색 & 정보 */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="곡명 또는 아티스트 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
-            />
-          </div>
-          <div className="text-sm text-gray-500 self-center">
-            총 {totalCount}곡
-          </div>
-        </div>
+        {/* 곡 데이터 편집 탭 UI */}
+        {activeTab === 'song-editor' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 왼쪽: 곡 선택 */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border p-4">
+                <h2 className="font-semibold text-gray-900 mb-4">곡 선택</h2>
 
-        {/* 가사/테마 탭일 때 편집기로 이동 버튼 */}
-        {activeTab === 'lyrics-themes' && (
-          <div className="mb-6 p-4 bg-violet-50 rounded-lg flex items-center justify-between">
-            <div>
-              <p className="font-medium text-violet-900">테마가 없는 곡: {totalCount}곡</p>
-              <p className="text-sm text-violet-700">가사/테마 편집기에서 한 곡씩 편집할 수 있습니다.</p>
+                {/* 검색 */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="곡 또는 팀명 검색..."
+                    value={editorSearchQuery}
+                    onChange={(e) => {
+                      setEditorSearchQuery(e.target.value)
+                      setEditorPage(1)
+                    }}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                  />
+                </div>
+
+                {editorSearchQuery && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    검색 결과: {filteredEditorSongs.length}곡
+                  </p>
+                )}
+
+                {/* 곡 목록 */}
+                <div className="max-h-[calc(100vh-400px)] overflow-y-auto space-y-1">
+                  {paginatedEditorSongs.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">
+                      {editorSongs.length === 0 ? '곡이 없습니다.' : '검색 결과가 없습니다.'}
+                    </p>
+                  ) : (
+                    paginatedEditorSongs.map((song) => (
+                      <button
+                        key={song.id}
+                        onClick={() => handleEditorSongSelect(song.id)}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition text-sm ${
+                          selectedSongId === song.id
+                            ? 'bg-violet-100 text-violet-700 font-medium'
+                            : 'hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        <div className="font-medium truncate">{song.song_name}</div>
+                        {song.team_name && (
+                          <div className="text-xs text-gray-500 truncate">{song.team_name}</div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* 페이지네이션 */}
+                {editorTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <button
+                      onClick={() => setEditorPage(p => Math.max(1, p - 1))}
+                      disabled={editorPage <= 1}
+                      className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                    >
+                      <ChevronLeft size={16} />
+                      이전
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      {editorPage} / {editorTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setEditorPage(p => Math.min(editorTotalPages, p + 1))}
+                      disabled={editorPage >= editorTotalPages}
+                      className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                    >
+                      다음
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <button
-              onClick={() => router.push('/admin/theme-editor')}
-              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition"
-            >
-              편집기 열기
-            </button>
-          </div>
-        )}
 
-        {/* 일괄 작업 바 (선택된 항목이 있을 때 표시) */}
+            {/* 오른쪽: 입력 영역 */}
+            <div className="lg:col-span-2 space-y-4">
+              {selectedSong ? (
+                <>
+                  {/* 선택된 곡 정보 */}
+                  <div className="bg-white rounded-xl shadow-sm border p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-lg font-bold text-gray-900 truncate">{selectedSong.song_name}</h2>
+                        {selectedSong.team_name && (
+                          <p className="text-gray-500 truncate">{selectedSong.team_name}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const query = encodeURIComponent(`${selectedSong.song_name} ${selectedSong.team_name || ''} 가사`)
+                          window.open(`https://www.google.com/search?q=${query}`, '_blank')
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition shrink-0"
+                      >
+                        <Search size={18} />
+                        가사 검색
+                        <ExternalLink size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 가사 입력 */}
+                  <div className="bg-white rounded-xl shadow-sm border p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4">가사</h3>
+                    <textarea
+                      value={fullLyrics}
+                      onChange={(e) => setFullLyrics(e.target.value)}
+                      placeholder="가사를 입력하세요..."
+                      className="w-full h-[450px] p-4 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 resize-none font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* 유튜브 링크 */}
+                  <div className="bg-white rounded-xl shadow-sm border p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4">유튜브 링크</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={youtubeUrl}
+                        onChange={(e) => setYoutubeUrl(e.target.value)}
+                        placeholder="https://youtube.com/watch?v=..."
+                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                      />
+                      <button
+                        onClick={() => {
+                          const query = encodeURIComponent(`${selectedSong?.song_name} ${selectedSong?.team_name || ''}`)
+                          window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank')
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition shrink-0"
+                      >
+                        <Search size={18} />
+                        검색
+                        <ExternalLink size={14} />
+                      </button>
+                    </div>
+                    {youtubeUrl && (
+                      <a
+                        href={youtubeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline"
+                      >
+                        <ExternalLink size={14} />
+                        링크 확인
+                      </a>
+                    )}
+                  </div>
+
+                  {/* 저장 버튼 */}
+                  <button
+                    onClick={handleEditorSave}
+                    disabled={editorSaving}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-medium rounded-xl transition shadow-lg"
+                  >
+                    {editorSaving ? (
+                      <>저장 중...</>
+                    ) : (
+                      <>
+                        <Save size={20} />
+                        저장
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-500">
+                  왼쪽에서 곡을 선택하세요.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 다른 탭들 UI */}
+            {/* 검색 & 정보 */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="곡명 또는 아티스트 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div className="text-sm text-gray-500 self-center">
+                총 {totalCount}곡
+              </div>
+            </div>
+
+            {/* 일괄 작업 바 (선택된 항목이 있을 때 표시) */}
         {selectedIds.size > 0 && (
           <div className="mb-4 p-3 bg-violet-50 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -700,7 +959,6 @@ export default function ContentManagementPage() {
               {activeTab === 'approvals' && '승인 대기 중인 곡이 없습니다.'}
               {activeTab === 'all-songs' && '등록된 곡이 없습니다.'}
               {activeTab === 'official-songs' && '공식 곡이 없습니다.'}
-              {activeTab === 'lyrics-themes' && '모든 곡에 테마가 입력되어 있습니다!'}
             </div>
           ) : activeTab === 'all-songs' ? (
             /* 전체 곡 - 컴팩트 상세 정보 표시 */
@@ -938,6 +1196,8 @@ export default function ContentManagementPage() {
               <ChevronRight size={20} />
             </button>
           </div>
+        )}
+          </>
         )}
       </div>
 
