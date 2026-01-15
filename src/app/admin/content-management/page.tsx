@@ -597,11 +597,10 @@ export default function ContentManagementPage() {
         song_name: editForm.song_name.trim(),
         team_name: editForm.team_name.trim() || null,
         key: editForm.key.trim() || null,
-        bpm: editForm.bpm ? parseInt(editForm.bpm) : null,
-        themes: editForm.themes.trim() ? editForm.themes.split(',').map(t => t.trim()) : null,
+        bpm: editForm.bpm.trim() || null,
+        themes: editForm.themes.trim() || null,
         visibility: editForm.visibility,
         is_official: editForm.is_official,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', editingSong.id)
 
@@ -612,7 +611,8 @@ export default function ContentManagementPage() {
       setEditingSong(null)
       loadData()
     } else {
-      showToast('수정 중 오류가 발생했습니다.', 'error')
+      console.error('Song update error:', error)
+      showToast(`수정 오류: ${error.message}`, 'error')
     }
   }
 
