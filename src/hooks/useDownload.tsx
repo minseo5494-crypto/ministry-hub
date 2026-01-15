@@ -1050,19 +1050,74 @@ export function useDownload({
   // ========================================
   // PPT 생성
   // ========================================
+
+  // 가사에서 섹션별로 파싱하는 헬퍼 함수
+  const parseLyricsToSections = (lyrics: string): { [section: string]: string } => {
+    const sections: { [section: string]: string } = {}
+    if (!lyrics) return sections
+
+    // 섹션 태그 패턴: [Verse1], [Chorus], [Bridge] 등
+    const sectionPattern = /\[(Intro|Verse\s?\d?|PreChorus\s?\d?|Pre-Chorus\s?\d?|Chorus\s?\d?|Bridge\s?\d?|Interlude|Outro|Tag)\]/gi
+
+    const parts = lyrics.split(sectionPattern)
+    let currentSection = ''
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim()
+      if (!part) continue
+
+      // 섹션 태그인지 확인
+      if (sectionPattern.test(`[${part}]`)) {
+        // 섹션 이름 정규화
+        currentSection = part.replace(/\s+/g, '')
+        sectionPattern.lastIndex = 0 // regex 상태 리셋
+      } else if (currentSection) {
+        sections[currentSection] = part
+        currentSection = ''
+      } else {
+        // 태그 없이 시작하는 가사
+        if (!sections['Verse1']) {
+          sections['Verse1'] = part
+        }
+      }
+    }
+
+    return sections
+  }
+
+  // 섹션 약어를 전체 이름으로 매핑
+  const getFullSectionName = (abbr: string): string[] => {
+    const mapping: { [key: string]: string[] } = {
+      'I': ['Intro'],
+      'V': ['Verse', 'Verse1'],
+      'V1': ['Verse1', 'Verse'],
+      'V2': ['Verse2'],
+      'V3': ['Verse3'],
+      'Pc': ['PreChorus', 'Pre-Chorus', 'PreChorus1'],
+      'C': ['Chorus', 'Chorus1'],
+      'C2': ['Chorus2'],
+      'B': ['Bridge', 'Bridge1'],
+      '간주': ['Interlude'],
+      'Int': ['Interlude'],
+      'T': ['Tag'],
+      'Out': ['Outro']
+    }
+    return mapping[abbr] || [abbr]
+  }
+
   const generatePPTWithOptions = useCallback(async (mode: 'form' | 'original') => {
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
     }
-    
+
     setDownloadingPPT(true)
     setShowPPTModal(false)
-    
+
     try {
       const PptxGenJS = (await import('pptxgenjs')).default
       const prs = new PptxGenJS()
-      
+
       // 표지 슬라이드
       const coverSlide = prs.addSlide()
       coverSlide.background = { color: '1F2937' }
@@ -1074,38 +1129,124 @@ export function useDownload({
         x: 0.5, y: 3.8, w: 9, h: 0.5,
         fontSize: 24, color: '9CA3AF', align: 'center'
       })
-      
+
       // 각 곡 처리
       for (const song of selectedSongs) {
         const forms = songForms[song.id]
-        
-        if (mode === 'form' && forms && forms.length > 0 && song.song_structure) {
-          for (const abbr of forms) {
-            const fullName = Object.keys(SECTION_ABBREVIATIONS).find(
-              key => SECTION_ABBREVIATIONS[key] === abbr
-            )
-            
-            if (fullName && song.song_structure[fullName]) {
+
+        // 가사 모드일 때
+        if (mode === 'form') {
+          // 1. song_structure가 있으면 사용
+          // 2. 없으면 lyrics를 파싱해서 사용
+          let lyricsData: { [section: string]: string } = {}
+
+          if (song.song_structure && Object.keys(song.song_structure).length > 0) {
+            lyricsData = song.song_structure
+          } else if (song.lyrics) {
+            lyricsData = parseLyricsToSections(song.lyrics)
+          }
+
+          // 송폼이 설정되어 있고 가사 데이터가 있으면
+          if (forms && forms.length > 0 && Object.keys(lyricsData).length > 0) {
+            for (const abbr of forms) {
+              // 약어에 해당하는 섹션 이름들 찾기
+              const possibleNames = getFullSectionName(abbr)
+              let sectionLyrics = ''
+
+              for (const name of possibleNames) {
+                // 대소문자 무시하고 찾기
+                const foundKey = Object.keys(lyricsData).find(
+                  k => k.toLowerCase() === name.toLowerCase()
+                )
+                if (foundKey && lyricsData[foundKey]) {
+                  sectionLyrics = lyricsData[foundKey]
+                  break
+                }
+              }
+
+              if (sectionLyrics) {
+                // 가사 처리: /를 줄바꿈으로 변환하고 2줄씩 슬라이드 분할
+                const processedLyrics = sectionLyrics
+                  .replace(/\s*\/\s*/g, '\n')
+                  .split('\n')
+                  .map((line: string) => line.trim())
+                  .filter((line: string) => line.length > 0)
+
+                const LINES_PER_SLIDE = 2
+                for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
+                  const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
+                  const slideText = slideLines.join('\n')
+
+                  const slide = prs.addSlide()
+                  slide.background = { color: 'FFFFFF' }
+
+                  const slideIndex = Math.floor(i / LINES_PER_SLIDE) + 1
+                  const totalSlides = Math.ceil(processedLyrics.length / LINES_PER_SLIDE)
+                  const sectionLabel = totalSlides > 1 ? `${abbr} (${slideIndex}/${totalSlides})` : abbr
+
+                  slide.addText(sectionLabel, {
+                    x: 0.5, y: 0.3, w: 9, h: 0.5,
+                    fontSize: 16, bold: true, color: '6B7280', align: 'left'
+                  })
+
+                  slide.addText(slideText, {
+                    x: 0.5, y: 2, w: 9, h: 3,
+                    fontSize: 36, color: '111827', align: 'center', valign: 'middle'
+                  })
+
+                  slide.addText(song.song_name, {
+                    x: 0.5, y: 6.5, w: 9, h: 0.3,
+                    fontSize: 14, color: '9CA3AF', align: 'center'
+                  })
+                }
+              }
+            }
+          } else if (song.lyrics) {
+            // 송폼이 없지만 가사가 있으면 전체 가사를 슬라이드로
+            const processedLyrics = song.lyrics
+              .replace(/\[.*?\]/g, '') // 섹션 태그 제거
+              .replace(/\s*\/\s*/g, '\n')
+              .split('\n')
+              .map((line: string) => line.trim())
+              .filter((line: string) => line.length > 0)
+
+            const LINES_PER_SLIDE = 2
+            for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
+              const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
+              const slideText = slideLines.join('\n')
+
               const slide = prs.addSlide()
               slide.background = { color: 'FFFFFF' }
-              
-              slide.addText(abbr, {
+
+              const slideIndex = Math.floor(i / LINES_PER_SLIDE) + 1
+              const totalSlides = Math.ceil(processedLyrics.length / LINES_PER_SLIDE)
+
+              slide.addText(`${slideIndex}/${totalSlides}`, {
                 x: 0.5, y: 0.3, w: 9, h: 0.5,
                 fontSize: 16, bold: true, color: '6B7280', align: 'left'
               })
-              
-              slide.addText(song.song_structure[fullName], {
-                x: 1, y: 1.5, w: 8, h: 4,
-                fontSize: 28, color: '111827', align: 'center', valign: 'middle'
+
+              slide.addText(slideText, {
+                x: 0.5, y: 2, w: 9, h: 3,
+                fontSize: 36, color: '111827', align: 'center', valign: 'middle'
               })
-              
+
               slide.addText(song.song_name, {
                 x: 0.5, y: 6.5, w: 9, h: 0.3,
                 fontSize: 14, color: '9CA3AF', align: 'center'
               })
             }
+          } else if (song.file_url) {
+            // 가사가 없으면 악보 이미지
+            const slide = prs.addSlide()
+            slide.addImage({
+              path: song.file_url,
+              x: 0, y: 0, w: '100%', h: '100%',
+              sizing: { type: 'contain', w: '100%', h: '100%' }
+            })
           }
         } else {
+          // 악보 모드
           if (song.file_url) {
             const slide = prs.addSlide()
             slide.addImage({
@@ -1116,10 +1257,10 @@ export function useDownload({
           }
         }
       }
-      
+
       const fileName = `${setlistTitle || '찬양콘티'}_${new Date().toISOString().split('T')[0]}.pptx`
       await prs.writeFile({ fileName })
-      
+
       if (userId) {
         await logPPTDownload(
           selectedSongs.map(s => s.id),
@@ -1151,12 +1292,15 @@ export function useDownload({
       alert('찬양을 선택해주세요.')
       return
     }
-    
-    const hasSongForm = selectedSongs.some(song =>
-      songForms[song.id] && songForms[song.id].length > 0
+
+    // 송폼이 있거나 가사가 있는 곡이 있으면 모달 표시
+    const hasSongFormOrLyrics = selectedSongs.some(song =>
+      (songForms[song.id] && songForms[song.id].length > 0) ||
+      song.lyrics ||
+      (song.song_structure && Object.keys(song.song_structure).length > 0)
     )
-    
-    if (hasSongForm) {
+
+    if (hasSongFormOrLyrics) {
       setShowPPTModal(true)
     } else {
       generatePPTWithOptions('original')

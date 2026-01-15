@@ -15,6 +15,7 @@ import {
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useDownload } from '@/hooks/useDownload'
+import { useAISearch } from '@/hooks/useAISearch'
 
 import Link from 'next/link'
 import { loadKoreanFont } from '@/lib/fontLoader'
@@ -258,8 +259,9 @@ const {
 
   const songListRef = useRef<HTMLDivElement>(null)
 
-
-  
+  // AI 검색 상태
+  const [isAISearchEnabled, setIsAISearchEnabled] = useState(false)
+  const { searchWithAI, isSearching: isAISearching, lastResult: aiSearchResult, clearResult: clearAIResult } = useAISearch()
 
   // 사용자 정보 확인
   useEffect(() => {
@@ -1878,13 +1880,105 @@ const hasMore = displayCount < filteredSongs.length
               <Search className="absolute left-4 top-4 text-gray-400" size={24} />
               <input
                 type="text"
-                placeholder="찬양곡 제목, 아티스트, 가사로 검색..."
-                className="w-full pl-12 pr-4 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
+                placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : "찬양곡 제목, 아티스트, 가사로 검색..."}
+                className="w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
                 value={filters.searchText}
                 onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && isAISearchEnabled && filters.searchText.trim()) {
+                    const result = await searchWithAI(filters.searchText)
+                    if (result?.success && result.filters) {
+                      // AI 결과로 필터 적용
+                      const aiFilters = result.filters
+                      setFilters(prev => ({
+                        ...prev,
+                        searchText: aiFilters.keywords.join(' ') || prev.searchText,
+                        themes: aiFilters.themes.length > 0 ? aiFilters.themes : prev.themes,
+                        season: aiFilters.season || prev.season,
+                        tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : prev.tempo,
+                        key: aiFilters.key || prev.key,
+                      }))
+                    }
+                  }
+                }}
                 style={{ backgroundColor: 'white' }}
               />
+              {/* AI 검색 토글 */}
+              <button
+                onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  isAISearchEnabled
+                    ? 'bg-purple-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {isAISearching ? (
+                  <span className="flex items-center gap-1">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    AI
+                  </span>
+                ) : (
+                  <>✨ AI</>
+                )}
+              </button>
             </div>
+            {/* AI 검색 안내 메시지 */}
+            {isAISearchEnabled && !aiSearchResult && (
+              <p className="text-center text-white/80 text-sm mt-2">
+                Enter 키를 눌러 AI 검색 실행 · 예: &quot;성탄절 느린 경배곡&quot;, &quot;G키 빠른 찬양&quot;
+              </p>
+            )}
+            {/* AI 검색 결과 피드백 */}
+            {aiSearchResult && aiSearchResult.success && (
+              <div className="mt-3 bg-white/10 backdrop-blur rounded-lg p-3 text-white text-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium flex items-center gap-1">
+                    ✨ AI 검색 해석 결과
+                  </span>
+                  <button
+                    onClick={clearAIResult}
+                    className="text-white/60 hover:text-white text-xs"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {aiSearchResult.filters.themes.length > 0 && (
+                    <span className="px-2 py-1 bg-purple-500/30 rounded text-xs">
+                      🏷️ {aiSearchResult.filters.themes.join(', ')}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.season && (
+                    <span className="px-2 py-1 bg-green-500/30 rounded text-xs">
+                      📅 {aiSearchResult.filters.season}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.tempo && (
+                    <span className="px-2 py-1 bg-orange-500/30 rounded text-xs">
+                      🎵 {aiSearchResult.filters.tempo === 'slow' ? '느린' : aiSearchResult.filters.tempo === 'fast' ? '빠른' : '보통'} 템포
+                    </span>
+                  )}
+                  {aiSearchResult.filters.key && (
+                    <span className="px-2 py-1 bg-blue-500/30 rounded text-xs">
+                      🎹 {aiSearchResult.filters.key} Key
+                    </span>
+                  )}
+                  {aiSearchResult.filters.mood && (
+                    <span className="px-2 py-1 bg-pink-500/30 rounded text-xs">
+                      💭 {aiSearchResult.filters.mood}
+                    </span>
+                  )}
+                  {aiSearchResult.filters.keywords.length > 0 && (
+                    <span className="px-2 py-1 bg-gray-500/30 rounded text-xs">
+                      🔍 {aiSearchResult.filters.keywords.join(', ')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
 
@@ -2575,19 +2669,22 @@ const hasMore = displayCount < filteredSongs.length
             </button>
           )}
 
-          {/* 가사 추가/보기 버튼 */}
+          {/* 가사 보기 버튼 */}
           <button
             onClick={(e) => {
               e.stopPropagation()
-              openLyricsModal(song)
+              if (song.lyrics) {
+                openLyricsModal(song)
+              }
             }}
-            className="p-1.5 md:p-2 rounded-lg"
+            disabled={!song.lyrics}
+            className="p-1.5 md:p-2 rounded-lg transition-colors"
             style={{
               color: song.lyrics ? '#16a34a' : '#d1d5db',
-              backgroundColor: song.lyrics ? '#dcfce7' : 'transparent',
+              cursor: song.lyrics ? 'pointer' : 'not-allowed',
               opacity: song.lyrics ? 1 : 0.5
             }}
-            title={song.lyrics ? '가사 보기/수정' : '가사 추가'}
+            title={song.lyrics ? '가사 보기' : '가사 없음'}
           >
             <FileText size={16} className="md:w-[18px] md:h-[18px]" />
           </button>
@@ -3529,19 +3626,19 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 onClick={() => generatePPTWithOptions('form')}
                 className="w-full p-4 border-2 border-blue-600 rounded-lg hover:bg-blue-50 text-left transition"
               >
-                <div className="font-bold text-blue-900 mb-1">🎵 송폼 순서대로</div>
+                <div className="font-bold text-blue-900 mb-1">🎤 가사 PPT</div>
                 <div className="text-sm text-gray-600">
-                  설정한 송폼 순서에 따라 가사 슬라이드 생성
+                  가사를 슬라이드로 생성 (송폼 설정 시 해당 순서대로)
                 </div>
               </button>
-              
+
               <button
                 onClick={() => generatePPTWithOptions('original')}
                 className="w-full p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 text-left transition"
               >
-                <div className="font-bold text-gray-900 mb-1">📄 악보 그대로</div>
+                <div className="font-bold text-gray-900 mb-1">📄 악보 PPT</div>
                 <div className="text-sm text-gray-600">
-                  업로드된 악보 이미지 그대로 생성
+                  업로드된 악보 이미지를 슬라이드로 생성
                 </div>
               </button>
             </div>
@@ -3705,13 +3802,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
   />
 )}
 
-{/* 가사 입력/수정 모달 */}
+{/* 가사 보기 모달 (읽기 전용) */}
 {showLyricsModal && editingLyricsSong && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
     <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
       <div className="flex items-center justify-between p-4 border-b">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">가사 {editingLyricsSong.lyrics ? '수정' : '추가'}</h2>
+          <h2 className="text-lg font-bold text-gray-900">가사</h2>
           <p className="text-sm text-gray-600">{editingLyricsSong.song_name} - {editingLyricsSong.team_name}</p>
         </div>
         <button
@@ -3727,18 +3824,12 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        <textarea
-          value={lyricsText}
-          onChange={(e) => setLyricsText(e.target.value)}
-          placeholder="가사를 입력하세요...&#10;&#10;예시:&#10;[Verse 1]&#10;주의 약속하신 말씀 위에 서&#10;&#10;[Chorus]&#10;주님만이 나의 반석..."
-          className="w-full h-[400px] p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-        />
-        <p className="mt-2 text-xs text-gray-500">
-          💡 팁: [Verse], [Chorus], [Bridge] 등으로 섹션을 구분하면 좋아요
-        </p>
+        <div className="w-full h-[400px] p-4 border border-gray-200 rounded-lg bg-gray-50 overflow-auto font-mono text-sm whitespace-pre-wrap">
+          {lyricsText || '가사가 없습니다.'}
+        </div>
       </div>
 
-      <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50">
+      <div className="flex items-center justify-end p-4 border-t bg-gray-50">
         <button
           onClick={() => {
             setShowLyricsModal(false)
@@ -3747,14 +3838,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           }}
           className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
         >
-          취소
-        </button>
-        <button
-          onClick={saveLyrics}
-          disabled={savingLyrics}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingLyrics ? '저장 중...' : '저장'}
+          닫기
         </button>
       </div>
     </div>
