@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { Song } from '@/lib/supabase'
 import {
   ArrowLeft, Search, Save, ChevronLeft, ChevronRight,
-  ToggleLeft, ToggleRight, Plus, X, GripVertical, Check
+  ToggleLeft, ToggleRight, Plus, X, GripVertical, Check, ExternalLink
 } from 'lucide-react'
 
 // 섹션 타입 정의
@@ -44,6 +44,20 @@ const COMMON_THEMES = [
   '예배', '찬양', '경배', '헌신', '사랑', '은혜', '감사', '신뢰', '소망',
   '위로', '치유', '회개', '성령', '임재', '동행', '연합', '선교', '승리',
   '십자가', '보혈', '정체성', '자녀', '기쁨', '평안', '순종', '겸손', '섬김'
+]
+
+// 섹션 태그 퀵 버튼 (약어 → 태그)
+const SECTION_QUICK_TAGS: { abbr: string; tag: string; label: string }[] = [
+  { abbr: 'I', tag: '[Intro]', label: 'Intro' },
+  { abbr: 'V1', tag: '[Verse1]', label: 'Verse 1' },
+  { abbr: 'V2', tag: '[Verse2]', label: 'Verse 2' },
+  { abbr: 'V3', tag: '[Verse3]', label: 'Verse 3' },
+  { abbr: 'PC', tag: '[PreChorus]', label: 'Pre-Chorus' },
+  { abbr: 'C', tag: '[Chorus]', label: 'Chorus' },
+  { abbr: 'C2', tag: '[Chorus2]', label: 'Chorus 2' },
+  { abbr: 'B', tag: '[Bridge]', label: 'Bridge' },
+  { abbr: 'Int', tag: '[Interlude]', label: 'Interlude' },
+  { abbr: 'O', tag: '[Outro]', label: 'Outro' },
 ]
 
 // 섹션 데이터 타입
@@ -90,6 +104,30 @@ export default function ThemeEditorPage() {
   const [showSectionDropdown, setShowSectionDropdown] = useState(false)
 
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const lyricsTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 섹션 태그 삽입 함수
+  const insertSectionTag = (tag: string) => {
+    const textarea = lyricsTextareaRef.current
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const text = fullLyrics
+
+    // 태그 앞에 빈 줄 추가 (첫 태그가 아닌 경우)
+    const prefix = start > 0 && text[start - 1] !== '\n' ? '\n\n' : (start > 0 ? '\n' : '')
+    const newText = text.substring(0, start) + prefix + tag + '\n' + text.substring(end)
+
+    setFullLyrics(newText)
+
+    // 커서를 태그 다음 줄로 이동
+    setTimeout(() => {
+      const newCursorPos = start + prefix.length + tag.length + 1
+      textarea.focus()
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
+  }
 
   // 관리자 체크 및 데이터 로드
   useEffect(() => {
@@ -162,32 +200,28 @@ export default function ThemeEditorPage() {
   }
 
   const loadSongs = async () => {
-    // themes가 NULL인 곡들 로드
-    const { data: nullThemeSongs, error: nullError } = await supabase
+    // 모든 곡 로드
+    const { data: allSongs, error } = await supabase
       .from('songs')
       .select('id, song_name, team_name, lyrics, themes')
-      .is('themes', null)
       .order('song_name', { ascending: true })
 
-    if (nullError) {
-      console.error('Error loading songs:', nullError)
+    if (error) {
+      console.error('Error loading songs:', error)
       return
     }
 
-    // 전체 곡 수 (themes가 NULL이 아닌 곡)
-    const { count: completedCnt } = await supabase
-      .from('songs')
-      .select('id', { count: 'exact', head: true })
-      .not('themes', 'is', null)
+    // 테마가 입력된 곡 수 계산
+    const completedCnt = allSongs?.filter(s => s.themes != null).length || 0
 
-    setSongs(nullThemeSongs || [])
-    setTotalCount((nullThemeSongs?.length || 0) + (completedCnt || 0))
-    setCompletedCount(completedCnt || 0)
+    setSongs(allSongs || [])
+    setTotalCount(allSongs?.length || 0)
+    setCompletedCount(completedCnt)
 
     // 첫 번째 곡 자동 선택
-    if (nullThemeSongs && nullThemeSongs.length > 0) {
-      setSelectedSongId(nullThemeSongs[0].id)
-      loadSongDetails(nullThemeSongs[0])
+    if (allSongs && allSongs.length > 0) {
+      setSelectedSongId(allSongs[0].id)
+      loadSongDetails(allSongs[0])
     }
   }
 
@@ -399,14 +433,14 @@ export default function ThemeEditorPage() {
     }
   }
 
-  // 필터링된 곡 목록
+  // 필터링된 곡 목록 (띄어쓰기 무시 검색)
   const filteredSongs = songs.filter(song => {
     if (!searchQuery.trim()) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      song.song_name?.toLowerCase().includes(query) ||
-      song.team_name?.toLowerCase().includes(query)
-    )
+    // 띄어쓰기 제거 후 소문자로 변환
+    const query = searchQuery.replace(/\s/g, '').toLowerCase()
+    const songName = (song.song_name || '').replace(/\s/g, '').toLowerCase()
+    const teamName = (song.team_name || '').replace(/\s/g, '').toLowerCase()
+    return songName.includes(query) || teamName.includes(query)
   })
 
   // 현재 곡 인덱스
@@ -436,7 +470,7 @@ export default function ThemeEditorPage() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">가사/테마 편집</h1>
                 <p className="text-sm text-gray-500">
-                  진행률: {completedCount}/{totalCount} 완료 ({songs.length}곡 남음)
+                  테마 입력: {completedCount}/{totalCount}곡 완료
                 </p>
               </div>
             </div>
@@ -523,10 +557,25 @@ export default function ThemeEditorPage() {
               <>
                 {/* 선택된 곡 정보 */}
                 <div className="bg-white rounded-xl shadow-sm border p-4">
-                  <h2 className="text-lg font-bold text-gray-900">{selectedSong.song_name}</h2>
-                  {selectedSong.team_name && (
-                    <p className="text-gray-500">{selectedSong.team_name}</p>
-                  )}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-lg font-bold text-gray-900 truncate">{selectedSong.song_name}</h2>
+                      {selectedSong.team_name && (
+                        <p className="text-gray-500 truncate">{selectedSong.team_name}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const query = encodeURIComponent(`${selectedSong.song_name} ${selectedSong.team_name || ''} 가사`)
+                        window.open(`https://www.google.com/search?q=${query}`, '_blank')
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition shrink-0"
+                    >
+                      <Search size={18} />
+                      가사 검색
+                      <ExternalLink size={14} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* 가사 입력 */}
@@ -555,12 +604,29 @@ export default function ThemeEditorPage() {
 
                   {inputMode === 'full' ? (
                     /* 전체 입력 모드 */
-                    <textarea
-                      value={fullLyrics}
-                      onChange={(e) => setFullLyrics(e.target.value)}
-                      placeholder="가사를 붙여넣으세요. 섹션 구분이 필요하면 [Verse 1], [Chorus] 등을 직접 입력하세요."
-                      className="w-full h-[400px] p-4 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 resize-none font-mono text-sm"
-                    />
+                    <div className="space-y-3">
+                      {/* 섹션 태그 퀵 버튼 */}
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-xs text-gray-500 mr-1 self-center">섹션 태그:</span>
+                        {SECTION_QUICK_TAGS.map(({ abbr, tag, label }) => (
+                          <button
+                            key={abbr}
+                            onClick={() => insertSectionTag(tag)}
+                            title={label}
+                            className="px-2.5 py-1 text-xs font-medium bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-md transition"
+                          >
+                            {abbr}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        ref={lyricsTextareaRef}
+                        value={fullLyrics}
+                        onChange={(e) => setFullLyrics(e.target.value)}
+                        placeholder="가사를 붙여넣으세요. 위 버튼을 눌러 섹션 태그를 추가하세요."
+                        className="w-full h-[400px] p-4 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 resize-none font-mono text-sm"
+                      />
+                    </div>
                   ) : (
                     /* 파트별 입력 모드 */
                     <div className="space-y-3">
