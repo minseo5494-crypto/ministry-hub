@@ -82,6 +82,10 @@ export default function ThemeEditorPage() {
   // 검색
   const [searchQuery, setSearchQuery] = useState('')
 
+  // 페이지네이션
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20 // 한 페이지에 표시할 곡 수
+
   // 입력 모드: 'full' | 'parts'
   const [inputMode, setInputMode] = useState<'full' | 'parts'>('full')
 
@@ -200,26 +204,42 @@ export default function ThemeEditorPage() {
   }
 
   const loadSongs = async () => {
-    // 모든 곡 로드
-    const { data: allSongs, error } = await supabase
-      .from('songs')
-      .select('id, song_name, team_name, lyrics, themes')
-      .order('song_name', { ascending: true })
+    // Supabase API 기본 제한이 1000개이므로 여러 번 쿼리해서 합치기
+    const allSongs: Song[] = []
+    let offset = 0
+    const batchSize = 1000
 
-    if (error) {
-      console.error('Error loading songs:', error)
-      return
+    while (true) {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('id, song_name, team_name, lyrics, themes')
+        .order('song_name', { ascending: true })
+        .range(offset, offset + batchSize - 1)
+
+      if (error) {
+        console.error('Error loading songs:', error)
+        break
+      }
+
+      if (!data || data.length === 0) break
+
+      allSongs.push(...data)
+
+      // 가져온 데이터가 batchSize보다 작으면 더 이상 없음
+      if (data.length < batchSize) break
+
+      offset += batchSize
     }
 
     // 테마가 입력된 곡 수 계산
-    const completedCnt = allSongs?.filter(s => s.themes != null).length || 0
+    const completedCnt = allSongs.filter(s => s.themes != null).length
 
-    setSongs(allSongs || [])
-    setTotalCount(allSongs?.length || 0)
+    setSongs(allSongs)
+    setTotalCount(allSongs.length)
     setCompletedCount(completedCnt)
 
     // 첫 번째 곡 자동 선택
-    if (allSongs && allSongs.length > 0) {
+    if (allSongs.length > 0) {
       setSelectedSongId(allSongs[0].id)
       loadSongDetails(allSongs[0])
     }
@@ -405,25 +425,6 @@ export default function ThemeEditorPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // 이전/다음 곡
-  const goToPrevSong = () => {
-    const currentIndex = songs.findIndex(s => s.id === selectedSongId)
-    if (currentIndex > 0) {
-      const prevSong = songs[currentIndex - 1]
-      setSelectedSongId(prevSong.id)
-      loadSongDetails(prevSong)
-    }
-  }
-
-  const goToNextSong = () => {
-    const currentIndex = songs.findIndex(s => s.id === selectedSongId)
-    if (currentIndex < songs.length - 1) {
-      const nextSong = songs[currentIndex + 1]
-      setSelectedSongId(nextSong.id)
-      loadSongDetails(nextSong)
-    }
-  }
-
   // 곡 선택
   const handleSongSelect = (songId: string) => {
     const song = songs.find(s => s.id === songId)
@@ -443,8 +444,30 @@ export default function ThemeEditorPage() {
     return songName.includes(query) || teamName.includes(query)
   })
 
-  // 현재 곡 인덱스
-  const currentIndex = songs.findIndex(s => s.id === selectedSongId)
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredSongs.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedSongs = filteredSongs.slice(startIndex, startIndex + itemsPerPage)
+
+  // 현재 곡 인덱스 (검색 결과 기준)
+  const currentIndex = filteredSongs.findIndex(s => s.id === selectedSongId)
+
+  // 이전/다음 곡 (검색 결과 내에서 이동)
+  const goToPrevSong = () => {
+    if (currentIndex > 0) {
+      const prevSong = filteredSongs[currentIndex - 1]
+      setSelectedSongId(prevSong.id)
+      loadSongDetails(prevSong)
+    }
+  }
+
+  const goToNextSong = () => {
+    if (currentIndex < filteredSongs.length - 1) {
+      const nextSong = filteredSongs[currentIndex + 1]
+      setSelectedSongId(nextSong.id)
+      loadSongDetails(nextSong)
+    }
+  }
 
   if (loading) {
     return (
@@ -496,21 +519,31 @@ export default function ThemeEditorPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
-                  placeholder="곡 검색..."
+                  placeholder="곡 또는 팀명 검색..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setCurrentPage(1) // 검색어 변경시 첫 페이지로
+                  }}
                   className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
                 />
               </div>
 
+              {/* 검색 결과 수 */}
+              {searchQuery && (
+                <p className="text-xs text-gray-500 mb-2">
+                  검색 결과: {filteredSongs.length}곡
+                </p>
+              )}
+
               {/* 곡 목록 */}
-              <div className="max-h-[calc(100vh-350px)] overflow-y-auto space-y-1">
-                {filteredSongs.length === 0 ? (
+              <div className="max-h-[calc(100vh-280px)] overflow-y-auto space-y-1">
+                {paginatedSongs.length === 0 ? (
                   <p className="text-gray-500 text-sm text-center py-4">
-                    {songs.length === 0 ? '모든 곡에 테마가 입력되었습니다!' : '검색 결과가 없습니다.'}
+                    {songs.length === 0 ? '곡이 없습니다.' : '검색 결과가 없습니다.'}
                   </p>
                 ) : (
-                  filteredSongs.map((song, index) => (
+                  paginatedSongs.map((song) => (
                     <button
                       key={song.id}
                       onClick={() => handleSongSelect(song.id)}
@@ -529,25 +562,30 @@ export default function ThemeEditorPage() {
                 )}
               </div>
 
-              {/* 이전/다음 버튼 */}
-              <div className="flex gap-2 mt-4 pt-4 border-t">
-                <button
-                  onClick={goToPrevSong}
-                  disabled={currentIndex <= 0}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
-                >
-                  <ChevronLeft size={16} />
-                  이전
-                </button>
-                <button
-                  onClick={goToNextSong}
-                  disabled={currentIndex >= songs.length - 1}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
-                >
-                  다음
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                  >
+                    <ChevronLeft size={16} />
+                    이전
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                  >
+                    다음
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
