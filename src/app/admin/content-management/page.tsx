@@ -87,6 +87,7 @@ export default function ContentManagementPage() {
   const [fullLyrics, setFullLyrics] = useState('')
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [editorSaving, setEditorSaving] = useState(false)
+  const [editorFilter, setEditorFilter] = useState<'all' | 'no-lyrics' | 'no-youtube'>('all')
   const editorItemsPerPage = 15
 
   useEffect(() => {
@@ -381,6 +382,11 @@ export default function ContentManagementPage() {
 
   // 필터링된 에디터 곡 목록
   const filteredEditorSongs = editorSongs.filter(song => {
+    // 필터 적용
+    if (editorFilter === 'no-lyrics' && song.lyrics) return false
+    if (editorFilter === 'no-youtube' && (song as any).youtube_url) return false
+
+    // 검색어 적용
     if (!editorSearchQuery.trim()) return true
     const query = editorSearchQuery.replace(/\s/g, '').toLowerCase()
     const songName = (song.song_name || '').replace(/\s/g, '').toLowerCase()
@@ -739,11 +745,43 @@ export default function ContentManagementPage() {
                   />
                 </div>
 
-                {editorSearchQuery && (
-                  <p className="text-xs text-gray-500 mb-2">
-                    검색 결과: {filteredEditorSongs.length}곡
-                  </p>
-                )}
+                {/* 필터 버튼 */}
+                <div className="flex gap-1 mb-4">
+                  <button
+                    onClick={() => { setEditorFilter('all'); setEditorPage(1) }}
+                    className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
+                      editorFilter === 'all'
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    전체
+                  </button>
+                  <button
+                    onClick={() => { setEditorFilter('no-lyrics'); setEditorPage(1) }}
+                    className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
+                      editorFilter === 'no-lyrics'
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    가사 없음
+                  </button>
+                  <button
+                    onClick={() => { setEditorFilter('no-youtube'); setEditorPage(1) }}
+                    className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
+                      editorFilter === 'no-youtube'
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    유튜브 없음
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-500 mb-2">
+                  {editorFilter === 'all' ? '전체' : editorFilter === 'no-lyrics' ? '가사 없는 곡' : '유튜브 없는 곡'}: {filteredEditorSongs.length}곡
+                </p>
 
                 {/* 곡 목록 */}
                 <div className="max-h-[calc(100vh-400px)] overflow-y-auto space-y-1">
