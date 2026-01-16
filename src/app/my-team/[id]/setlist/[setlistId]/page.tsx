@@ -129,28 +129,128 @@ function SortableSongItem({
       style={style}
       className={`p-4 hover:bg-gray-50 print-song ${isDragging ? 'shadow-2xl z-50' : ''}`}
     >
-      {/* 상단: 곡 정보 + 버튼 (모바일: 세로 배치, 데스크톱: 가로 배치) */}
+      {/* 데스크톱: 가로 배치 / 모바일: 세로 배치 */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start flex-1 gap-2">
-          {/* 드래그 핸들 */}
-          {canEdit && (
-            <div
-              {...attributes}
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing pt-1 text-gray-400 hover:text-gray-600"
-              title="드래그하여 순서 변경"
-            >
-              <GripVertical size={20} />
+        {/* 메인 정보 영역 */}
+        <div className="flex-1">
+          {/* 첫 줄: 드래그 핸들 + 번호 + 제목 */}
+          <div className="flex items-start gap-2">
+            {/* 드래그 핸들 */}
+            {canEdit && (
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing pt-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                title="드래그하여 순서 변경"
+              >
+                <GripVertical size={20} />
+              </div>
+            )}
+            <span className="text-lg font-bold text-blue-600 w-8 mt-1 flex-shrink-0">
+              {index + 1}.
+            </span>
+            {/* 데스크톱: 제목+정보 같은 줄, 모바일: 제목만 */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 text-xl">
+                {song.songs.song_name}
+              </h3>
+              {/* 데스크톱에서만 제목 옆에 표시 */}
+              <div className="hidden md:block">
+                <p className="text-sm text-gray-600 mb-2">
+                  {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
+                </p>
+                {song.selected_form && song.selected_form.length > 0 && (
+                  <p className="text-sm text-purple-600 mb-2">
+                    송폼: {song.selected_form.join(' - ')}
+                  </p>
+                )}
+                {/* 내 버전 선택 UI - 데스크톱 */}
+                {userNotes && userNotes.length > 0 && (
+                  <div className="mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">내 버전:</span>
+                      <select
+                        value={personalNote?.id || ''}
+                        onChange={(e) => {
+                          const noteId = e.target.value || null
+                          onSelectPersonalNote?.(song.songs.id, noteId)
+                        }}
+                        className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                      >
+                        <option value="">원본 사용</option>
+                        {userNotes.map(note => (
+                          <option key={note.id} value={note.id}>
+                            {note.title || note.song_name} ({new Date(note.updated_at).toLocaleDateString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {personalNote && (
+                      <p className="text-xs text-green-600 mt-1">
+                        ✓ 내 필기 노트 적용됨
+                      </p>
+                    )}
+                  </div>
+                )}
+                {/* 메모 - 데스크톱 */}
+                {song.notes ? (
+                  <div className="mb-2">
+                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm text-yellow-800 flex-1">
+                          <span className="font-medium">📝 메모:</span>
+                          <pre className="whitespace-pre-wrap font-sans mt-1">
+                            {song.notes.length > 100 && !isNoteExpanded
+                              ? `${song.notes.slice(0, 100)}...`
+                              : song.notes
+                            }
+                          </pre>
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => onOpenNoteModal(song)}
+                            className="text-xs text-yellow-700 hover:text-yellow-900 font-medium whitespace-nowrap px-2 py-1 hover:bg-yellow-100 rounded"
+                          >
+                            수정
+                          </button>
+                        )}
+                      </div>
+                      {song.notes.length > 100 && (
+                        <button
+                          onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+                          className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
+                        >
+                          {isNoteExpanded ? (
+                            <>
+                              <ChevronUp size={14} />
+                              접기
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown size={14} />
+                              더보기
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  canEdit && (
+                    <button
+                      onClick={() => onOpenNoteModal(song)}
+                      className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+                    >
+                      + 메모 추가
+                    </button>
+                  )
+                )}
+              </div>
             </div>
-          )}
-          <span className="text-lg font-bold text-blue-600 w-8 mt-1">
-            {index + 1}.
-          </span>
-          <div className="flex-1 min-w-0">
-            {/* 기본 정보 (항상 표시) */}
-            <h3 className="font-semibold text-gray-900 text-xl mb-2">
-              {song.songs.song_name}
-            </h3>
+          </div>
+
+          {/* 모바일: 전체 너비 사용하는 정보 영역 (약간의 왼쪽 여백) */}
+          <div className="md:hidden mt-2 pl-4">
             <p className="text-sm text-gray-600 mb-2">
               {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
             </p>
@@ -159,7 +259,7 @@ function SortableSongItem({
                 송폼: {song.selected_form.join(' - ')}
               </p>
             )}
-            {/* 내 버전 선택 UI */}
+            {/* 내 버전 선택 UI - 모바일 */}
             {userNotes && userNotes.length > 0 && (
               <div className="mb-2">
                 <div className="flex items-center gap-2">
@@ -170,7 +270,7 @@ function SortableSongItem({
                       const noteId = e.target.value || null
                       onSelectPersonalNote?.(song.songs.id, noteId)
                     }}
-                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-base"
                   >
                     <option value="">원본 사용</option>
                     {userNotes.map(note => (
@@ -187,18 +287,28 @@ function SortableSongItem({
                 )}
               </div>
             )}
-            {/* 메모 표시 */}
+            {/* 메모 - 모바일 (전체 너비) */}
             {song.notes ? (
-              <div className="flex items-start gap-2 mb-2">
-                <div className="flex-1 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="text-sm text-yellow-800">
-                    <span className="font-medium">📝 메모:</span>
-                    <pre className="whitespace-pre-wrap font-sans mt-1">
-                      {song.notes.length > 100 && !isNoteExpanded
-                        ? `${song.notes.slice(0, 100)}...`
-                        : song.notes
-                      }
-                    </pre>
+              <div className="mb-2">
+                <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm text-yellow-800 flex-1">
+                      <span className="font-medium">📝 메모:</span>
+                      <pre className="whitespace-pre-wrap font-sans mt-1">
+                        {song.notes.length > 100 && !isNoteExpanded
+                          ? `${song.notes.slice(0, 100)}...`
+                          : song.notes
+                        }
+                      </pre>
+                    </div>
+                    {canEdit && (
+                      <button
+                        onClick={() => onOpenNoteModal(song)}
+                        className="text-xs text-yellow-700 hover:text-yellow-900 font-medium whitespace-nowrap px-2 py-1 hover:bg-yellow-100 rounded"
+                      >
+                        수정
+                      </button>
+                    )}
                   </div>
                   {song.notes.length > 100 && (
                     <button
@@ -219,14 +329,6 @@ function SortableSongItem({
                     </button>
                   )}
                 </div>
-                {canEdit && (
-                  <button
-                    onClick={() => onOpenNoteModal(song)}
-                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-                  >
-                    수정
-                  </button>
-                )}
               </div>
             ) : (
               canEdit && (
@@ -241,8 +343,8 @@ function SortableSongItem({
           </div>
         </div>
 
-        {/* 버튼들 - 모바일: 아래로, 데스크톱: 오른쪽 */}
-        <div className="flex gap-2 no-print mt-3 md:mt-0 md:ml-4 flex-shrink-0 flex-wrap">
+        {/* 버튼들 - 모바일: 아래로 가운데 정렬, 데스크톱: 오른쪽 */}
+        <div className="flex gap-2 no-print mt-4 md:mt-0 md:ml-4 flex-shrink-0 flex-wrap justify-center md:justify-end">
           {/* 미리보기 토글 버튼 */}
           {(song.songs.lyrics || song.songs.file_url) && (
             <button
@@ -295,17 +397,18 @@ function SortableSongItem({
               >
                 <Edit size={18} />
               </button>
+              {/* 순서 변경 화살표 - 데스크톱에서만 표시 (모바일은 드래그로 변경) */}
               <button
                 onClick={() => onMoveUp(index)}
                 disabled={index === 0}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                className="hidden md:block p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
                 <ChevronUp size={18} />
               </button>
               <button
                 onClick={() => onMoveDown(index)}
                 disabled={index === totalSongs - 1}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
+                className="hidden md:block p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
               >
                 <ChevronDown size={18} />
               </button>
@@ -1631,43 +1734,56 @@ const saveNote = async () => {
 
       {/* 송폼 편집 모달 */}
 {showSongFormModal && selectedSongForForm && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
-      <h3 className="text-2xl font-bold mb-4">
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 md:p-4">
+    <div className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] overflow-y-auto p-4 md:p-6">
+      <h3 className="text-lg md:text-2xl font-bold mb-4">
         {selectedSongForForm.songs.song_name} - 송폼 편집
       </h3>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* 왼쪽: 사용 가능한 송폼 */}
+      {/* 모바일: 선택된 순서 먼저 표시 */}
+      <div className="md:hidden mb-4">
+        {tempSongForm.length > 0 && (
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm font-bold text-blue-900 mb-1">현재 송폼:</p>
+            <p className="text-blue-800 text-sm">
+              {tempSongForm.join(' - ')}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        {/* 송폼 추가 */}
         <div>
-          <h4 className="font-bold mb-3 text-lg">송폼 추가</h4>
-          <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
+          <h4 className="font-bold mb-3 text-base md:text-lg">송폼 추가</h4>
+          {/* 모바일: 그리드, 데스크톱: 리스트 */}
+          <div className="grid grid-cols-4 gap-2 md:grid-cols-1 md:space-y-2 md:gap-0 mb-4 max-h-[200px] md:max-h-[400px] overflow-y-auto">
             {songFormOptions.map((form) => (
               <button
                 key={form}
                 onClick={() => addSongForm(form)}
-                className="w-full px-4 py-3 rounded text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium flex justify-between items-center"
+                className="px-2 py-2 md:px-4 md:py-3 rounded text-center md:text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium text-sm md:text-base"
               >
-                <span>{form}</span>
+                {form}
               </button>
             ))}
           </div>
 
           {/* 커스텀 송폼 입력 */}
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <h5 className="font-bold mb-2">커스텀 송폼</h5>
+          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
+            <h5 className="font-bold mb-2 text-sm md:text-base">커스텀 송폼</h5>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={customFormInput}
                 onChange={(e) => setCustomFormInput(e.target.value)}
-                placeholder="예: Special, Transition"
-                className="flex-1 px-3 py-2 border rounded"
+                placeholder="예: Special"
+                className="flex-1 px-3 py-2 border rounded text-base"
                 onKeyPress={(e) => e.key === 'Enter' && addCustomSongForm()}
               />
               <button
                 onClick={addCustomSongForm}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                className="px-3 md:px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm md:text-base"
               >
                 추가
               </button>
@@ -1675,42 +1791,42 @@ const saveNote = async () => {
           </div>
         </div>
 
-        {/* 오른쪽: 선택된 송폼 순서 */}
-        <div className="flex flex-col h-[500px]">
-          <h4 className="font-bold mb-3 text-lg">선택된 순서</h4>
-          <div className="border-2 border-dashed rounded-lg p-4 flex-1 overflow-y-auto bg-gray-50">
+        {/* 선택된 송폼 순서 */}
+        <div className="flex flex-col h-[250px] md:h-[500px]">
+          <h4 className="font-bold mb-3 text-base md:text-lg">선택된 순서</h4>
+          <div className="border-2 border-dashed rounded-lg p-3 md:p-4 flex-1 overflow-y-auto bg-gray-50">
             {tempSongForm.length === 0 ? (
-              <p className="text-gray-400 text-center mt-20">
-                왼쪽에서 송폼을 선택하세요
+              <p className="text-gray-400 text-center mt-8 md:mt-20 text-sm md:text-base">
+                위에서 송폼을 선택하세요
               </p>
             ) : (
               <div className="space-y-2">
                 {tempSongForm.map((form, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
+                    className="flex items-center gap-2 bg-white border-2 border-green-200 px-2 md:px-3 py-2 md:py-3 rounded-lg"
                   >
-                    <span className="font-bold text-green-900 flex-1 text-lg">
+                    <span className="font-bold text-green-900 flex-1 text-base md:text-lg">
                       {index + 1}. {form}
                     </span>
                     <div className="flex gap-1">
                       <button
                         onClick={() => moveSongForm(index, 'up')}
                         disabled={index === 0}
-                        className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="w-8 h-8 flex items-center justify-center bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
                       >
                         ↑
                       </button>
                       <button
                         onClick={() => moveSongForm(index, 'down')}
                         disabled={index === tempSongForm.length - 1}
-                        className="px-2 py-1 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="w-8 h-8 flex items-center justify-center bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
                       >
                         ↓
                       </button>
                       <button
                         onClick={() => removeSongForm(index)}
-                        className="px-2 py-1 bg-[#E26559] text-white rounded hover:bg-[#D14E42]"
+                        className="w-8 h-8 flex items-center justify-center bg-[#E26559] text-white rounded hover:bg-[#D14E42] text-sm"
                       >
                         ✕
                       </button>
@@ -1721,8 +1837,9 @@ const saveNote = async () => {
             )}
           </div>
 
+          {/* 데스크톱에서만 미리보기 표시 */}
           {tempSongForm.length > 0 && (
-            <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+            <div className="hidden md:block mt-3 p-3 bg-blue-50 rounded border border-blue-200">
               <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
               <p className="text-blue-800 font-mono">
                 {tempSongForm.join(' - ')}
@@ -1733,16 +1850,16 @@ const saveNote = async () => {
       </div>
 
       {/* 버튼 */}
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-4 md:mt-6 flex justify-end gap-3">
         <button
           onClick={() => setShowSongFormModal(false)}
-          className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium"
+          className="px-4 md:px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium text-sm md:text-base"
         >
           취소
         </button>
         <button
           onClick={saveSongForm}
-          className="px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold"
+          className="px-4 md:px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold text-sm md:text-base"
         >
           저장
         </button>
