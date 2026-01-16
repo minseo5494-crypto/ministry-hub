@@ -20,7 +20,8 @@ const AVAILABLE_THEMES = [
 ]
 
 const AVAILABLE_SEASONS = [
-  '크리스마스', '부활절', '추수감사절', '사순절', '대림절', '맥추감사절'
+  '성탄절', '부활절', '추수감사절', '사순절', '고난주간', '오순절',
+  '어버이주일', '송구영신'
 ]
 
 const AVAILABLE_TEMPOS = ['slow', 'medium', 'fast']
@@ -47,21 +48,35 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `당신은 예배 찬양곡 검색을 도와주는 AI입니다.
 사용자의 자연어 검색 요청을 분석하여 구조화된 검색 필터로 변환합니다.
 
-사용 가능한 필터:
-- themes: [${AVAILABLE_THEMES.join(', ')}]
+## 핵심 규칙:
+1. keywords는 곡 제목/아티스트 검색용입니다. "추천해줘", "찾아줘" 같은 요청어는 제외하세요.
+2. **lyricsKeywords가 가장 중요합니다!** 사용자 요청의 의미를 이해하고, 실제 찬양 가사에 나올법한 관련 단어들을 최대한 많이(10-15개) 생성하세요.
+3. 단순 키워드 추출이 아닌, 개념을 확장하여 관련된 표현들을 포함하세요.
+
+## lyricsKeywords 생성 예시:
+- "선교 관련 찬양" → lyricsKeywords: ["복음", "전도", "열방", "민족", "세상 끝까지", "모든 족속", "가서", "전파", "증인", "빛", "소금", "보내소서", "일꾼"]
+- "위로 관련 찬양" → lyricsKeywords: ["위로", "평안", "눈물", "아픔", "상처", "치유", "품", "안아", "함께", "두려움", "걱정", "염려", "쉼"]
+- "감사 관련 찬양" → lyricsKeywords: ["감사", "은혜", "축복", "선하신", "베푸신", "주신", "감격", "눈물", "고마워", "풍성"]
+- "회개 관련 찬양" → lyricsKeywords: ["회개", "용서", "죄", "돌아", "자백", "긍휼", "불쌍히", "씻어", "정결", "새롭게"]
+
+## 성경 구절 처리:
+- "시편 23편" → themes: ["평안"], lyricsKeywords: ["목자", "푸른 초장", "잔잔한 물", "인도", "지팡이", "막대기", "기름", "잔", "선하심", "따르리"]
+- "요한복음 3:16" → themes: ["사랑", "구원"], lyricsKeywords: ["세상", "사랑", "독생자", "영생", "믿는 자", "멸망", "생명", "보내신"]
+
+## 사용 가능한 필터:
+- themes: [${AVAILABLE_THEMES.join(', ')}] (여러 개 선택 가능)
 - season: ${AVAILABLE_SEASONS.join(', ')} 또는 null
 - tempo: slow(느린), medium(보통), fast(빠른) 또는 null
 - key: ${AVAILABLE_KEYS.join(', ')} 또는 null
-- keywords: 곡 제목이나 아티스트 이름에서 검색할 키워드 배열
-- lyricsKeywords: 가사에서 찾을 키워드 배열
-- mood: 분위기 설명 (예: "차분한", "힘찬", "감동적인") 또는 null
+- keywords: 곡 제목 검색용 (보통 비워두세요)
+- lyricsKeywords: 가사 검색용 (관련 단어 10-15개 생성!)
+- mood: 분위기 설명 또는 null
 
-JSON 형식으로만 응답하세요. 다른 설명은 필요 없습니다.
-매칭되지 않는 필터는 빈 배열([]) 또는 null로 설정하세요.`
+JSON 형식으로만 응답하세요.`
 
     const message = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 500,
+      max_tokens: 800,
       system: systemPrompt,
       messages: [
         {

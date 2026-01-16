@@ -280,33 +280,33 @@ export default function SongFormModal({
                   왼쪽에서 섹션을 선택하세요
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {tempSelectedForm.map((abbr, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-2 bg-white border-2 border-green-200 px-3 py-3 rounded-lg"
+                      className="flex items-center gap-2 bg-white border border-green-200 px-2 py-1.5 rounded-lg"
                     >
-                      <span className="font-bold text-green-900 flex-1 text-lg">
+                      <span className="font-semibold text-green-900 flex-1 text-sm">
                         {index + 1}. {abbr}
                       </span>
-                      <div className="flex gap-1">
+                      <div className="flex gap-0.5">
                         <TouchButton
                           onClick={() => moveSectionUp(index)}
                           disabled={index === 0}
-                          className="px-3 py-2 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] active:bg-[#5A9AA1] disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[40px]"
+                          className="px-2 py-1 bg-teal-500 text-white text-sm rounded hover:bg-teal-600 active:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[28px]"
                         >
                           ↑
                         </TouchButton>
                         <TouchButton
                           onClick={() => moveSectionDown(index)}
                           disabled={index === tempSelectedForm.length - 1}
-                          className="px-3 py-2 bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] active:bg-[#5A9AA1] disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[40px]"
+                          className="px-2 py-1 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-700 active:bg-cyan-800 disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[28px]"
                         >
                           ↓
                         </TouchButton>
                         <TouchButton
                           onClick={() => removeSection(index)}
-                          className="px-3 py-2 bg-[#E26559] text-white rounded hover:bg-[#D14E42] active:bg-[#C03E32] min-w-[40px]"
+                          className="px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 active:bg-red-700 min-w-[28px]"
                         >
                           ✕
                         </TouchButton>
@@ -408,13 +408,13 @@ export default function SongFormModal({
         <div className="mt-6 flex justify-end gap-3">
           <TouchButton
             onClick={onClose}
-            className="px-6 py-3 bg-gray-300 rounded-lg hover:bg-gray-400 active:bg-gray-500 font-medium min-h-[48px]"
+            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 active:bg-gray-100 font-medium min-h-[48px]"
           >
             취소
           </TouchButton>
           <TouchButton
             onClick={handleSave}
-            className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] active:bg-[#90B1DE] font-bold min-h-[48px]"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 font-semibold min-h-[48px]"
           >
             저장
           </TouchButton>

@@ -42,8 +42,13 @@ p, span, div, label {
 }
 
 /* 입력 요소들 */
-input, textarea, select, button {
+input, textarea, select {
   color: #1F2937;
+}
+
+/* 버튼은 Tailwind 클래스 색상 사용 */
+button {
+  color: inherit;
 }
 
 input::placeholder, textarea::placeholder {

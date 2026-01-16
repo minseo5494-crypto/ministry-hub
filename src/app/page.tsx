@@ -261,6 +261,7 @@ const {
 
   // AI 검색 상태
   const [isAISearchEnabled, setIsAISearchEnabled] = useState(false)
+  const [aiSearchKeywords, setAiSearchKeywords] = useState<string[]>([])  // AI 추출 키워드 (내부 검색용)
   const { searchWithAI, isSearching: isAISearching, lastResult: aiSearchResult, clearResult: clearAIResult } = useAISearch()
 
   // 사용자 정보 확인
@@ -1089,19 +1090,34 @@ if (newSong.visibility === 'public') {
   useEffect(() => {
     let result = [...songs]
 
-    if (filters.searchText) {
-      const normalizedSearch = normalizeText(filters.searchText)
+    // AI 검색 키워드가 있으면 그것으로 검색, 없으면 일반 searchText로 검색
+    const searchKeywords = aiSearchKeywords.length > 0
+      ? aiSearchKeywords
+      : filters.searchText
+        ? filters.searchText.split(/[,\s]+/).map(k => k.trim()).filter(k => k.length > 0)
+        : []
+
+    if (searchKeywords.length > 0) {
       result = result.filter(song => {
-        // 띄어쓰기/특수문자 무시 검색
         const normalizedSongName = normalizeText(song.song_name)
         const normalizedTeamName = normalizeText(song.team_name || '')
+        const normalizedLyrics = normalizeText(song.lyrics || '')
+        const songNameLower = song.song_name.toLowerCase()
+        const teamNameLower = song.team_name?.toLowerCase() || ''
+        const lyricsLower = song.lyrics?.toLowerCase() || ''
 
-        // 정규화된 검색과 일반 검색 둘 다 지원
-        const searchLower = filters.searchText.toLowerCase()
-        return normalizedSongName.includes(normalizedSearch) ||
-               normalizedTeamName.includes(normalizedSearch) ||
-               song.song_name.toLowerCase().includes(searchLower) ||
-               song.team_name?.toLowerCase().includes(searchLower)
+        // 키워드 중 하나라도 매칭되면 true (OR 조건)
+        return searchKeywords.some(keyword => {
+          const normalizedKeyword = normalizeText(keyword)
+          const keywordLower = keyword.toLowerCase()
+
+          return normalizedSongName.includes(normalizedKeyword) ||
+                 normalizedTeamName.includes(normalizedKeyword) ||
+                 normalizedLyrics.includes(normalizedKeyword) ||
+                 songNameLower.includes(keywordLower) ||
+                 teamNameLower.includes(keywordLower) ||
+                 lyricsLower.includes(keywordLower)
+        })
       })
     }
 
@@ -1235,7 +1251,7 @@ if (sortBy === 'likes') {
 
   return () => clearTimeout(debounceTimer)
 }
-  }, [songs, filters, user, sortBy, songFilter, mySheetNotes])
+  }, [songs, filters, user, sortBy, songFilter, mySheetNotes, aiSearchKeywords])
   
   // 🆕 필터가 변경되면 표시 개수 초기화
 useEffect(() => {
@@ -1880,17 +1896,32 @@ const hasMore = displayCount < filteredSongs.length
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : "찬양곡 제목, 아티스트, 가사로 검색..."}
                 className="w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
                 value={filters.searchText}
-                onChange={(e) => setFilters({ ...filters, searchText: e.target.value })}
+                onChange={(e) => {
+                  setFilters({ ...filters, searchText: e.target.value })
+                  // 사용자가 새로 입력하면 AI 키워드 초기화
+                  if (aiSearchKeywords.length > 0) {
+                    setAiSearchKeywords([])
+                    clearAIResult()
+                  }
+                }}
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter' && isAISearchEnabled && filters.searchText.trim()) {
                     const result = await searchWithAI(filters.searchText)
                     if (result?.success && result.filters) {
                       // AI 결과로 필터 적용
                       const aiFilters = result.filters
+
+                      // AI 추출 키워드를 별도 상태에 저장 (검색창 텍스트는 유지)
+                      const allKeywords = [
+                        ...(aiFilters.keywords || []),
+                        ...(aiFilters.lyricsKeywords || [])
+                      ]
+                      setAiSearchKeywords(allKeywords)
+
+                      // 테마, 절기, 템포 등 필터만 적용 (searchText는 변경하지 않음)
                       setFilters(prev => ({
                         ...prev,
-                        searchText: aiFilters.keywords.join(' ') || prev.searchText,
-                        themes: aiFilters.themes.length > 0 ? aiFilters.themes : prev.themes,
+                        themes: aiFilters.themes?.length > 0 ? aiFilters.themes : prev.themes,
                         season: aiFilters.season || prev.season,
                         tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : prev.tempo,
                         key: aiFilters.key || prev.key,
@@ -1943,7 +1974,7 @@ const hasMore = displayCount < filteredSongs.length
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {aiSearchResult.filters.themes.length > 0 && (
+                  {aiSearchResult.filters.themes?.length > 0 && (
                     <span className="px-2 py-1 bg-purple-500/30 rounded text-xs">
                       🏷️ {aiSearchResult.filters.themes.join(', ')}
                     </span>
@@ -1966,11 +1997,6 @@ const hasMore = displayCount < filteredSongs.length
                   {aiSearchResult.filters.mood && (
                     <span className="px-2 py-1 bg-pink-500/30 rounded text-xs">
                       💭 {aiSearchResult.filters.mood}
-                    </span>
-                  )}
-                  {aiSearchResult.filters.keywords.length > 0 && (
-                    <span className="px-2 py-1 bg-gray-500/30 rounded text-xs">
-                      🔍 {aiSearchResult.filters.keywords.join(', ')}
                     </span>
                   )}
                 </div>
@@ -2434,7 +2460,7 @@ const hasMore = displayCount < filteredSongs.length
                     e.stopPropagation()
                     setPreviewSong(song)
                   }}
-                  className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                  className="p-1 text-sky-500 hover:bg-sky-100 rounded"
                   title="악보 보기"
                 >
                   <Eye size={18} />
@@ -2446,7 +2472,7 @@ const hasMore = displayCount < filteredSongs.length
                     setEditingSong(song)
                     setShowNoteEditor(true)
                   }}
-                  className="p-1 text-gray-700 hover:bg-gray-100 rounded"
+                  className="p-1 text-purple-500 hover:bg-purple-100 rounded"
                   title="필기하기"
                 >
                   <Pencil size={18} />
@@ -2643,8 +2669,8 @@ const hasMore = displayCount < filteredSongs.length
               }}
               className={`p-2 rounded-lg ${
                 previewStates[song.id]
-                  ? 'text-blue-600 bg-blue-100'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'text-sky-600 bg-sky-100'
+                  : 'text-sky-500 hover:bg-sky-100'
               }`}
               title={previewStates[song.id] ? '접기' : '펼치기'}
             >
@@ -2659,7 +2685,7 @@ const hasMore = displayCount < filteredSongs.length
                 e.stopPropagation()
                 openSheetViewer(song)
               }}
-              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+              className="p-2 text-indigo-500 hover:bg-indigo-100 rounded-lg"
               title={selectedSongs.length >= 2 && selectedSongs.some(s => s.id === song.id) ? `선택한 ${selectedSongs.filter(s => s.file_url).length}곡 악보 에디터` : '악보 에디터'}
             >
               <Presentation size={18} />

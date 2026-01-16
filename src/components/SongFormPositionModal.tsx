@@ -59,20 +59,20 @@ const COLOR_PRESETS = [
   { name: '검정', value: '#1F2937' },
 ]
 
-// 파트 태그 색상
+// 파트 태그 색상 (부드러운 파스텔 톤)
 const PART_COLORS: { [key: string]: string } = {
-  'I': '#EF4444',
-  'V': '#3B82F6',
-  'V1': '#3B82F6',
-  'V2': '#2563EB',
-  'V3': '#1D4ED8',
-  'PC': '#EAB308',
-  'C': '#22C55E',
-  'C1': '#22C55E',
-  'C2': '#16A34A',
-  'B': '#A855F7',
-  '간주': '#F97316',
-  'Out': '#6B7280',
+  'I': '#F87171',      // 부드러운 코랄
+  'V': '#60A5FA',      // 부드러운 파랑
+  'V1': '#7DD3FC',     // 연한 스카이블루
+  'V2': '#60A5FA',     // 부드러운 파랑
+  'V3': '#818CF8',     // 연한 인디고
+  'PC': '#FBBF24',     // 부드러운 앰버
+  'C': '#4ADE80',      // 부드러운 초록
+  'C1': '#86EFAC',     // 연한 민트
+  'C2': '#4ADE80',     // 부드러운 초록
+  'B': '#C084FC',      // 부드러운 보라
+  '간주': '#FB923C',   // 부드러운 주황
+  'Out': '#9CA3AF',    // 부드러운 회색
 }
 
 // 사용 가능한 파트 태그
@@ -822,12 +822,12 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-2 md:p-4">
       <div className="bg-white rounded-lg w-full max-w-7xl max-h-[98vh] md:max-h-[95vh] flex flex-col shadow-2xl">
         {/* 헤더 */}
-        <div className="p-2 md:p-4 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+        <div className="p-2 md:p-4 border-b bg-white">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h2 className="text-base md:text-xl font-bold text-gray-900">송폼 & 파트 태그 편집</h2>
               <p className="text-xs md:text-sm text-gray-600 truncate">
-                <span className="font-semibold text-purple-600">
+                <span className="font-semibold text-blue-600">
                   곡 {currentSongIndex + 1}/{songsWithForms.length}
                 </span>
                 {' - '}
@@ -1153,7 +1153,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               </button>
               <button
                 onClick={handleNext}
-                className="px-3 md:px-6 py-1.5 md:py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-semibold shadow-lg flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+                className="px-3 md:px-6 py-1.5 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold flex items-center gap-1 md:gap-2 text-xs md:text-sm"
               >
                 {currentSongIndex < songsWithForms.length - 1 ? (
                   <>
@@ -1180,9 +1180,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   key={index}
                   className={`flex-1 h-1 md:h-1.5 rounded-full transition-all ${
                     index === currentSongIndex
-                      ? 'bg-purple-500'
+                      ? 'bg-blue-600'
                       : index < currentSongIndex
-                      ? 'bg-green-500'
+                      ? 'bg-blue-300'
                       : 'bg-gray-300'
                   }`}
                 />

@@ -151,15 +151,15 @@ export default function DownloadLoadingModal({ isOpen, type, progress }: Downloa
         {(!progress || progress.total === 0) && (
           <div className="mt-6 flex justify-center gap-2">
             <div
-              className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce"
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
               style={{ animationDelay: '0s' }}
             ></div>
             <div
-              className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce"
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
               style={{ animationDelay: '0.2s' }}
             ></div>
             <div
-              className="w-2 h-2 bg-[#C5D7F2] rounded-full animate-bounce"
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
               style={{ animationDelay: '0.4s' }}
             ></div>
           </div>
