@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Music, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react'
+import { Music, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ArrowLeft } from 'lucide-react'
 
 interface Song {
   id: string
@@ -30,8 +30,9 @@ interface SetlistInfo {
 
 export default function PlaylistPage() {
   const params = useParams()
+  const router = useRouter()
   const playlistId = params.id as string
-  
+
   const [songs, setSongs] = useState<SetlistSong[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [setlistInfo, setSetlistInfo] = useState<SetlistInfo | null>(null)
@@ -165,8 +166,17 @@ const handleNext = () => {
       {/* 헤더 */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-5xl mx-auto p-4 md:p-6">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">{setlistInfo?.title}</h1>
-          <p className="text-sm md:text-base text-gray-600">
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              onClick={() => router.back()}
+              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="뒤로 가기"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-800">{setlistInfo?.title}</h1>
+          </div>
+          <p className="text-sm md:text-base text-gray-600 ml-9">
             {setlistInfo?.service_date && new Date(setlistInfo.service_date).toLocaleDateString('ko-KR')}
             {setlistInfo?.service_type && ` • ${setlistInfo.service_type}`}
             {` • ${songs.length}곡`}
