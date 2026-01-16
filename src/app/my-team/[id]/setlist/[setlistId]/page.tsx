@@ -129,8 +129,8 @@ function SortableSongItem({
       style={style}
       className={`p-4 hover:bg-gray-50 print-song ${isDragging ? 'shadow-2xl z-50' : ''}`}
     >
-      {/* 상단: 곡 정보 + 버튼 (항상 고정) */}
-      <div className="flex items-start justify-between">
+      {/* 상단: 곡 정보 + 버튼 (모바일: 세로 배치, 데스크톱: 가로 배치) */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between">
         <div className="flex items-start flex-1 gap-2">
           {/* 드래그 핸들 */}
           {canEdit && (
@@ -241,8 +241,8 @@ function SortableSongItem({
           </div>
         </div>
 
-        {/* 버튼들 - 항상 오른쪽 상단에 고정 */}
-        <div className="flex gap-2 no-print ml-4 flex-shrink-0">
+        {/* 버튼들 - 모바일: 아래로, 데스크톱: 오른쪽 */}
+        <div className="flex gap-2 no-print mt-3 md:mt-0 md:ml-4 flex-shrink-0 flex-wrap">
           {/* 미리보기 토글 버튼 */}
           {(song.songs.lyrics || song.songs.file_url) && (
             <button
