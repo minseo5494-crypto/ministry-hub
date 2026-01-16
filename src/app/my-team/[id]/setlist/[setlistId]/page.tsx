@@ -160,9 +160,10 @@ function SortableSongItem({
                   {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
                 </p>
                 {song.selected_form && song.selected_form.length > 0 && (
-                  <p className="text-sm text-purple-600 mb-2">
-                    송폼: {song.selected_form.join(' - ')}
-                  </p>
+                  <div className="text-sm text-purple-600 mb-2 flex">
+                    <span className="flex-shrink-0">송폼:&nbsp;</span>
+                    <span className="flex-1">{song.selected_form.join(' - ')}</span>
+                  </div>
                 )}
                 {/* 내 버전 선택 UI - 데스크톱 */}
                 {userNotes && userNotes.length > 0 && (
@@ -255,9 +256,10 @@ function SortableSongItem({
               {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
             </p>
             {song.selected_form && song.selected_form.length > 0 && (
-              <p className="text-sm text-purple-600 mb-2">
-                송폼: {song.selected_form.join(' - ')}
-              </p>
+              <div className="text-sm text-purple-600 mb-2 flex">
+                <span className="flex-shrink-0">송폼:&nbsp;</span>
+                <span className="flex-1">{song.selected_form.join(' - ')}</span>
+              </div>
             )}
             {/* 내 버전 선택 UI - 모바일 */}
             {userNotes && userNotes.length > 0 && (
