@@ -1485,7 +1485,6 @@ const hasMore = displayCount < filteredSongs.length
           <div className="flex items-center justify-between">
             {/* 로고 */}
             <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-              <Music className="w-8 h-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">WORSHEEP</h1>
             </div>
 
@@ -1889,12 +1888,21 @@ const hasMore = displayCount < filteredSongs.length
 
           {/* 검색바 - 흰색 배경 */}
           <div className="max-w-3xl mx-auto mb-8">
-            <div className="relative">
-              <Search className="absolute left-4 top-4 text-gray-400" size={24} />
+            <div className={`relative rounded-xl p-[2px] transition-all duration-300 ${
+              isAISearchEnabled
+                ? 'bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-500 shadow-lg shadow-purple-500/30'
+                : 'bg-transparent'
+            }`}>
+              <div className="relative">
+              <Search className={`absolute left-4 top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
               <input
                 type="text"
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : "찬양곡 제목, 아티스트, 가사로 검색..."}
-                className="w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:ring-4 focus:ring-blue-500 focus:outline-none border-2 border-white/50"
+                className={`w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none ${
+                  isAISearchEnabled
+                    ? 'focus:ring-2 focus:ring-purple-400'
+                    : 'focus:ring-4 focus:ring-blue-500 border-2 border-white/50'
+                }`}
                 value={filters.searchText}
                 onChange={(e) => {
                   setFilters({ ...filters, searchText: e.target.value })
@@ -1934,31 +1942,29 @@ const hasMore = displayCount < filteredSongs.length
               {/* AI 검색 토글 */}
               <button
                 onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
                   isAISearchEnabled
-                    ? 'bg-purple-600 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/40'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
                 }`}
               >
                 {isAISearching ? (
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1.5">
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    AI
+                    <span>검색중</span>
                   </span>
                 ) : (
-                  <>✨ AI</>
+                  <span className="flex items-center gap-1">
+                    <span>✨</span>
+                    <span>AI 검색</span>
+                  </span>
                 )}
               </button>
+              </div>
             </div>
-            {/* AI 검색 안내 메시지 */}
-            {isAISearchEnabled && !aiSearchResult && (
-              <p className="text-center text-white/80 text-sm mt-2">
-                Enter 키를 눌러 AI 검색 실행 · 예: &quot;성탄절 느린 경배곡&quot;, &quot;G키 빠른 찬양&quot;
-              </p>
-            )}
             {/* AI 검색 결과 피드백 */}
             {aiSearchResult && aiSearchResult.success && (
               <div className="mt-3 bg-white/10 backdrop-blur rounded-lg p-3 text-white text-sm">
