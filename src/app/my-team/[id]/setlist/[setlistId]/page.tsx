@@ -7,6 +7,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -141,6 +142,7 @@ function SortableSongItem({
                 {...attributes}
                 {...listeners}
                 className="cursor-grab active:cursor-grabbing pt-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
+                style={{ touchAction: 'none' }}
                 title="드래그하여 순서 변경"
               >
                 <GripVertical size={20} />
@@ -250,8 +252,8 @@ function SortableSongItem({
             </div>
           </div>
 
-          {/* 모바일: 전체 너비 사용하는 정보 영역 (약간의 왼쪽 여백) */}
-          <div className="md:hidden mt-2 pl-4">
+          {/* 모바일: 전체 너비 사용하는 정보 영역 (좌우 동일 여백) */}
+          <div className="md:hidden mt-2 px-4">
             <p className="text-sm text-gray-600 mb-2">
               {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
             </p>
@@ -587,6 +589,12 @@ const {
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8, // 8px 이상 움직여야 드래그 시작
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200, // 200ms 누르고 있어야 드래그 시작 (스크롤과 구분)
+        tolerance: 5, // 5px 이내 움직임은 허용
       },
     }),
     useSensor(KeyboardSensor, {

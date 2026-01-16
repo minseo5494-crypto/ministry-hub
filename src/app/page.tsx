@@ -315,19 +315,16 @@ useEffect(() => {
       setCheckingAuth(false)
     }
   }
-  // 🆕 초기 로드 시 화면 크기에 따라 필터 패널 표시 설정
+  // 🆕 화면 크기에 따라 필터 패널 표시 설정
   // 모바일/태블릿: 필터 닫힌 상태 (버튼 클릭 시 오버레이로 표시)
   // 데스크톱: 필터 열린 상태
 useEffect(() => {
-  const handleFilterVisibility = () => {
-    if (window.innerWidth < 768) {
-      setShowFilterPanel(false)
-    } else {
-      setShowFilterPanel(true)
-    }
+  if (isMobile) {
+    setShowFilterPanel(false)
+  } else {
+    setShowFilterPanel(true)
   }
-  handleFilterVisibility()
-}, [])
+}, [isMobile])
 
   // 📝 사용자 로드 시 필기 노트 가져오기
   useEffect(() => {
