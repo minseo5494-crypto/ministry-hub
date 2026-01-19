@@ -13,6 +13,12 @@
 - **모니터링**: Sentry, Google Analytics 4
 - **배포**: Vercel
 
+## Supabase 프로젝트
+
+- **Project ID**: `uoneiotepfmikprknxhk`
+- **Name**: ministry-hub
+- **Region**: ap-southeast-1 (Singapore)
+
 ## 프로젝트 구조
 
 ```
@@ -99,6 +105,16 @@ npm run build    # 프로덕션 빌드
 npm run lint     # ESLint 검사
 git push         # Vercel 자동 배포
 ```
+
+## Claude Code 스킬
+
+| 명령어 | 설명 |
+|--------|------|
+| `/deploy` | 배포 전 빌드 테스트 |
+| `/db-check` | DB 스키마 확인 (MCP) |
+| `/ios-test` | iOS 호환성 검사 |
+| `/commit-kr` | 한국어 커밋 생성 |
+| `/supabase-query` | Supabase 쿼리 도우미 (MCP) |
 
 ## 관련 서비스
 

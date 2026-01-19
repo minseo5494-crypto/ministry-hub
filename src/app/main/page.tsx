@@ -205,6 +205,8 @@ export default function MainPage() {
     onPositionConfirm,
     onPositionCancel,
     generatePPTWithOptions,
+    hasMultipleSongs,
+    hasSongForms: hasSongFormsForPPT,
     DownloadFormatModal,
   } = useDownload({
     selectedSongs,
@@ -1249,6 +1251,8 @@ export default function MainPage() {
         isOpen={showPPTModal}
         onGeneratePPT={generatePPTWithOptions}
         onClose={() => setShowPPTModal(false)}
+        hasMultipleSongs={hasMultipleSongs}
+        hasSongForms={hasSongFormsForPPT}
       />
 
       <YoutubeModal

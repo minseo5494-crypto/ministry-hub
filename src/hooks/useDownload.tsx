@@ -79,7 +79,9 @@ interface UseDownloadReturn {
   onPositionCancel: () => void
   startDownloadWithFormat: (format: 'pdf' | 'image') => void
   startPPTDownload: () => void
-  generatePPTWithOptions: (mode: 'form' | 'original') => Promise<void>
+  generatePPTWithOptions: (options: { includeTitleSlides: boolean; showFormLabels: boolean }) => Promise<void>
+  hasMultipleSongs: boolean
+  hasSongForms: boolean
 
   // ✅ 새로 추가: 공통 모달 컴포넌트
   DownloadFormatModal: () => React.ReactElement | null
@@ -1105,7 +1107,7 @@ export function useDownload({
     return mapping[abbr] || [abbr]
   }
 
-  const generatePPTWithOptions = useCallback(async (mode: 'form' | 'original') => {
+  const generatePPTWithOptions = useCallback(async (options: { includeTitleSlides: boolean; showFormLabels: boolean }) => {
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
@@ -1118,143 +1120,161 @@ export function useDownload({
       const PptxGenJS = (await import('pptxgenjs')).default
       const prs = new PptxGenJS()
 
+      // 한글 폰트 설정
+      const koreanFont = 'NanumGothic'
+
       // 표지 슬라이드
       const coverSlide = prs.addSlide()
       coverSlide.background = { color: '1F2937' }
       coverSlide.addText(setlistTitle || '찬양 콘티', {
         x: 0.5, y: 2.0, w: 9, h: 1.5,
-        fontSize: 60, bold: true, color: 'FFFFFF', align: 'center'
+        fontSize: 60, bold: true, color: 'FFFFFF', align: 'center', fontFace: koreanFont
       })
       coverSlide.addText(setlistDate || new Date().toLocaleDateString('ko-KR'), {
         x: 0.5, y: 3.8, w: 9, h: 0.5,
-        fontSize: 24, color: '9CA3AF', align: 'center'
+        fontSize: 24, color: '9CA3AF', align: 'center', fontFace: koreanFont
       })
 
       // 각 곡 처리
-      for (const song of selectedSongs) {
+      for (let songIndex = 0; songIndex < selectedSongs.length; songIndex++) {
+        const song = selectedSongs[songIndex]
         const forms = songForms[song.id]
 
-        // 가사 모드일 때
-        if (mode === 'form') {
-          // 1. song_structure가 있으면 사용
-          // 2. 없으면 lyrics를 파싱해서 사용
-          let lyricsData: { [section: string]: string } = {}
-
-          if (song.song_structure && Object.keys(song.song_structure).length > 0) {
-            lyricsData = song.song_structure
-          } else if (song.lyrics) {
-            lyricsData = parseLyricsToSections(song.lyrics)
+        // 곡 제목 슬라이드 (옵션이 켜져 있고 여러 곡일 때)
+        if (options.includeTitleSlides && selectedSongs.length > 1) {
+          const titleSlide = prs.addSlide()
+          titleSlide.background = { color: '374151' }
+          titleSlide.addText(`${songIndex + 1}`, {
+            x: 0.5, y: 1.5, w: 9, h: 1,
+            fontSize: 48, bold: true, color: '9CA3AF', align: 'center', fontFace: koreanFont
+          })
+          titleSlide.addText(song.song_name, {
+            x: 0.5, y: 2.5, w: 9, h: 1.5,
+            fontSize: 48, bold: true, color: 'FFFFFF', align: 'center', fontFace: koreanFont
+          })
+          if (song.team_name) {
+            titleSlide.addText(song.team_name, {
+              x: 0.5, y: 4.2, w: 9, h: 0.5,
+              fontSize: 24, color: '9CA3AF', align: 'center', fontFace: koreanFont
+            })
           }
+        }
 
-          // 송폼이 설정되어 있고 가사 데이터가 있으면
-          if (forms && forms.length > 0 && Object.keys(lyricsData).length > 0) {
-            for (const abbr of forms) {
-              // 약어에 해당하는 섹션 이름들 찾기
-              const possibleNames = getFullSectionName(abbr)
-              let sectionLyrics = ''
+        // 1. song_structure가 있으면 사용
+        // 2. 없으면 lyrics를 파싱해서 사용
+        let lyricsData: { [section: string]: string } = {}
 
-              for (const name of possibleNames) {
-                // 대소문자 무시하고 찾기
-                const foundKey = Object.keys(lyricsData).find(
-                  k => k.toLowerCase() === name.toLowerCase()
-                )
-                if (foundKey && lyricsData[foundKey]) {
-                  sectionLyrics = lyricsData[foundKey]
-                  break
-                }
+        if (song.song_structure && Object.keys(song.song_structure).length > 0) {
+          lyricsData = song.song_structure
+        } else if (song.lyrics) {
+          lyricsData = parseLyricsToSections(song.lyrics)
+        }
+
+        // 송폼이 설정되어 있고 가사 데이터가 있으면
+        if (forms && forms.length > 0 && Object.keys(lyricsData).length > 0) {
+          for (const abbr of forms) {
+            // 약어에 해당하는 섹션 이름들 찾기
+            const possibleNames = getFullSectionName(abbr)
+            let sectionLyrics = ''
+
+            for (const name of possibleNames) {
+              // 대소문자 무시하고 찾기
+              const foundKey = Object.keys(lyricsData).find(
+                k => k.toLowerCase() === name.toLowerCase()
+              )
+              if (foundKey && lyricsData[foundKey]) {
+                sectionLyrics = lyricsData[foundKey]
+                break
               }
+            }
 
-              if (sectionLyrics) {
-                // 가사 처리: /를 줄바꿈으로 변환하고 2줄씩 슬라이드 분할
-                const processedLyrics = sectionLyrics
-                  .replace(/\s*\/\s*/g, '\n')
-                  .split('\n')
-                  .map((line: string) => line.trim())
-                  .filter((line: string) => line.length > 0)
+            if (sectionLyrics) {
+              // 가사 처리: /를 줄바꿈으로 변환하고 2줄씩 슬라이드 분할
+              const processedLyrics = sectionLyrics
+                .replace(/\s*\/\s*/g, '\n')
+                .split('\n')
+                .map((line: string) => line.trim())
+                .filter((line: string) => line.length > 0)
 
-                const LINES_PER_SLIDE = 2
-                for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
-                  const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
-                  const slideText = slideLines.join('\n')
+              const LINES_PER_SLIDE = 2
+              for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
+                const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
+                const slideText = slideLines.join('\n')
 
-                  const slide = prs.addSlide()
-                  slide.background = { color: 'FFFFFF' }
+                const slide = prs.addSlide()
+                slide.background = { color: 'FFFFFF' }
 
+                // 송폼 라벨 표시 (옵션이 켜져 있을 때만)
+                if (options.showFormLabels) {
                   const slideIndex = Math.floor(i / LINES_PER_SLIDE) + 1
                   const totalSlides = Math.ceil(processedLyrics.length / LINES_PER_SLIDE)
                   const sectionLabel = totalSlides > 1 ? `${abbr} (${slideIndex}/${totalSlides})` : abbr
 
                   slide.addText(sectionLabel, {
                     x: 0.5, y: 0.3, w: 9, h: 0.5,
-                    fontSize: 16, bold: true, color: '6B7280', align: 'left'
-                  })
-
-                  slide.addText(slideText, {
-                    x: 0.5, y: 2, w: 9, h: 3,
-                    fontSize: 36, color: '111827', align: 'center', valign: 'middle'
-                  })
-
-                  slide.addText(song.song_name, {
-                    x: 0.5, y: 6.5, w: 9, h: 0.3,
-                    fontSize: 14, color: '9CA3AF', align: 'center'
+                    fontSize: 16, bold: true, color: '6B7280', align: 'left', fontFace: koreanFont
                   })
                 }
+
+                slide.addText(slideText, {
+                  x: 0.5, y: 2, w: 9, h: 3,
+                  fontSize: 36, color: '111827', align: 'center', valign: 'middle', fontFace: koreanFont
+                })
+
+                slide.addText(song.song_name, {
+                  x: 0.5, y: 6.5, w: 9, h: 0.3,
+                  fontSize: 14, color: '9CA3AF', align: 'center', fontFace: koreanFont
+                })
               }
             }
-          } else if (song.lyrics) {
-            // 송폼이 없지만 가사가 있으면 전체 가사를 슬라이드로
-            const processedLyrics = song.lyrics
-              .replace(/\[.*?\]/g, '') // 섹션 태그 제거
-              .replace(/\s*\/\s*/g, '\n')
-              .split('\n')
-              .map((line: string) => line.trim())
-              .filter((line: string) => line.length > 0)
+          }
+        } else if (song.lyrics) {
+          // 송폼이 없지만 가사가 있으면 전체 가사를 슬라이드로
+          const processedLyrics = song.lyrics
+            .replace(/\[.*?\]/g, '') // 섹션 태그 제거
+            .replace(/\s*\/\s*/g, '\n')
+            .split('\n')
+            .map((line: string) => line.trim())
+            .filter((line: string) => line.length > 0)
 
-            const LINES_PER_SLIDE = 2
-            for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
-              const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
-              const slideText = slideLines.join('\n')
+          const LINES_PER_SLIDE = 2
+          for (let i = 0; i < processedLyrics.length; i += LINES_PER_SLIDE) {
+            const slideLines = processedLyrics.slice(i, i + LINES_PER_SLIDE)
+            const slideText = slideLines.join('\n')
 
-              const slide = prs.addSlide()
-              slide.background = { color: 'FFFFFF' }
-
-              const slideIndex = Math.floor(i / LINES_PER_SLIDE) + 1
-              const totalSlides = Math.ceil(processedLyrics.length / LINES_PER_SLIDE)
-
-              slide.addText(`${slideIndex}/${totalSlides}`, {
-                x: 0.5, y: 0.3, w: 9, h: 0.5,
-                fontSize: 16, bold: true, color: '6B7280', align: 'left'
-              })
-
-              slide.addText(slideText, {
-                x: 0.5, y: 2, w: 9, h: 3,
-                fontSize: 36, color: '111827', align: 'center', valign: 'middle'
-              })
-
-              slide.addText(song.song_name, {
-                x: 0.5, y: 6.5, w: 9, h: 0.3,
-                fontSize: 14, color: '9CA3AF', align: 'center'
-              })
-            }
-          } else if (song.file_url) {
-            // 가사가 없으면 악보 이미지
             const slide = prs.addSlide()
-            slide.addImage({
-              path: song.file_url,
-              x: 0, y: 0, w: '100%', h: '100%',
-              sizing: { type: 'contain', w: '100%', h: '100%' }
+            slide.background = { color: 'FFFFFF' }
+
+            const slideIndex = Math.floor(i / LINES_PER_SLIDE) + 1
+            const totalSlides = Math.ceil(processedLyrics.length / LINES_PER_SLIDE)
+
+            slide.addText(`${slideIndex}/${totalSlides}`, {
+              x: 0.5, y: 0.3, w: 9, h: 0.5,
+              fontSize: 16, bold: true, color: '6B7280', align: 'left', fontFace: koreanFont
+            })
+
+            slide.addText(slideText, {
+              x: 0.5, y: 2, w: 9, h: 3,
+              fontSize: 36, color: '111827', align: 'center', valign: 'middle', fontFace: koreanFont
+            })
+
+            slide.addText(song.song_name, {
+              x: 0.5, y: 6.5, w: 9, h: 0.3,
+              fontSize: 14, color: '9CA3AF', align: 'center', fontFace: koreanFont
             })
           }
         } else {
-          // 악보 모드
-          if (song.file_url) {
-            const slide = prs.addSlide()
-            slide.addImage({
-              path: song.file_url,
-              x: 0, y: 0, w: '100%', h: '100%',
-              sizing: { type: 'contain', w: '100%', h: '100%' }
-            })
-          }
+          // 가사가 없으면 안내 슬라이드
+          const slide = prs.addSlide()
+          slide.background = { color: 'FFFFFF' }
+          slide.addText(song.song_name, {
+            x: 0.5, y: 2, w: 9, h: 1,
+            fontSize: 36, bold: true, color: '111827', align: 'center', fontFace: koreanFont
+          })
+          slide.addText('가사 정보가 없습니다', {
+            x: 0.5, y: 3.5, w: 9, h: 0.5,
+            fontSize: 18, color: '9CA3AF', align: 'center', fontFace: koreanFont
+          })
         }
       }
 
@@ -1286,6 +1306,14 @@ export function useDownload({
     }
   }, [selectedSongs, songForms, userId, setlistTitle, setlistDate])
   
+  // 여러 곡 선택 여부
+  const hasMultipleSongs = selectedSongs.length > 1
+
+  // 송폼 설정된 곡 있는지
+  const hasSongFormsForPPT = selectedSongs.some(song =>
+    songForms[song.id] && songForms[song.id].length > 0
+  )
+
   // PPT 다운로드 시작
   const startPPTDownload = useCallback(() => {
     if (selectedSongs.length === 0) {
@@ -1293,19 +1321,18 @@ export function useDownload({
       return
     }
 
-    // 송폼이 있거나 가사가 있는 곡이 있으면 모달 표시
-    const hasSongFormOrLyrics = selectedSongs.some(song =>
-      (songForms[song.id] && songForms[song.id].length > 0) ||
+    // 가사가 있는 곡이 있으면 모달 표시
+    const hasLyrics = selectedSongs.some(song =>
       song.lyrics ||
       (song.song_structure && Object.keys(song.song_structure).length > 0)
     )
 
-    if (hasSongFormOrLyrics) {
+    if (hasLyrics) {
       setShowPPTModal(true)
     } else {
-      generatePPTWithOptions('original')
+      alert('가사가 있는 곡이 없습니다.')
     }
-  }, [selectedSongs, songForms, generatePPTWithOptions])
+  }, [selectedSongs])
   
   return {
     downloadingPDF,
@@ -1340,6 +1367,8 @@ export function useDownload({
     startDownloadWithFormat,
     startPPTDownload,
     generatePPTWithOptions,
+    hasMultipleSongs,
+    hasSongForms: hasSongFormsForPPT,
 
     // ✅ 공통 모달 컴포넌트
     DownloadFormatModal,
