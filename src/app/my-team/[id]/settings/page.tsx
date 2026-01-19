@@ -334,36 +334,7 @@ export default function TeamSettingsPage() {
       console.error('Error deleting team setlists:', teamSetlistError)
     }
 
-    // 3. 개인 콘티의 곡들 삭제 (team_id가 있는 개인 콘티)
-    const { data: personalSetlists } = await supabase
-      .from('setlists')
-      .select('id')
-      .eq('team_id', teamId)
-
-    if (personalSetlists && personalSetlists.length > 0) {
-      const setlistIds = personalSetlists.map(s => s.id)
-      
-      const { error: personalSongError } = await supabase
-        .from('setlist_songs')
-        .delete()
-        .in('setlist_id', setlistIds)
-
-      if (personalSongError) {
-        console.error('Error deleting personal songs:', personalSongError)
-      }
-
-      // 4. 개인 콘티 삭제
-      const { error: personalSetlistError } = await supabase
-        .from('setlists')
-        .delete()
-        .eq('team_id', teamId)
-
-      if (personalSetlistError) {
-        console.error('Error deleting personal setlists:', personalSetlistError)
-      }
-    }
-
-    // 5. 팀 멤버 삭제
+    // 3. 팀 멤버 삭제
     const { error: memberError } = await supabase
       .from('team_members')
       .delete()
@@ -373,7 +344,7 @@ export default function TeamSettingsPage() {
       console.error('Error deleting members:', memberError)
     }
 
-    // 6. 팀 삭제
+    // 4. 팀 삭제
     const { error: teamError } = await supabase
       .from('teams')
       .delete()
