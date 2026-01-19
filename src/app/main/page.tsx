@@ -73,7 +73,7 @@ const initialNewSong: NewSongForm = {
 
 export default function MainPage() {
   const router = useRouter()
-  const isMobile = useMobile()
+  const isMobile = useMobile(1024) // lg 브레이크포인트 사용 (태블릿도 모바일 UI)
 
   // Auth state
   const [user, setUser] = useState<User | null>(null)
@@ -1105,18 +1105,18 @@ export default function MainPage() {
         setSongForms={setSongForms}
       />
 
-      {/* 모바일 필터 배경 오버레이 */}
+      {/* 모바일/태블릿 필터 배경 오버레이 */}
       {isMobile && showFilterPanel && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 md:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setShowFilterPanel(false)}
         />
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex flex-col md:flex-row gap-3 md:gap-6">
+        <div className="flex flex-col lg:flex-row gap-3 lg:gap-6">
           {/* 필터 패널 */}
-          <div className={`${showFilterPanel ? 'w-64 md:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
+          <div className={`${showFilterPanel ? 'w-64 lg:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
             <FilterPanel
               filters={filters}
               onFilterChange={handleFilterChange}
