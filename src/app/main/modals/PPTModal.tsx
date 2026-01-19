@@ -114,6 +114,22 @@ export default function PPTModal({
           </button>
         </div>
 
+        {/* 폰트 안내 */}
+        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-xs text-amber-800">
+            <span className="font-bold">💡 폰트 안내:</span> PPT는 나눔고딕 폰트를 사용합니다.
+            정상적으로 표시되려면 컴퓨터에 나눔고딕이 설치되어 있어야 합니다.{' '}
+            <a
+              href="https://hangeul.naver.com/font"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-700 underline hover:text-amber-900"
+            >
+              나눔글꼴 다운로드
+            </a>
+          </p>
+        </div>
+
         <button
           onClick={onClose}
           className="w-full mt-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
