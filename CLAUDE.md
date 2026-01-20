@@ -116,13 +116,13 @@ git push         # Vercel 자동 배포
 | `/commit-kr` | 한국어 커밋 생성 |
 | `/supabase-query` | Supabase 쿼리 도우미 (MCP) |
 | `/docs` | 문서 관리 (생성, 수정, 목록) |
+| `/handoff` | 컨텍스트 리셋 전 HANDOFF.md 업데이트 |
 
 ## 컨텍스트 관리
 
-**HANDOFF.md**: 프로젝트 상태 인수인계 문서
-- 위치: 프로젝트 루트
-- 용도: 컨텍스트 리셋 후 프로젝트 상태 파악
-- 새 대화 시작 시: "HANDOFF.md 읽어줘"로 상태 파악 가능
+**세션 종료 전**: `/handoff` 실행 → `/clear`
+
+**새 세션 시작**: "HANDOFF.md 읽어줘"로 상태 파악
 
 ## Claude Code 에이전트
 
