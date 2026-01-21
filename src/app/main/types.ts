@@ -12,6 +12,7 @@ export type Filters = {
   bpmMin: string
   bpmMax: string
   includeMyNotes: boolean
+  includeLyrics: boolean
 }
 
 export type SortBy = 'recent' | 'likes' | 'name'

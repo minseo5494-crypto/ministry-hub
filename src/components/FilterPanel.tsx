@@ -60,7 +60,11 @@ export default function FilterPanel({
 
   if (!isVisible) return null  // ← 추가
     return (
-    <div className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] md:max-h-none md:overflow-visible overflow-y-auto">
+    <div
+      className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] md:max-h-none md:overflow-visible overflow-y-auto"
+      style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
       {/* 모바일 닫기 버튼 */}
       {isMobile && onClose && (
         <div className="flex items-center justify-between mb-4 pb-2 border-b md:hidden">

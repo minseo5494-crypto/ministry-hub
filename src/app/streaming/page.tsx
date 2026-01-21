@@ -12,11 +12,20 @@ import {
 interface Video {
   id: number
   title: string
-  thumbnail: string
   duration: string
   views: string
   category: string
   artist: string
+}
+
+// 카테고리별 그라데이션 색상
+const categoryGradients: Record<string, string> = {
+  Worship: 'from-blue-500 to-purple-600',
+  Sermon: 'from-amber-500 to-orange-600',
+  Prayer: 'from-emerald-500 to-teal-600',
+  Youth: 'from-pink-500 to-rose-600',
+  Kids: 'from-cyan-400 to-blue-500',
+  default: 'from-slate-600 to-slate-800',
 }
 
 interface Song {
@@ -39,7 +48,6 @@ const isMobile = useMobile()
     {
       id: 1,
       title: "Sunday Morning Worship Service",
-      thumbnail: "/api/placeholder/400/225",  // 나중에 실제 이미지로 교체
       duration: "1:45:30",
       views: "2.3K views",
       category: "Worship",
@@ -48,13 +56,19 @@ const isMobile = useMobile()
     {
       id: 2,
       title: "Pastor John's Message: Faith in Action",
-      thumbnail: "/api/placeholder/400/225",
       duration: "42:15",
       views: "1.8K views",
       category: "Sermon",
       artist: "Pastor John Miller"
     },
-    // ... 더 많은 비디오 데이터 추가 가능
+    {
+      id: 3,
+      title: "Evening Prayer & Meditation",
+      duration: "28:45",
+      views: "1.2K views",
+      category: "Prayer",
+      artist: "Worship Ministry"
+    },
   ]
 
   const popularSongs: Song[] = [
@@ -221,7 +235,9 @@ const isMobile = useMobile()
                     <div key={video.id} className="group cursor-pointer">
                       <div className="relative mb-4">
                         <div className="w-full aspect-video bg-slate-700 rounded-xl overflow-hidden">
-                          <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800" />
+                          <div className={`w-full h-full bg-gradient-to-br ${categoryGradients[video.category] || categoryGradients.default} flex items-center justify-center`}>
+                            <Music className="w-12 h-12 text-white/50" />
+                          </div>
                         </div>
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 rounded-xl flex items-center justify-center">
                           <div className="w-14 h-14 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100">
@@ -297,7 +313,9 @@ const isMobile = useMobile()
                     <div key={video.id} className="group cursor-pointer bg-slate-800/30 rounded-xl p-4 hover:bg-slate-700/30 transition-all duration-200">
                       <div className="flex space-x-4">
                         <div className="relative flex-shrink-0">
-                          <div className="w-20 h-20 bg-slate-700 rounded-lg" />
+                          <div className={`w-20 h-20 bg-gradient-to-br ${categoryGradients[video.category] || categoryGradients.default} rounded-lg flex items-center justify-center`}>
+                            <Music className="w-8 h-8 text-white/50" />
+                          </div>
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 rounded-lg flex items-center justify-center">
                             <div className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                               <Play className="w-4 h-4 text-slate-800 ml-0.5" />

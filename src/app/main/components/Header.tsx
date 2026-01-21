@@ -48,7 +48,7 @@ export default function Header({
 
             {/* 데스크톱: 기존 버튼들 */}
             <div className="hidden md:flex items-center gap-2">
-              {/* PraiseHub 버튼 */}
+              {/* PraiseHub 버튼 - 현재 비활성화
               <button
                 onClick={() => router.push('/streaming')}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:opacity-90 transition-opacity"
@@ -56,6 +56,7 @@ export default function Header({
                 <Music size={18} />
                 <span className="text-sm font-medium">PraiseHub</span>
               </button>
+              */}
 
               {user ? (
                 <>

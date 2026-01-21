@@ -81,7 +81,7 @@ export default function HeroSection({
               <Search className={`absolute left-4 top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
               <input
                 type="text"
-                placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : "찬양곡 제목, 아티스트, 가사로 검색..."}
+                placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : `찬양곡 제목, 아티스트${filters.includeLyrics ? ', 가사' : ''}로 검색...`}
                 className={`w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none ${isAISearchEnabled
                   ? 'focus:ring-2 focus:ring-purple-400'
                   : 'focus:ring-4 focus:ring-blue-500 border-2 border-white/50'
@@ -143,6 +143,24 @@ export default function HeroSection({
               </button>
             </div>
           </div>
+
+          {/* 가사 검색 토글 */}
+          {!isAISearchEnabled && (
+            <div className="mt-3 flex justify-center">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filters.includeLyrics}
+                  onChange={(e) => setFilters({ ...filters, includeLyrics: e.target.checked })}
+                  className="w-4 h-4 rounded border-white/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-white/20"
+                />
+                <span className="text-sm font-medium" style={{ color: '#FFFFFF', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
+                  가사 포함 검색
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* AI 검색 결과 피드백 */}
           {aiSearchResult && aiSearchResult.success && (
             <div className="mt-3 bg-white/10 backdrop-blur rounded-lg p-3 text-white text-sm">

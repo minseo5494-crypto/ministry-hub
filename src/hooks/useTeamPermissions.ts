@@ -16,9 +16,6 @@ interface UseTeamPermissionsResult {
   refetch: () => Promise<void>
 }
 
-// 관리자 이메일 목록 (나중에 DB로 이동 가능)
-const ADMIN_EMAILS = ['minseo1885@naver.com']
-
 export function useTeamPermissions(teamId: string | null, userId: string | null): UseTeamPermissionsResult {
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [role, setRole] = useState<TeamRole | null>(null)
@@ -40,14 +37,14 @@ export function useTeamPermissions(teamId: string | null, userId: string | null)
       setLoading(true)
       setError(null)
 
-      // 1. 먼저 사용자가 관리자인지 확인
+      // 1. 먼저 사용자가 관리자인지 확인 (DB의 is_admin 필드 사용)
       const { data: userData } = await supabase
         .from('users')
-        .select('email')
+        .select('is_admin')
         .eq('id', userId)
         .single()
 
-      if (userData && ADMIN_EMAILS.includes(userData.email)) {
+      if (userData?.is_admin) {
         // 관리자는 모든 권한 부여
         setIsAdmin(true)
         setIsLeader(true)

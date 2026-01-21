@@ -2212,7 +2212,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  악보 파일 (선택사항)
+                  악보 파일 <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <input
@@ -2274,7 +2274,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               </button>
               <button
                 onClick={addNewSong}
-                disabled={uploading || !newSong.song_name.trim() || (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0)}
+                disabled={uploading || !newSong.song_name.trim() || !uploadingFile || (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0)}
                 className="flex-1 px-6 py-3 bg-[#C5D7F2] hover:bg-[#A8C4E8] text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {uploading ? '추가 중...' : '곡 추가'}

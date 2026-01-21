@@ -48,6 +48,12 @@ const withPWA = require('next-pwa')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 프로덕션 빌드에서 console.log 자동 제거 (error, warn만 유지)
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production'
+      ? { exclude: ['error', 'warn'] }
+      : false,
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

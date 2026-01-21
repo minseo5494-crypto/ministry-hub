@@ -53,7 +53,8 @@ const initialFilters: Filters = {
   searchText: '',
   bpmMin: '',
   bpmMax: '',
-  includeMyNotes: false
+  includeMyNotes: false,
+  includeLyrics: false
 }
 
 const initialNewSong: NewSongForm = {
@@ -259,6 +260,21 @@ export default function MainPage() {
     }
   }, [isMobile])
 
+  // 모바일에서 필터 패널이 열렸을 때 body 스크롤 잠금
+  useEffect(() => {
+    if (isMobile && showFilterPanel) {
+      document.body.style.overflow = 'hidden'
+      document.body.style.touchAction = 'none'
+    } else {
+      document.body.style.overflow = ''
+      document.body.style.touchAction = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.touchAction = ''
+    }
+  }, [isMobile, showFilterPanel])
+
   useEffect(() => {
     if (user?.id) fetchMyNotes(user.id)
   }, [user?.id, fetchMyNotes])
@@ -326,25 +342,45 @@ export default function MainPage() {
         : []
 
     if (searchKeywords.length > 0) {
+      // AI 검색인지 일반 검색인지 구분
+      const isAISearch = aiSearchKeywords.length > 0
+
       result = result.filter(song => {
         const normalizedSongName = normalizeText(song.song_name)
         const normalizedTeamName = normalizeText(song.team_name || '')
-        const normalizedLyrics = normalizeText(song.lyrics || '')
         const songNameLower = song.song_name.toLowerCase()
         const teamNameLower = song.team_name?.toLowerCase() || ''
-        const lyricsLower = song.lyrics?.toLowerCase() || ''
 
-        return searchKeywords.some(keyword => {
+        // AI 검색 시 가사도 자동으로 검색
+        const shouldSearchLyrics = isAISearch || filters.includeLyrics
+        const normalizedLyrics = shouldSearchLyrics && song.lyrics ? normalizeText(song.lyrics) : ''
+        const lyricsLower = shouldSearchLyrics && song.lyrics ? song.lyrics.toLowerCase() : ''
+
+        const matchKeyword = (keyword: string) => {
           const normalizedKeyword = normalizeText(keyword)
           const keywordLower = keyword.toLowerCase()
 
-          return normalizedSongName.includes(normalizedKeyword) ||
+          // 제목과 팀명으로 검색
+          const matchesTitleOrTeam =
+            normalizedSongName.includes(normalizedKeyword) ||
             normalizedTeamName.includes(normalizedKeyword) ||
-            normalizedLyrics.includes(normalizedKeyword) ||
             songNameLower.includes(keywordLower) ||
-            teamNameLower.includes(keywordLower) ||
-            lyricsLower.includes(keywordLower)
-        })
+            teamNameLower.includes(keywordLower)
+
+          // 가사 검색
+          const matchesLyrics = shouldSearchLyrics && song.lyrics &&
+            (normalizedLyrics.includes(normalizedKeyword) || lyricsLower.includes(keywordLower))
+
+          return matchesTitleOrTeam || matchesLyrics
+        }
+
+        // AI 검색: 하나라도 매칭되면 OK (some) - 관련 키워드 중 하나만 있어도 됨
+        // 일반 검색: 모든 키워드가 매칭되어야 함 (every)
+        if (isAISearch) {
+          return searchKeywords.some(matchKeyword)
+        } else {
+          return searchKeywords.every(matchKeyword)
+        }
       })
     }
 
@@ -412,7 +448,34 @@ export default function MainPage() {
       result = result.filter(song => song.is_official !== true)
     }
 
-    if (sortBy === 'likes') {
+    // 검색어가 있을 때 제목 일치 우선 정렬
+    if (searchKeywords.length > 0) {
+      // 키워드 등장 횟수 계산 함수
+      const countKeywordOccurrences = (title: string, keywords: string[]): number => {
+        const normalizedTitle = normalizeText(title)
+        return keywords.reduce((total, keyword) => {
+          const normalizedKeyword = normalizeText(keyword)
+          if (!normalizedKeyword) return total
+          // 제목에서 키워드가 몇 번 등장하는지 카운트
+          const regex = new RegExp(normalizedKeyword, 'g')
+          const matches = normalizedTitle.match(regex)
+          return total + (matches ? matches.length : 0)
+        }, 0)
+      }
+
+      result.sort((a, b) => {
+        const aTitleScore = countKeywordOccurrences(a.song_name, searchKeywords)
+        const bTitleScore = countKeywordOccurrences(b.song_name, searchKeywords)
+
+        // 제목 일치 점수가 높은 순으로 정렬
+        if (bTitleScore !== aTitleScore) {
+          return bTitleScore - aTitleScore
+        }
+
+        // 점수가 같으면 제목 가나다순
+        return a.song_name.localeCompare(b.song_name, 'ko')
+      })
+    } else if (sortBy === 'likes') {
       result.sort((a, b) => ((b as any).like_count || 0) - ((a as any).like_count || 0))
     } else if (sortBy === 'name') {
       result.sort((a, b) => a.song_name.localeCompare(b.song_name, 'ko'))
@@ -939,13 +1002,13 @@ export default function MainPage() {
         .from('official_uploaders')
         .select('id')
         .eq('email', user!.email.toLowerCase())
-        .single()
+        .maybeSingle()
 
       const { data: publisherAccount } = await supabase
         .from('publisher_accounts')
         .select('publisher_id, verified_publishers!inner(is_active)')
         .eq('email', user!.email.toLowerCase())
-        .single()
+        .maybeSingle()
 
       const isOfficial = !!officialUploader || (!!publisherAccount && (publisherAccount.verified_publishers as any)?.is_active)
       const publisherId = publisherAccount?.publisher_id || null
@@ -963,6 +1026,7 @@ export default function MainPage() {
         lyrics: newSong.lyrics.trim() || null,
         file_url: fileUrl || null,
         file_type: fileType || null,
+        user_id: user!.id,
         uploaded_by: user!.id,
         visibility: newSong.visibility,
         shared_with_teams: newSong.visibility === 'teams' ? newSong.shared_with_teams : null,
@@ -1111,14 +1175,19 @@ export default function MainPage() {
       {isMobile && showFilterPanel && (
         <div
           className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden"
+          style={{ touchAction: 'none' }}
           onClick={() => setShowFilterPanel(false)}
+          onTouchMove={(e) => e.preventDefault()}
         />
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex flex-col lg:flex-row gap-3 lg:gap-6">
           {/* 필터 패널 */}
-          <div className={`${showFilterPanel ? 'w-64 lg:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}>
+          <div
+            className={`${showFilterPanel ? 'w-64 lg:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}
+            style={isMobile && showFilterPanel ? { overscrollBehavior: 'contain' } : undefined}
+          >
             <FilterPanel
               filters={filters}
               onFilterChange={handleFilterChange}

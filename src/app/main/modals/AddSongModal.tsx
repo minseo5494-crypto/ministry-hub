@@ -423,7 +423,9 @@ export default function AddSongModal({
 
           {/* 악보 파일 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">악보 파일 (선택사항)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              악보 파일 <span className="text-red-500">*</span>
+            </label>
             <input
               ref={fileInputRef}
               type="file"
@@ -466,7 +468,7 @@ export default function AddSongModal({
           </button>
           <button
             onClick={onSubmit}
-            disabled={uploading || !newSong.song_name.trim()}
+            disabled={uploading || !newSong.song_name.trim() || !uploadingFile}
             className="flex-1 px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
           >
             {uploading ? (

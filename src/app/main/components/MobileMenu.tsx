@@ -51,7 +51,7 @@ export default function MobileMenu({
         <div className="p-4 space-y-2">
           {user ? (
             <>
-              {/* PraiseHub */}
+              {/* PraiseHub - 현재 비활성화
               <button
                 onClick={() => {
                   router.push('/streaming')
@@ -62,6 +62,7 @@ export default function MobileMenu({
                 <Music size={20} />
                 <span className="font-medium">PraiseHub</span>
               </button>
+              */}
 
               {/* My Team */}
               <button
