@@ -22,7 +22,7 @@ export default function Footer() {
             <Link href="/copyright" className="text-gray-600 hover:text-gray-900">
               저작권 정책
             </Link>
-            <a href="mailto:support@worsheep.com" className="text-gray-600 hover:text-gray-900">
+            <a href="mailto:support@worsheep.org" className="text-gray-600 hover:text-gray-900">
               문의하기
             </a>
           </div>

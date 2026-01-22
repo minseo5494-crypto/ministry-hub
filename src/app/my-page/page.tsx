@@ -1391,9 +1391,9 @@ setNewSong({ ...newSong, tempo: tempoValue })
                     )}
                   </div>
 
-                  {/* 🆕 그리드 뷰 */}
+                  {/* 🆕 그리드 뷰 - 컴팩트한 파일 브라우저 스타일 */}
                   {notesViewMode === 'grid' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                       {sheetMusicNotes.map((note) => (
                         <div
                           key={note.id}
@@ -1413,19 +1413,19 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                 }
                                 setSelectedNoteIds(newSet)
                               }}
-                              className="absolute top-2 left-2 z-10 p-1 bg-white rounded shadow"
+                              className="absolute top-1 left-1 z-10 p-0.5 bg-white rounded shadow"
                             >
                               {selectedNoteIds.has(note.id) ? (
-                                <CheckSquare size={20} className="text-green-600" />
+                                <CheckSquare size={16} className="text-green-600" />
                               ) : (
-                                <Square size={20} className="text-gray-400" />
+                                <Square size={16} className="text-gray-400" />
                               )}
                             </button>
                           )}
 
-                          {/* 썸네일 영역 */}
+                          {/* 썸네일 영역 - 더 작게 */}
                           <div
-                            className="h-40 bg-gray-100 flex items-center justify-center cursor-pointer relative"
+                            className="h-24 bg-gray-100 flex items-center justify-center cursor-pointer relative"
                             onClick={() => {
                               if (notesSelectMode) {
                                 const newSet = new Set(selectedNoteIds)
@@ -1449,12 +1449,11 @@ setNewSong({ ...newSong, tempo: tempoValue })
                               />
                             ) : (
                               <div className="text-gray-400 text-center">
-                                <FileText size={48} className="mx-auto mb-2" />
-                                <span className="text-sm">미리보기</span>
+                                <FileText size={28} className="mx-auto" />
                               </div>
                             )}
-                            {/* 파일 타입 배지 */}
-                            <span className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium ${
+                            {/* 파일 타입 배지 - 더 작게 */}
+                            <span className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
                               note.file_type === 'pdf'
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-blue-100 text-blue-700'
@@ -1463,29 +1462,26 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             </span>
                           </div>
 
-                          {/* 정보 영역 */}
-                          <div className="p-4">
-                            <h3 className="font-bold text-gray-900 truncate">{note.title}</h3>
-                            <p className="text-sm text-gray-600 truncate">{note.song_name}</p>
-                            {note.team_name && (
-                              <p className="text-xs text-gray-500 truncate">{note.team_name}</p>
-                            )}
-                            <p className="text-xs text-gray-400 mt-2">
-                              수정일: {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                          {/* 정보 영역 - 더 컴팩트하게 */}
+                          <div className="px-2 pt-2">
+                            <h3 className="font-medium text-xs text-gray-900 truncate" title={note.title}>{note.title}</h3>
+                            <p className="text-[10px] text-gray-500 truncate" title={note.song_name}>{note.song_name}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">
+                              {new Date(note.updated_at).toLocaleDateString('ko-KR')}
                             </p>
 
-                            {/* 버튼 영역 - 선택 모드가 아닐 때만 표시 */}
+                            {/* 버튼 영역 - 4등분 균등 배치 */}
                             {!notesSelectMode && (
-                              <div className="flex gap-2 mt-3">
+                              <div className="flex mt-1 border-t pt-1 pb-0.5">
                                 <button
                                   onClick={() => {
                                     setEditingNote(note)
                                     setShowNoteEditor(true)
                                   }}
-                                  className="flex-1 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center justify-center gap-1"
+                                  className="flex-1 flex justify-center text-green-600 hover:text-green-700"
+                                  title="편집"
                                 >
-                                  <Edit size={14} />
-                                  편집
+                                  <Edit size={15} />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1493,10 +1489,10 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                     setNewTitle(note.title)
                                     setShowRenameModal(true)
                                   }}
-                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                                  className="flex-1 flex justify-center text-gray-400 hover:text-blue-600"
                                   title="파일명 변경"
                                 >
-                                  <Pencil size={14} />
+                                  <Pencil size={15} />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1504,10 +1500,10 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                     setShareFileName(note.title)
                                     setShowShareModal2(true)
                                   }}
-                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-blue-100 hover:text-blue-600"
+                                  className="flex-1 flex justify-center text-gray-400 hover:text-blue-600"
                                   title="내보내기"
                                 >
-                                  <Upload size={14} />
+                                  <Upload size={15} />
                                 </button>
                                 <button
                                   onClick={async () => {
@@ -1517,9 +1513,10 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                       alert('삭제되었습니다.')
                                     }
                                   }}
-                                  className="px-3 py-2 bg-gray-100 text-gray-600 text-sm rounded hover:bg-red-100 hover:text-red-600"
+                                  className="flex-1 flex justify-center text-gray-400 hover:text-red-600"
+                                  title="삭제"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={15} />
                                 </button>
                               </div>
                             )}

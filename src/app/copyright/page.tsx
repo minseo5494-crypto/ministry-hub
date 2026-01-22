@@ -101,8 +101,8 @@ export default function CopyrightPage() {
                 <Mail className="w-6 h-6 text-blue-600 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-blue-900">신고 접수처</p>
-                  <a href="mailto:copyright@worsheep.com" className="text-blue-600 hover:underline">
-                    copyright@worsheep.com
+                  <a href="mailto:support@worsheep.org" className="text-blue-600 hover:underline">
+                    support@worsheep.org
                   </a>
                 </div>
               </div>
@@ -189,8 +189,8 @@ export default function CopyrightPage() {
                 <Mail className="w-6 h-6 text-green-600 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-green-900">파트너십 문의</p>
-                  <a href="mailto:partnership@worsheep.com" className="text-green-600 hover:underline">
-                    partnership@worsheep.com
+                  <a href="mailto:support@worsheep.org" className="text-green-600 hover:underline">
+                    support@worsheep.org
                   </a>
                 </div>
               </div>

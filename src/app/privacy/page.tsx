@@ -126,7 +126,7 @@ export default function PrivacyPage() {
               <div className="bg-gray-50 rounded-lg p-4 mt-3">
                 <p className="text-gray-700">
                   <strong>담당자:</strong> WORSHEEP 운영팀<br />
-                  <strong>이메일:</strong> support@worsheep.com
+                  <strong>이메일:</strong> support@worsheep.org
                 </p>
               </div>
             </section>

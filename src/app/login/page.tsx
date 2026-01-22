@@ -8,7 +8,7 @@ import { Mail, Lock, AlertCircle, Chrome, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
 
-const TURNSTILE_SITE_KEY = '0x4AAAAAACMZcDVS_OETU_9t'
+const TURNSTILE_SITE_KEY = '0x4AAAAAACOIX2uAQ0UBMsab'
 
 // useSearchParams를 사용하는 컴포넌트를 분리
 function LoginForm() {
