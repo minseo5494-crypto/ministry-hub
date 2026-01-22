@@ -8,7 +8,7 @@ import { Mail, Lock, User, AlertCircle, Chrome, Building, ArrowLeft } from 'luci
 import Link from 'next/link'
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
 
-const TURNSTILE_SITE_KEY = '0x4AAAAAACOIX2uAQ0UBMsab'
+const TURNSTILE_SITE_KEY = '0x4AAAAAACMZcDVS_OETU_9t'
 
 export default function SignupPage() {
   const router = useRouter()
