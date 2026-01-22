@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 1월 20일
+**마지막 업데이트**: 2026년 1월 22일
 
 ---
 
@@ -13,39 +13,47 @@
 | **베타 테스트** | 준비 완료, 시작 전 |
 | **등록 곡 수** | 1,000곡+ |
 | **팀 구성** | 1인 (2월 디자이너 합류 예정) |
+| **도메인** | worsheep.org ✅ |
+| **비즈니스 이메일** | minseo@worsheep.org ✅ |
 
 ---
 
-## 2. 최근 작업 (2026-01-20)
+## 2. 최근 작업 (2026-01-22)
 
 ### 완료된 작업
-- [x] `/handoff` 스킬 추가 (컨텍스트 리셋 전 자동 업데이트)
-- [x] HANDOFF.md 인수인계 문서 생성
-- [x] `/task` 스킬 제거 (HANDOFF.md로 대체)
+- [x] 도메인 구매 (worsheep.org) - 호스팅케이알
+- [x] WHOIS 개인정보 보호 설정
+- [x] Google Workspace 설정 및 도메인 인증
+- [x] 비즈니스 이메일 생성 (minseo@worsheep.org)
+- [x] 이메일 별칭 추가 (support@worsheep.org)
+- [x] Gmail MX 레코드 설정
+- [x] DKIM 이메일 인증 설정
+- [x] Vercel 커스텀 도메인 연결 (worsheep.org)
+- [x] DNS A 레코드 설정 (Vercel 연결)
+- [x] 코드 내 이메일 주소 변경 (worsheep.com → worsheep.org)
+- [x] Cloudflare Turnstile에 worsheep.org 도메인 추가
 
-### 이전 세션 (2026-01-19)
+### 이전 세션 요약
+- 검색 기능 개선 및 다수 버그 수정
 - 문서 전면 재구성 및 베타 테스트 준비 완료
-- 저작권/콘텐츠 모델 정립 (수익분배 50/20/30, Safe Harbor 등)
 
 ---
 
 ## 3. 다음에 할 일
 
-### 즉시 (베타 시작 전)
-- [ ] 비즈니스 이메일 생성 (Gmail 무료로 시작 권장)
-- [ ] 문서에 이메일 주소 업데이트
+### 즉시 (베타 시작)
 - [ ] 테스터 모집 (지인 연락)
-- [ ] 초대 메시지 발송
+- [ ] 초대 메시지 발송 (minseo@worsheep.org 또는 support@worsheep.org 사용)
+- [ ] 베타 피드백 수집 시작
 
 ### 단기 (베타 기간)
-- [ ] 베타 피드백 수집 및 반영
+- [ ] 베타 피드백 반영
 - [ ] 파트너십 연락 (찬양팀에 협업제안서 발송)
 - [ ] 디자이너와 UI/UX 리뉴얼 (2월)
 
 ### 중기 (정식 출시 전)
 - [ ] 사업자 등록 (결제 받기 전 필수)
 - [ ] 결제 시스템 연동
-- [ ] 도메인 이메일 설정
 
 ---
 
@@ -83,11 +91,6 @@
 
 ## 5. 진행 중인 결정 사항
 
-### 비즈니스 이메일
-- **현재**: 개인 이메일 (minseo1885@naver.com)
-- **결정 필요**: 비즈니스 이메일 생성
-- **추천**: `worsheep.official@gmail.com` (무료) → 정식 출시 시 도메인 이메일
-
 ### 사업자 등록
 - **현재**: 미등록 (개인 프로젝트)
 - **타이밍**: 정식 출시 전, 결제 받기 전 등록 필요
@@ -96,23 +99,34 @@
 
 ## 6. 주요 정보
 
-### 연락처 (현재 문서에 기재된)
+### 연락처
+| 용도 | 이메일 |
+|------|--------|
+| 대표 | minseo@worsheep.org |
+| 지원/문의 | support@worsheep.org |
+| (개인) | minseo1885@naver.com |
+
 - 담당자: 조민서
-- 이메일: minseo1885@naver.com
 - 전화: 010-3150-4221
 
 ### 서비스 URL
-- 프로덕션: https://worsheep.com
-- GitHub: https://github.com/minseo5494-crypto/ministry-hub
+- **프로덕션**: https://worsheep.org
+- **Vercel 기본**: https://ministry-hub-three.vercel.app
+- **GitHub**: https://github.com/minseo5494-crypto/ministry-hub
 
 ### 요금제
 - Free: 무료 (다운로드 주 5회)
 - Pro: 월 4,900원
 - Team: 월 19,900원/팀
 
-### Supabase
-- Project ID: `uoneiotepfmikprknxhk`
-- Region: ap-southeast-1 (Singapore)
+### 외부 서비스
+| 서비스 | 용도 |
+|--------|------|
+| Supabase | DB, Auth, Storage (Project ID: uoneiotepfmikprknxhk) |
+| Vercel | 배포, 호스팅 |
+| Google Workspace | 비즈니스 이메일 |
+| Cloudflare Turnstile | CAPTCHA (회원가입/로그인) |
+| 호스팅케이알 | 도메인 (worsheep.org) |
 
 ---
 
