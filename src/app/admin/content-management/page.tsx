@@ -9,7 +9,7 @@ import {
   ArrowLeft, Music, CheckCircle, Shield, Tag,
   Search, Check, X, ChevronLeft, ChevronRight,
   FileText, Eye, Edit2, User, Calendar, Lock, Globe, Users,
-  Save, Trash2, ExternalLink
+  Save, Trash2, ExternalLink, Filter
 } from 'lucide-react'
 
 // 사용자 정보가 포함된 확장 Song 타입
@@ -51,6 +51,13 @@ export default function ContentManagementPage() {
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const pageSize = 20
+
+  // 필터 상태 (전체 곡 탭용)
+  const [songTypeFilter, setSongTypeFilter] = useState<'all' | 'official' | 'user'>('all')
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'teams' | 'private'>('all')
+  const [uploaderFilter, setUploaderFilter] = useState<string>('all')
+  const [uploaders, setUploaders] = useState<{ id: string; email: string }[]>([])
+  const [showFilters, setShowFilters] = useState(false)
 
   // 처리 중 상태
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
@@ -94,11 +101,45 @@ export default function ContentManagementPage() {
     checkAdminAndLoad()
   }, [])
 
+  // 탭이나 검색어 변경 시 페이지 리셋 및 데이터 로드
   useEffect(() => {
     if (!loading) {
+      setPage(1)
       loadData()
     }
-  }, [activeTab, searchQuery, page, loading])
+  }, [activeTab, searchQuery, loading])
+
+  // 필터 변경 시 페이지 리셋 및 데이터 로드
+  useEffect(() => {
+    if (!loading && activeTab === 'all-songs') {
+      setPage(1)
+      loadData()
+    }
+  }, [songTypeFilter, visibilityFilter, uploaderFilter])
+
+  // 업로더 목록 로드
+  useEffect(() => {
+    if (!loading) {
+      loadUploaders()
+    }
+  }, [loading])
+
+  // 페이지 변경 시 데이터만 로드 (리셋 없이)
+  useEffect(() => {
+    if (!loading && page > 1) {
+      loadData()
+    }
+  }, [page])
+
+  const loadUploaders = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('id, email')
+      .order('email')
+    if (data) {
+      setUploaders(data)
+    }
+  }
 
   const checkAdminAndLoad = async () => {
     try {
@@ -126,8 +167,6 @@ export default function ContentManagementPage() {
   }
 
   const loadData = async () => {
-    setPage(1)
-
     switch (activeTab) {
       case 'approvals':
         await loadPendingSongs()
@@ -202,16 +241,45 @@ export default function ContentManagementPage() {
   }
 
   const loadAllSongs = async () => {
-    // 검색어가 있을 때는 전체를 가져와서 클라이언트에서 필터링
-    if (searchQuery.trim()) {
+    // 필터 적용 함수
+    const applyFilters = (data: Song[]): Song[] => {
+      let result = data
+
+      // 곡 유형 필터
+      if (songTypeFilter === 'official') {
+        result = result.filter(s => s.is_official === true)
+      } else if (songTypeFilter === 'user') {
+        result = result.filter(s => s.is_user_uploaded === true)
+      }
+
+      // 공개 범위 필터
+      if (visibilityFilter !== 'all') {
+        result = result.filter(s => s.visibility === visibilityFilter)
+      }
+
+      // 업로더 필터
+      if (uploaderFilter !== 'all') {
+        result = result.filter(s => s.uploaded_by === uploaderFilter)
+      }
+
+      return result
+    }
+
+    // 검색어 또는 필터가 있을 때는 전체를 가져와서 클라이언트에서 필터링
+    const hasFilters = songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all'
+
+    if (searchQuery.trim() || hasFilters) {
       const { data, error } = await supabase
         .from('songs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(1000)
+        .limit(2000)
 
       if (!error && data) {
-        const filtered = filterBySearch(data, searchQuery)
+        let filtered = applyFilters(data)
+        if (searchQuery.trim()) {
+          filtered = filterBySearch(filtered, searchQuery)
+        }
         const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
         // 업로더 정보 가져오기
@@ -237,7 +305,7 @@ export default function ContentManagementPage() {
         setTotalCount(filtered.length)
       }
     } else {
-      // 검색어가 없을 때는 기존 방식
+      // 검색어/필터가 없을 때는 기존 방식
       const { data, count, error } = await supabase
         .from('songs')
         .select('*', { count: 'exact' })
@@ -539,7 +607,7 @@ export default function ContentManagementPage() {
     const ids = Array.from(selectedIds)
     const { error } = await supabase
       .from('songs')
-      .update({ is_official: false })
+      .update({ is_official: false, is_user_uploaded: true })
       .in('id', ids)
 
     if (!error) {
@@ -936,21 +1004,108 @@ export default function ContentManagementPage() {
         ) : (
           <>
             {/* 다른 탭들 UI */}
-            {/* 검색 & 정보 */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="곡명 또는 아티스트 검색..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
-                />
+            {/* 검색 & 필터 & 정보 */}
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="곡명 또는 아티스트 검색..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+                {activeTab === 'all-songs' && (
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition ${
+                      showFilters || songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all'
+                        ? 'bg-violet-50 border-violet-300 text-violet-700'
+                        : 'bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <Filter size={18} />
+                    <span>필터</span>
+                    {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all') && (
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-violet-600 text-white rounded-full">
+                        {[songTypeFilter !== 'all', visibilityFilter !== 'all', uploaderFilter !== 'all'].filter(Boolean).length}
+                      </span>
+                    )}
+                  </button>
+                )}
+                <div className="text-sm text-gray-500 self-center">
+                  총 {totalCount}곡
+                </div>
               </div>
-              <div className="text-sm text-gray-500 self-center">
-                총 {totalCount}곡
-              </div>
+
+              {/* 필터 패널 (전체 곡 탭에서만) */}
+              {activeTab === 'all-songs' && showFilters && (
+                <div className="p-4 bg-gray-50 rounded-lg border space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* 곡 유형 필터 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">곡 유형</label>
+                      <select
+                        value={songTypeFilter}
+                        onChange={(e) => setSongTypeFilter(e.target.value as 'all' | 'official' | 'user')}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 text-base"
+                      >
+                        <option value="all">전체</option>
+                        <option value="official">공식 악보</option>
+                        <option value="user">사용자 곡</option>
+                      </select>
+                    </div>
+
+                    {/* 공개 범위 필터 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">공개 범위</label>
+                      <select
+                        value={visibilityFilter}
+                        onChange={(e) => setVisibilityFilter(e.target.value as 'all' | 'public' | 'teams' | 'private')}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 text-base"
+                      >
+                        <option value="all">전체</option>
+                        <option value="public">전체 공개</option>
+                        <option value="teams">팀 공개</option>
+                        <option value="private">나만 보기</option>
+                      </select>
+                    </div>
+
+                    {/* 업로더 필터 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">업로더</label>
+                      <select
+                        value={uploaderFilter}
+                        onChange={(e) => setUploaderFilter(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 text-base"
+                      >
+                        <option value="all">전체</option>
+                        {uploaders.map(u => (
+                          <option key={u.id} value={u.id}>{u.email}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 필터 초기화 버튼 */}
+                  {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all') && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => {
+                          setSongTypeFilter('all')
+                          setVisibilityFilter('all')
+                          setUploaderFilter('all')
+                        }}
+                        className="text-sm text-violet-600 hover:text-violet-800"
+                      >
+                        필터 초기화
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 일괄 작업 바 (선택된 항목이 있을 때 표시) */}
@@ -1035,10 +1190,8 @@ export default function ContentManagementPage() {
                             <VisIcon size={10} />
                             {visInfo.label}
                           </span>
-                          {song.is_official ? (
+                          {song.is_official && (
                             <span className="px-1.5 py-0.5 text-[11px] bg-blue-100 text-blue-700 rounded font-medium">공식</span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 text-[11px] bg-gray-100 text-gray-600 rounded">사용자</span>
                           )}
                           {song.upload_status && (
                             <span className={`px-1.5 py-0.5 text-[11px] rounded ${
