@@ -445,7 +445,7 @@ export default function MainPage() {
     if (songFilter === 'official') {
       result = result.filter(song => song.is_official === true)
     } else if (songFilter === 'user') {
-      result = result.filter(song => song.is_official !== true)
+      result = result.filter(song => song.is_user_uploaded === true)
     }
 
     // 검색어가 있을 때 제목 일치 우선 정렬
