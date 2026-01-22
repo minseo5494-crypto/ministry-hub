@@ -357,9 +357,9 @@ WORSHEEP은 한국 교회 찬양팀을 위한 종합 악보 관리 플랫폼입�
 | 항목 | 정보 |
 |------|------|
 | **담당자** | 조민서 |
-| **이메일** | minseo1885@naver.com |
+| **이메일** | support@worsheep.org |
 | **전화번호** | 010-3150-4221 |
-| **서비스** | https://worsheep.com |
+| **서비스** | https://worsheep.org |
 
 ---
 

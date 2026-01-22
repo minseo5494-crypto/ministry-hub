@@ -86,8 +86,8 @@
 
 | | |
 |---|---|
-| **웹사이트** | https://worsheep.com |
-| **이메일** | minseo1885@naver.com |
+| **웹사이트** | https://worsheep.org |
+| **이메일** | support@worsheep.org |
 | **전화** | 010-3150-4221 |
 
 ---
