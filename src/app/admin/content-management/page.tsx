@@ -132,12 +132,16 @@ export default function ContentManagementPage() {
   }, [page])
 
   const loadUploaders = async () => {
-    const { data } = await supabase
-      .from('users')
-      .select('id, email')
-      .order('email')
-    if (data) {
-      setUploaders(data)
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email')
+        .order('email')
+      if (!error && data) {
+        setUploaders(data)
+      }
+    } catch (err) {
+      console.error('Failed to load uploaders:', err)
     }
   }
 

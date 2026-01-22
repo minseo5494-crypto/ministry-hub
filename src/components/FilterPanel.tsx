@@ -61,7 +61,7 @@ export default function FilterPanel({
   if (!isVisible) return null  // ← 추가
     return (
     <div
-      className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] md:max-h-none md:overflow-visible overflow-y-auto"
+      className="bg-white rounded-lg shadow-md p-4 md:p-6 sticky top-20 max-h-[80vh] overflow-y-auto lg:max-h-none lg:overflow-visible"
       style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
       onTouchMove={(e) => e.stopPropagation()}
     >
