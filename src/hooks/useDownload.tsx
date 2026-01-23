@@ -383,7 +383,7 @@ export function useDownload({
                 }))}
                 className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
                   downloadOptions.includeCover
-                    ? 'bg-blue-500 border-blue-500'
+                    ? 'bg-blue-100 border-blue-500'
                     : 'bg-white border-gray-300'
                 }`}
               >
@@ -408,7 +408,7 @@ export function useDownload({
                   }))}
                   className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
                     downloadOptions.includeSongForm
-                      ? 'bg-blue-500 border-blue-500'
+                      ? 'bg-blue-100 border-blue-500'
                       : 'bg-white border-gray-300'
                   }`}
                 >

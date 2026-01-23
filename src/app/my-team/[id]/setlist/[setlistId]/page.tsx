@@ -1964,7 +1964,7 @@ const saveNote = async () => {
         <button
           onClick={saveNote}
           disabled={savingNote}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
         >
           {savingNote ? '저장 중...' : '저장'}
         </button>

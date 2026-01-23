@@ -54,7 +54,7 @@ export default function PPTModal({
                 }))}
                 className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
                   options.includeTitleSlides
-                    ? 'bg-blue-500 border-blue-500'
+                    ? 'bg-blue-100 border-blue-500'
                     : 'bg-white border-gray-300'
                 }`}
               >
@@ -80,7 +80,7 @@ export default function PPTModal({
                 }))}
                 className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
                   options.showFormLabels
-                    ? 'bg-blue-500 border-blue-500'
+                    ? 'bg-blue-100 border-blue-500'
                     : 'bg-white border-gray-300'
                 }`}
               >
@@ -108,7 +108,7 @@ export default function PPTModal({
         <div className="space-y-3">
           <button
             onClick={handleGenerate}
-            className="w-full p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold"
+            className="w-full p-4 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition font-bold"
           >
             PPT 생성하기
           </button>

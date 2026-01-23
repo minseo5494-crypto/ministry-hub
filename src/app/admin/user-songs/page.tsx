@@ -744,7 +744,7 @@ export default function UserSongsPage() {
                       onClick={() => setEditSong({ ...editSong, key: editSong.key.replace('m', '') })}
                       className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
                         !editSong.key.includes('m')
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
@@ -759,7 +759,7 @@ export default function UserSongsPage() {
                       }}
                       className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
                         editSong.key.includes('m')
-                          ? 'bg-purple-600 text-white'
+                          ? 'bg-purple-100 text-purple-700'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
@@ -872,7 +872,7 @@ export default function UserSongsPage() {
                       }}
                       className={`px-3 py-1 rounded-full text-sm transition ${
                         editSong.themes.includes(theme)
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
                     >
@@ -981,7 +981,7 @@ export default function UserSongsPage() {
               <button
                 onClick={updateSong}
                 disabled={updating || !editSong.song_name.trim()}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {updating ? (
                   <>

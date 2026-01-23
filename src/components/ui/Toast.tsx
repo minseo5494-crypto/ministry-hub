@@ -13,11 +13,11 @@ interface ToastProps {
   show: boolean
 }
 
-const toastStyles: Record<ToastType, { bg: string; icon: typeof CheckCircle }> = {
-  success: { bg: 'bg-green-500', icon: CheckCircle },
-  error: { bg: 'bg-red-500', icon: XCircle },
-  warning: { bg: 'bg-yellow-500', icon: AlertCircle },
-  info: { bg: 'bg-blue-500', icon: Info },
+const toastStyles: Record<ToastType, { bg: string; text: string; icon: typeof CheckCircle }> = {
+  success: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle },
+  error: { bg: 'bg-red-100', text: 'text-red-700', icon: XCircle },
+  warning: { bg: 'bg-amber-100', text: 'text-amber-700', icon: AlertCircle },
+  info: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Info },
 }
 
 export default function Toast({
@@ -36,14 +36,14 @@ export default function Toast({
 
   if (!show) return null
 
-  const { bg, icon: Icon } = toastStyles[type]
+  const { bg, text, icon: Icon } = toastStyles[type]
 
   return (
     <div
       className={`
         fixed bottom-6 right-6 z-50
         flex items-center gap-3 px-4 py-3
-        ${bg} text-white
+        ${bg} ${text}
         rounded-xl shadow-lg
         animate-in slide-in-from-right-5 fade-in duration-300
       `}
@@ -52,7 +52,7 @@ export default function Toast({
       <span className="font-medium">{message}</span>
       <button
         onClick={onClose}
-        className="p-1 hover:bg-white/20 rounded-full transition"
+        className="p-1 hover:bg-black/10 rounded-full transition"
       >
         <X size={16} />
       </button>

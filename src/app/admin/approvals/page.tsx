@@ -232,7 +232,7 @@ export default function AdminApprovalsPage() {
               onClick={() => setFilter('pending')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
                 filter === 'pending'
-                  ? 'bg-yellow-600 text-white'
+                  ? 'bg-yellow-100 text-yellow-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >

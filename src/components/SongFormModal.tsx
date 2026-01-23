@@ -306,7 +306,7 @@ export default function SongFormModal({
                         </TouchButton>
                         <TouchButton
                           onClick={() => removeSection(index)}
-                          className="px-2 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 active:bg-red-700 min-w-[28px]"
+                          className="px-2 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-100 active:bg-red-700 min-w-[28px]"
                         >
                           ✕
                         </TouchButton>
@@ -414,7 +414,7 @@ export default function SongFormModal({
           </TouchButton>
           <TouchButton
             onClick={handleSave}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 font-semibold min-h-[48px]"
+            className="px-6 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 active:bg-blue-800 font-semibold min-h-[48px]"
           >
             저장
           </TouchButton>
@@ -474,7 +474,7 @@ export default function SongFormModal({
               </TouchButton>
               <TouchButton
                 onClick={addToFavorites}
-                className="flex-1 px-4 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 active:bg-yellow-700 min-h-[48px]"
+                className="flex-1 px-4 py-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-100 active:bg-yellow-700 min-h-[48px]"
               >
                 추가
               </TouchButton>

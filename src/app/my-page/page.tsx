@@ -1370,7 +1370,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                   <p className="text-sm mt-2">메인 페이지에서 악보의 ✏️ 버튼을 눌러 필기해보세요!</p>
                   <button
                     onClick={() => router.push('/')}
-                    className="mt-4 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    className="mt-4 px-6 py-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
                   >
                     악보 보러가기
                   </button>
@@ -1384,14 +1384,14 @@ setNewSong({ ...newSong, tempo: tempoValue })
                       <div className="flex border rounded-lg overflow-hidden">
                         <button
                           onClick={() => setNotesViewMode('grid')}
-                          className={`p-2 ${notesViewMode === 'grid' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                          className={`p-2 ${notesViewMode === 'grid' ? 'bg-green-100 text-green-700' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
                           title="그리드 뷰"
                         >
                           <Grid size={18} />
                         </button>
                         <button
                           onClick={() => setNotesViewMode('list')}
-                          className={`p-2 ${notesViewMode === 'list' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+                          className={`p-2 ${notesViewMode === 'list' ? 'bg-green-100 text-green-700' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
                           title="리스트 뷰"
                         >
                           <List size={18} />
@@ -1408,7 +1408,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                         }}
                         className={`px-3 py-2 rounded-lg text-sm font-medium ${
                           notesSelectMode
-                            ? 'bg-green-600 text-white'
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-white border text-gray-600 hover:bg-gray-100'
                         }`}
                       >
@@ -1454,7 +1454,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             alert(`${successCount}개의 노트가 삭제되었습니다.`)
                           }}
                           disabled={selectedNoteIds.size === 0 || deletingNotes}
-                          className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
                         >
                           {deletingNotes ? '삭제 중...' : `삭제 (${selectedNoteIds.size})`}
                         </button>
@@ -2394,7 +2394,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   }
                 }}
                 disabled={!newTitle.trim()}
-                className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:bg-gray-400"
+                className="flex-1 px-4 py-3 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-medium disabled:bg-gray-400"
               >
                 변경
               </button>
@@ -3130,7 +3130,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               <button
                 onClick={updateSong}
                 disabled={updating || !editSong.song_name.trim() || (editSong.visibility === 'teams' && editSong.shared_with_teams.length === 0)}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {updating ? (
                   <>

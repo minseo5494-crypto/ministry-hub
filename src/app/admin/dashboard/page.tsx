@@ -792,7 +792,7 @@ export default function AdminDashboard() {
               {/* Excel 내보내기 버튼 */}
               <button
                 onClick={exportToExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium"
               >
                 <FileSpreadsheet size={18} />
                 Excel 다운로드
@@ -805,7 +805,7 @@ export default function AdminDashboard() {
                     onClick={() => setTimeRange(days as 7 | 30 | 90)}
                     className={`px-4 py-2 rounded-lg font-medium transition ${
                       timeRange === days
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-blue-100 text-blue-700'
                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                     }`}
                   >
@@ -827,7 +827,7 @@ export default function AdminDashboard() {
               onClick={() => router.push('/admin/content-management')}
               className="flex items-center gap-4 p-6 bg-blue-50 hover:bg-blue-100 rounded-xl transition text-left"
             >
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                 <Music className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -839,7 +839,7 @@ export default function AdminDashboard() {
               onClick={() => router.push('/admin/account-management')}
               className="flex items-center gap-4 p-6 bg-violet-50 hover:bg-violet-100 rounded-xl transition text-left"
             >
-              <div className="w-12 h-12 bg-violet-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
                 <Users className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -851,7 +851,7 @@ export default function AdminDashboard() {
               onClick={() => router.push('/admin/feedbacks')}
               className="flex items-center gap-4 p-6 bg-green-50 hover:bg-green-100 rounded-xl transition text-left"
             >
-              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                 <MessageSquare className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -1050,7 +1050,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
-                    className="bg-purple-600 h-3 rounded-full transition-all"
+                    className="bg-purple-100 h-3 rounded-full transition-all"
                     style={{ width: `${Math.min(userJourney.conversionRate, 100)}%` }}
                   ></div>
                 </div>
@@ -1247,7 +1247,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-blue-100 h-2 rounded-full"
                             style={{
                               width: `${(stat.usage_count / copyrightStats[0].usage_count) * 100}%`
                             }}
@@ -1323,7 +1323,7 @@ export default function AdminDashboard() {
                     <div
                       className={`w-10 h-10 flex items-center justify-center rounded-full font-bold text-white ${
                         index === 0
-                          ? 'bg-yellow-500'
+                          ? 'bg-yellow-100'
                           : index === 1
                           ? 'bg-gray-400'
                           : index === 2

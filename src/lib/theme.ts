@@ -96,11 +96,11 @@ export const STATUS_COLORS = {
 
 // ===== 버튼 스타일 =====
 export const BUTTON_STYLES = {
-  primary: 'bg-[#C5D7F2] hover:bg-[#A8C4E8] text-white',
+  primary: 'bg-blue-100 hover:bg-blue-200 text-blue-700',
   secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-700',
-  danger: 'bg-red-600 hover:bg-red-700 text-white',
-  success: 'bg-green-600 hover:bg-green-700 text-white',
-  violet: 'bg-violet-600 hover:bg-violet-700 text-white',
+  danger: 'bg-red-100 hover:bg-red-200 text-red-700',
+  success: 'bg-green-100 hover:bg-green-200 text-green-700',
+  violet: 'bg-violet-100 hover:bg-violet-200 text-violet-700',
   outline: 'border border-gray-300 hover:bg-gray-50 text-gray-700',
 } as const
 

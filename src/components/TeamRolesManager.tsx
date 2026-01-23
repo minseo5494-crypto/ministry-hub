@@ -225,7 +225,7 @@ export default function TeamRolesManager({ teamId, canManageRoles, onRolesChange
           {canManageRoles && !isDefaultMode && (
             <button
               onClick={() => setShowAddRole(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center text-sm"
+              className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-100 flex items-center text-sm"
             >
               <Plus size={18} className="mr-1" />
               새 직책 추가
@@ -277,7 +277,7 @@ export default function TeamRolesManager({ teamId, canManageRoles, onRolesChange
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={handleAddRole}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-100"
                 >
                   추가
                 </button>
@@ -388,7 +388,7 @@ export default function TeamRolesManager({ teamId, canManageRoles, onRolesChange
                       <div className="flex gap-2 pt-2">
                         <button
                           onClick={handleSaveEdit}
-                          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center"
+                          className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-100 flex items-center"
                         >
                           <Check size={18} className="mr-1" />
                           저장

@@ -1004,7 +1004,7 @@ const openSelectedFixedSongsViewer = () => {
           <>
             <button
               onClick={openSelectedFixedSongsViewer}
-              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm"
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 flex items-center justify-center gap-2 text-sm"
             >
               <Presentation size={16} className="flex-shrink-0" />
               <span className="hidden sm:inline">악보 뷰어</span>
@@ -1012,7 +1012,7 @@ const openSelectedFixedSongsViewer = () => {
             <button
               onClick={downloadSelectedFixedSongs}
               disabled={downloadingFixed}
-              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:bg-gray-400 text-sm"
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center justify-center gap-2 disabled:bg-gray-400 text-sm"
             >
               <Download size={16} className="flex-shrink-0" />
               <span className="hidden sm:inline">{downloadingFixed ? '다운로드 중...' : `${selectedFixedSongs.length}곡 다운로드`}</span>

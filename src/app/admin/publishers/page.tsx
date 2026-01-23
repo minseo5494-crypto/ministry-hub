@@ -328,7 +328,7 @@ export default function PublishersPage() {
               {!showAddForm && (
                 <button
                   onClick={() => setShowAddForm(true)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 flex items-center gap-2"
                 >
                   <Plus size={18} />
                   추가
@@ -399,7 +399,7 @@ export default function PublishersPage() {
                 <button
                   onClick={addPublisher}
                   disabled={adding || !newPublisher.name.trim()}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {adding ? (
                     <>
@@ -636,7 +636,7 @@ export default function PublishersPage() {
               <button
                 onClick={addAccount}
                 disabled={addingAccount || !newAccountEmail.trim()}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {addingAccount ? (
                   <>

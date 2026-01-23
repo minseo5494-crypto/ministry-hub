@@ -153,7 +153,7 @@ export default function DrumScoreRenderer({
       {/* 삭제 버튼 (선택된 상태에서만) */}
       {!isViewMode && isSelected && (
         <button
-          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+          className="absolute -top-2 -right-2 w-5 h-5 bg-red-100 text-red-700 rounded-full text-xs flex items-center justify-center hover:bg-red-100"
           onClick={(e) => {
             e.stopPropagation()
             onDelete()

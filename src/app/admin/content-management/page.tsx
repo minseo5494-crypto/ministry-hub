@@ -869,7 +869,7 @@ export default function ContentManagementPage() {
                     onClick={() => { setEditorFilter('all'); setEditorPage(1) }}
                     className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
                       editorFilter === 'all'
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-violet-100 text-violet-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -879,7 +879,7 @@ export default function ContentManagementPage() {
                     onClick={() => { setEditorFilter('no-lyrics'); setEditorPage(1) }}
                     className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
                       editorFilter === 'no-lyrics'
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-violet-100 text-violet-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -889,7 +889,7 @@ export default function ContentManagementPage() {
                     onClick={() => { setEditorFilter('no-youtube'); setEditorPage(1) }}
                     className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
                       editorFilter === 'no-youtube'
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-violet-100 text-violet-700'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -972,7 +972,7 @@ export default function ContentManagementPage() {
                           const query = encodeURIComponent(`${selectedSong.song_name} ${selectedSong.team_name || ''} 가사`)
                           window.open(`https://www.google.com/search?q=${query}`, '_blank')
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition shrink-0"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-100 text-blue-700 font-medium rounded-lg transition shrink-0"
                       >
                         <Search size={18} />
                         가사 검색
@@ -1008,7 +1008,7 @@ export default function ContentManagementPage() {
                           const query = encodeURIComponent(`${selectedSong?.song_name} ${selectedSong?.team_name || ''}`)
                           window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank')
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition shrink-0"
+                        className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-100 text-red-700 font-medium rounded-lg transition shrink-0"
                       >
                         <Search size={18} />
                         검색
@@ -1032,7 +1032,7 @@ export default function ContentManagementPage() {
                   <button
                     onClick={handleEditorSave}
                     disabled={editorSaving}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-medium rounded-xl transition shadow-lg"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-violet-100 hover:bg-violet-200 disabled:bg-violet-400 text-white font-medium rounded-xl transition shadow-lg"
                   >
                     {editorSaving ? (
                       <>저장 중...</>
@@ -1079,7 +1079,7 @@ export default function ContentManagementPage() {
                     <Filter size={18} />
                     <span>필터</span>
                     {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || hiddenFilter !== 'all' || uploaderFilter !== 'all') && (
-                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-violet-600 text-white rounded-full">
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-violet-100 text-violet-700 rounded-full">
                         {[songTypeFilter !== 'all', visibilityFilter !== 'all', hiddenFilter !== 'all', uploaderFilter !== 'all'].filter(Boolean).length}
                       </span>
                     )}
@@ -1190,19 +1190,19 @@ export default function ContentManagementPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={bulkSetOfficial}
-                className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition"
+                className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-lg hover:bg-blue-100 transition"
               >
                 공식 악보로
               </button>
               <button
                 onClick={bulkSetUser}
-                className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition"
+                className="px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-lg hover:bg-green-100 transition"
               >
                 사용자 곡으로
               </button>
               <button
                 onClick={bulkHide}
-                className="px-3 py-1.5 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600 transition"
+                className="px-3 py-1.5 bg-amber-100 text-amber-700 text-sm rounded-lg hover:bg-amber-200 transition"
               >
                 숨김처리
               </button>
@@ -1214,7 +1214,7 @@ export default function ContentManagementPage() {
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
-                className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition"
+                className="px-3 py-1.5 bg-red-100 text-red-700 text-sm rounded-lg hover:bg-red-100 transition"
               >
                 삭제
               </button>
@@ -1614,7 +1614,7 @@ export default function ContentManagementPage() {
               <button
                 onClick={saveEdit}
                 disabled={saving || !editForm.song_name.trim()}
-                className="flex-1 px-4 py-2.5 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:bg-gray-400 transition flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 disabled:bg-gray-400 transition flex items-center justify-center gap-2"
               >
                 {saving ? '저장 중...' : (
                   <>
@@ -1652,7 +1652,7 @@ export default function ContentManagementPage() {
               <button
                 onClick={confirmDelete}
                 disabled={processingIds.has(deletingId)}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
+                className="flex-1 px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50 transition"
               >
                 {processingIds.has(deletingId) ? '삭제 중...' : '삭제'}
               </button>
@@ -1684,7 +1684,7 @@ export default function ContentManagementPage() {
               </button>
               <button
                 onClick={bulkDelete}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                className="flex-1 px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
               >
                 삭제
               </button>
@@ -1696,7 +1696,7 @@ export default function ContentManagementPage() {
       {/* 토스트 */}
       {toast && (
         <div className={`fixed bottom-6 right-6 px-6 py-3 rounded-xl shadow-lg text-white font-medium z-50 ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+          toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
         }`}>
           {toast.message}
         </div>

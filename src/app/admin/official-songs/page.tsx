@@ -289,7 +289,7 @@ export default function OfficialSongsPage() {
                 onClick={() => { setFilterStatus('official'); setPage(1) }}
                 className={`px-4 py-2 rounded-lg font-medium transition flex items-center gap-1 ${
                   filterStatus === 'official'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-100 text-blue-700'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -396,7 +396,7 @@ export default function OfficialSongsPage() {
                           className={`px-3 py-1 rounded-lg text-sm font-medium transition ${
                             song.is_official
                               ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                           } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           {song.is_official ? (

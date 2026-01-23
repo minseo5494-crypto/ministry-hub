@@ -178,12 +178,12 @@ export default function HeroSection({
               <div className="flex flex-wrap gap-2">
                 {/* 가사 검색 키워드 표시 (lyricsKeywords) */}
                 {aiSearchResult.filters.lyricsKeywords?.length && aiSearchResult.filters.lyricsKeywords.length > 0 && (
-                  <span className="px-2 py-1 bg-purple-500/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-purple-100/30 rounded text-xs">
                     🔍 {aiSearchResult.filters.lyricsKeywords.slice(0, 5).join(', ')}{aiSearchResult.filters.lyricsKeywords.length > 5 ? ' ...' : ''}
                   </span>
                 )}
                 {aiSearchResult.filters.season && (
-                  <span className="px-2 py-1 bg-green-500/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-green-100/30 rounded text-xs">
                     📅 {aiSearchResult.filters.season}
                   </span>
                 )}
@@ -193,7 +193,7 @@ export default function HeroSection({
                   </span>
                 )}
                 {aiSearchResult.filters.key && (
-                  <span className="px-2 py-1 bg-blue-500/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-blue-100/30 rounded text-xs">
                     🎹 {aiSearchResult.filters.key} Key
                   </span>
                 )}

@@ -275,7 +275,7 @@ export default function MyNotesPage() {
             </div>
             <button
               onClick={openNewNoteModal}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
             >
               <Plus size={18} />
               <span className="hidden sm:inline">새 노트 만들기</span>
@@ -308,7 +308,7 @@ export default function MyNotesPage() {
             </p>
             <button
               onClick={() => router.push('/')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-6 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
             >
               악보 보러가기
             </button>
@@ -359,7 +359,7 @@ export default function MyNotesPage() {
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleOpenNote(note)}
-                        className="flex-1 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                        className="flex-1 py-2 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200"
                       >
                         열기
                       </button>
@@ -533,7 +533,7 @@ export default function MyNotesPage() {
               <button
                 onClick={handleCreateNote}
                 disabled={creatingNote || !newNoteTitle.trim() || (newNoteType === 'song' && !selectedSong)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creatingNote ? '생성 중...' : '만들기'}
               </button>

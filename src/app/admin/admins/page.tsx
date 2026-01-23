@@ -242,7 +242,7 @@ export default function AdminsManagePage() {
               <button
                 onClick={addAdmin}
                 disabled={adding}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white rounded-lg transition flex items-center gap-2"
+                className="px-4 py-2 bg-violet-100 hover:bg-violet-200 disabled:bg-violet-400 text-white rounded-lg transition flex items-center gap-2"
               >
                 <Shield size={18} />
                 {adding ? '추가 중...' : '관리자로 추가'}
@@ -271,7 +271,7 @@ export default function AdminsManagePage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      isCurrentUser ? 'bg-blue-600' : 'bg-gray-400'
+                      isCurrentUser ? 'bg-blue-100' : 'bg-gray-400'
                     }`}>
                       {isCurrentUser ? (
                         <Crown size={20} className="text-white" />
@@ -283,7 +283,7 @@ export default function AdminsManagePage() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-gray-900">{admin.email}</p>
                         {isCurrentUser && (
-                          <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                             나
                           </span>
                         )}
@@ -359,7 +359,7 @@ export default function AdminsManagePage() {
               </button>
               <button
                 onClick={() => removeAdmin(confirmDelete)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                className="flex-1 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition"
               >
                 권한 제거
               </button>
@@ -371,7 +371,7 @@ export default function AdminsManagePage() {
       {/* 토스트 */}
       {toast && (
         <div className={`fixed bottom-6 right-6 px-6 py-3 rounded-xl shadow-lg text-white font-medium z-50 ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+          toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
         }`}>
           {toast.message}
         </div>

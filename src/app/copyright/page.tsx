@@ -113,28 +113,28 @@ export default function CopyrightPage() {
               <h2 className="text-xl font-semibold text-gray-900 mb-3">처리 절차</h2>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold">1</span>
                   <div>
                     <p className="font-medium text-gray-900">신고 접수</p>
                     <p className="text-sm text-gray-600">이메일을 통해 저작권 침해 신고를 접수합니다.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold">2</span>
                   <div>
                     <p className="font-medium text-gray-900">검토 (3영업일 이내)</p>
                     <p className="text-sm text-gray-600">신고 내용의 타당성을 검토합니다.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold">3</span>
                   <div>
                     <p className="font-medium text-gray-900">조치</p>
                     <p className="text-sm text-gray-600">침해가 확인되면 해당 콘텐츠를 삭제하고, 업로더에게 통지합니다.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+                  <span className="flex-shrink-0 w-7 h-7 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold">4</span>
                   <div>
                     <p className="font-medium text-gray-900">결과 통보</p>
                     <p className="text-sm text-gray-600">신고자에게 처리 결과를 이메일로 통보합니다.</p>

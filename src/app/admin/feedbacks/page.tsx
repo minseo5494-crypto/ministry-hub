@@ -421,7 +421,7 @@ export default function AdminFeedbacks() {
                       disabled={updating === selectedFeedback.id || selectedFeedback.status === status}
                       className={`px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 ${
                         selectedFeedback.status === status
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >

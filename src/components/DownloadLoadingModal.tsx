@@ -47,17 +47,17 @@ export default function DownloadLoadingModal({ isOpen, type, progress }: Downloa
   const colorClasses = {
     blue: {
       spinner: 'border-blue-600',
-      bar: 'bg-blue-600',
+      bar: 'bg-blue-100',
       text: 'text-blue-600'
     },
     purple: {
       spinner: 'border-purple-600',
-      bar: 'bg-purple-600',
+      bar: 'bg-purple-100',
       text: 'text-purple-600'
     },
     green: {
       spinner: 'border-green-600',
-      bar: 'bg-green-600',
+      bar: 'bg-green-100',
       text: 'text-green-600'
     }
   }

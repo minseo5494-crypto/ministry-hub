@@ -305,7 +305,7 @@ export default function PianoScoreEditor({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className={`bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden ${isMobile ? 'mx-2' : ''}`}>
         {/* 헤더 */}
-        <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+        <div className="bg-blue-100 text-blue-700 p-4 flex items-center justify-between">
           <h2 className="text-lg font-bold flex items-center gap-2">
             피아노 악보 {step === 'measure' ? '- 마디 선택' : '- 음표 입력'}
           </h2>
@@ -531,7 +531,7 @@ export default function PianoScoreEditor({
                     key={opt.value}
                     onClick={() => setEditingState(prev => prev ? { ...prev, currentDuration: opt.value } : prev)}
                     className={`px-2 py-1.5 rounded text-sm font-medium ${
-                      editingState.currentDuration === opt.value ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                      editingState.currentDuration === opt.value ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
                     }`}
                   >
                     {opt.label}
@@ -562,7 +562,7 @@ export default function PianoScoreEditor({
                     }}
                     className={`px-3 py-1.5 text-sm rounded ${
                       selectedNotesForBeam.some(idx => editingState.notes[idx]?.dotted)
-                        ? 'bg-purple-500 text-white hover:bg-purple-600'
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-100'
                         : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                     }`}
                   >
@@ -580,7 +580,7 @@ export default function PianoScoreEditor({
                         })
                         setSelectedNotesForBeam([])
                       }}
-                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                      className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-100"
                     >
                       연결
                     </button>
@@ -612,7 +612,7 @@ export default function PianoScoreEditor({
                       })
                       setSelectedNotesForBeam([])
                     }}
-                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                    className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded hover:bg-red-100"
                   >
                     삭제
                   </button>
@@ -660,7 +660,7 @@ export default function PianoScoreEditor({
               <button
                 onClick={handleSave}
                 disabled={!editingState || editingState.notes.length === 0}
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="flex-1 py-2 px-4 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {editingScoreId ? '수정' : '추가'}
               </button>
@@ -724,7 +724,7 @@ function ChordPicker({
               const currentType = currentChordName.replace(/^[A-G][#b]?/, '')
               updateChord(note + currentType)
             }}
-            className={`px-3 py-1.5 rounded font-bold text-sm ${currentChordName.startsWith(note) ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-100'}`}
+            className={`px-3 py-1.5 rounded font-bold text-sm ${currentChordName.startsWith(note) ? 'bg-blue-100 text-blue-700' : 'bg-white hover:bg-gray-100'}`}
           >
             {note}
           </button>
@@ -742,7 +742,7 @@ function ChordPicker({
                 const chordType = currentChordName.replace(/^[A-G][#b]?/, '')
                 updateChord(root + mod.symbol + chordType)
               }}
-              className={`px-3 py-1.5 rounded text-sm ${hasSymbol ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-100'}`}
+              className={`px-3 py-1.5 rounded text-sm ${hasSymbol ? 'bg-blue-100 text-blue-700' : 'bg-white hover:bg-gray-100'}`}
             >
               {mod.label || 'N'}
             </button>
@@ -769,7 +769,7 @@ function ChordPicker({
                 const rootWithMod = currentChordName.match(/^[A-G][#b]?/)?.[0] || 'C'
                 updateChord(rootWithMod + chord.type)
               }}
-              className={`px-2 py-1 rounded text-xs ${currentType === chord.type ? 'bg-blue-600 text-white' : 'bg-white hover:bg-gray-100'}`}
+              className={`px-2 py-1 rounded text-xs ${currentType === chord.type ? 'bg-blue-100 text-blue-700' : 'bg-white hover:bg-gray-100'}`}
             >
               {chord.label}
             </button>

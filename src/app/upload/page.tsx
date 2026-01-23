@@ -414,7 +414,7 @@ export default function UploadPage() {
           <div className="flex gap-2 mt-4 flex-wrap">
             <button
               onClick={testStorageConnection}
-              className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm"
+              className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-100 text-sm"
               disabled={uploading}
             >
               Storage 연결 테스트

@@ -3119,7 +3119,7 @@ export default function SheetMusicEditor({
                   isMobile ? 'px-2 py-1 text-sm' : 'px-3 py-1.5 text-sm'
                 } ${
                   isViewMode
-                    ? 'bg-blue-500 text-white shadow-md'
+                    ? 'bg-blue-100 text-blue-700 shadow-md'
                     : 'text-blue-600 hover:bg-blue-200'
                 }`}
                 title="악보 보기 (스와이프로 페이지 넘기기)"
@@ -3685,7 +3685,7 @@ export default function SheetMusicEditor({
         {modeToast.show && (
           <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl text-white font-medium text-lg transition-all duration-300 ${
             modeToast.mode === 'view'
-              ? 'bg-blue-500'
+              ? 'bg-blue-100'
               : 'bg-orange-500'
           }`}
           style={{
@@ -3759,7 +3759,7 @@ export default function SheetMusicEditor({
               />
               <button
                 onClick={addTextElement}
-                className="ml-2 px-2 py-1 bg-blue-500 text-white rounded text-sm"
+                className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm"
               >
                 확인
               </button>
@@ -3790,7 +3790,7 @@ export default function SheetMusicEditor({
               />
               <button
                 onClick={updateTextElement}
-                className="ml-2 px-2 py-1 bg-green-500 text-white rounded text-sm"
+                className="ml-2 px-2 py-1 bg-green-100 text-green-700 rounded text-sm"
               >
                 완료
               </button>
@@ -3905,7 +3905,7 @@ export default function SheetMusicEditor({
             <div
               className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-center justify-center pointer-events-none z-10"
             >
-              <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
                 여기에 드롭
               </span>
             </div>
@@ -4043,7 +4043,7 @@ export default function SheetMusicEditor({
                     if (!songFormEnabled) setSongFormEnabled(true)
                   }
                 }}
-                className={`bg-purple-600 text-white rounded font-medium hover:bg-purple-700 ${isMobile ? 'px-4 py-2' : 'px-3 py-1 text-sm'}`}
+                className={`bg-purple-100 text-purple-700 rounded font-medium hover:bg-purple-200 ${isMobile ? 'px-4 py-2' : 'px-3 py-1 text-sm'}`}
               >
                 추가
               </button>
@@ -4087,7 +4087,7 @@ export default function SheetMusicEditor({
                   isMobile ? 'py-3 text-base' : 'py-1.5 text-sm'
                 } ${
                   songFormEnabled
-                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                     : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                 }`}
               >
@@ -4307,7 +4307,7 @@ export default function SheetMusicEditor({
                     onClick={() => setExportOptions(prev => ({ ...prev, includeCover: !prev.includeCover }))}
                     className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
                       exportOptions.includeCover
-                        ? 'bg-blue-500 border-blue-500'
+                        ? 'bg-blue-100 border-blue-500'
                         : 'bg-white border-gray-300'
                     }`}
                   >
@@ -4328,7 +4328,7 @@ export default function SheetMusicEditor({
                     onClick={() => setExportOptions(prev => ({ ...prev, includeSongForms: !prev.includeSongForms }))}
                     className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
                       exportOptions.includeSongForms
-                        ? 'bg-blue-500 border-blue-500'
+                        ? 'bg-blue-100 border-blue-500'
                         : 'bg-white border-gray-300'
                     }`}
                   >
@@ -4459,7 +4459,7 @@ export default function SheetMusicEditor({
                     setShowCloseConfirm(false)
                     onClose()
                   }}
-                  className={`flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors ${
+                  className={`flex-1 py-3 px-4 bg-blue-100 text-blue-700 rounded-xl font-medium hover:bg-blue-200 transition-colors ${
                     isMobile ? 'text-base' : ''
                   }`}
                   style={{ touchAction: 'manipulation' }}

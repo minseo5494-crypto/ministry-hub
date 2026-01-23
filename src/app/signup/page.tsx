@@ -270,7 +270,7 @@ export default function SignupPage() {
             >
               <div
                 className={`w-5 h-5 mt-0.5 mr-2 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-                  agreeTerms ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                  agreeTerms ? 'bg-blue-100 border-blue-600' : 'bg-white border-gray-300'
                 }`}
               >
                 {agreeTerms && (
@@ -292,7 +292,7 @@ export default function SignupPage() {
             >
               <div
                 className={`w-5 h-5 mt-0.5 mr-2 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-                  agreeCopyright ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
+                  agreeCopyright ? 'bg-blue-100 border-blue-600' : 'bg-white border-gray-300'
                 }`}
               >
                 {agreeCopyright && (

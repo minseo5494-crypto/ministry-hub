@@ -589,7 +589,7 @@ export default function DrumScoreEditor({
                     }}
                     className={`px-3 py-1.5 text-sm rounded ${
                       selectedNotes.some(idx => editingState.notes[idx]?.dotted)
-                        ? 'bg-purple-500 text-white hover:bg-purple-600'
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-100'
                         : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                     }`}
                   >
@@ -598,7 +598,7 @@ export default function DrumScoreEditor({
                   {selectedNotes.length >= 2 && (
                     <button
                       onClick={connectSelectedNotes}
-                      className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                      className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-100"
                     >
                       연결
                     </button>
@@ -613,7 +613,7 @@ export default function DrumScoreEditor({
                   )}
                   <button
                     onClick={deleteSelectedNotes}
-                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                    className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded hover:bg-red-100"
                   >
                     삭제
                   </button>

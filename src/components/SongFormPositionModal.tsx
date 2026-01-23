@@ -919,7 +919,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   {/* 모든 곡에 적용 */}
                   <button
                     onClick={applyToAll}
-                    className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-blue-500 text-white rounded-lg text-xs md:text-sm font-medium hover:bg-blue-600"
+                    className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-blue-100 text-blue-700 rounded-lg text-xs md:text-sm font-medium hover:bg-blue-100"
                   >
                     📋 모든 곡에 적용
                   </button>
@@ -1106,7 +1106,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 {/* 드래그 안내 오버레이 */}
                 {(draggingNewTag || touchDraggingTag) && (
                   <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
-                    <p className="bg-purple-600 text-white font-bold text-sm px-3 py-1 rounded-full shadow-lg">
+                    <p className="bg-purple-100 text-purple-700 font-bold text-sm px-3 py-1 rounded-full shadow-lg">
                       여기에 드롭하세요
                     </p>
                   </div>
@@ -1153,7 +1153,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               </button>
               <button
                 onClick={handleNext}
-                className="px-3 md:px-6 py-1.5 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+                className="px-3 md:px-6 py-1.5 md:py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all font-semibold flex items-center gap-1 md:gap-2 text-xs md:text-sm"
               >
                 {currentSongIndex < songsWithForms.length - 1 ? (
                   <>
@@ -1180,7 +1180,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   key={index}
                   className={`flex-1 h-1 md:h-1.5 rounded-full transition-all ${
                     index === currentSongIndex
-                      ? 'bg-blue-600'
+                      ? 'bg-blue-100'
                       : index < currentSongIndex
                       ? 'bg-blue-300'
                       : 'bg-gray-300'
