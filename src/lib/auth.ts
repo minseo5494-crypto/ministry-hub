@@ -72,14 +72,12 @@ export const signIn = async (email: string, password: string) => {
   return data;
 };
 
-// 로그인 (CAPTCHA 포함)
-export const signInWithCaptcha = async (email: string, password: string, captchaToken: string) => {
+// 로그인 (CAPTCHA 포함, 개발환경에서는 선택적)
+export const signInWithCaptcha = async (email: string, password: string, captchaToken?: string) => {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
-    options: {
-      captchaToken,
-    }
+    options: captchaToken ? { captchaToken } : undefined,
   });
 
   if (error) throw error;

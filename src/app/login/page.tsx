@@ -8,7 +8,8 @@ import { Mail, Lock, AlertCircle, Chrome, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile'
 
-const TURNSTILE_SITE_KEY = '0x4AAAAAACMZcDVS_OETU_9t'
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAACMZcDVS_OETU_9t'
+const SKIP_CAPTCHA = process.env.NEXT_PUBLIC_SKIP_CAPTCHA === 'true'
 
 // useSearchParams를 사용하는 컴포넌트를 분리
 function LoginForm() {
@@ -33,7 +34,7 @@ function LoginForm() {
     e.preventDefault()
     setError('')
 
-    if (!captchaToken) {
+    if (!SKIP_CAPTCHA && !captchaToken) {
       setError('보안 확인을 완료해주세요.')
       return
     }
@@ -41,7 +42,7 @@ function LoginForm() {
     setLoading(true)
 
     try {
-      await signInWithCaptcha(formData.email, formData.password, captchaToken)
+      await signInWithCaptcha(formData.email, formData.password, SKIP_CAPTCHA ? undefined : captchaToken!)
       trackLogin('email')
       router.push('/')
     } catch (err: any) {
@@ -210,26 +211,28 @@ function LoginForm() {
           </div>
 
           {/* CAPTCHA */}
-          <div className="flex justify-center">
-            <Turnstile
-              ref={turnstileRef}
-              siteKey={TURNSTILE_SITE_KEY}
-              onSuccess={(token) => setCaptchaToken(token)}
-              onError={() => {
-                setCaptchaToken(null)
-                setError('보안 확인 로드에 실패했습니다. 페이지를 새로고침해주세요.')
-              }}
-              onExpire={() => setCaptchaToken(null)}
-              options={{
-                theme: 'light',
-                size: 'normal',
-              }}
-            />
-          </div>
+          {!SKIP_CAPTCHA && (
+            <div className="flex justify-center">
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={(token) => setCaptchaToken(token)}
+                onError={() => {
+                  setCaptchaToken(null)
+                  setError('보안 확인 로드에 실패했습니다. 페이지를 새로고침해주세요.')
+                }}
+                onExpire={() => setCaptchaToken(null)}
+                options={{
+                  theme: 'light',
+                  size: 'normal',
+                }}
+              />
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={loading || googleLoading || !captchaToken}
+            disabled={loading || googleLoading || (!SKIP_CAPTCHA && !captchaToken)}
             className="w-full bg-[#C5D7F2] text-white py-3 rounded-lg font-medium hover:bg-[#A8C4E8] disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {loading ? '로그인 중...' : '로그인'}
