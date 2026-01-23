@@ -8,7 +8,9 @@ import {
   TrendingUp, Users, Music, FileText, Download,
   BarChart3, Calendar, Award, Activity, ArrowLeft,
   Building, UserCheck, FileSpreadsheet, Settings, Tag,
-  Shield, CheckCircle, Upload, MessageSquare
+  Shield, CheckCircle, Upload, MessageSquare, Search,
+  AlertTriangle, Smartphone, Monitor, Tablet, ArrowUpRight,
+  ArrowDownRight, Target, Bug, Lightbulb, Percent
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -62,6 +64,53 @@ interface ChurchStat {
   user_count: number;
 }
 
+interface SearchStat {
+  query: string;
+  count: number;
+  avg_results: number;
+}
+
+interface FailedSearch {
+  query: string;
+  count: number;
+}
+
+interface UserJourney {
+  totalSignups: number;
+  usersWithDownload: number;
+  conversionRate: number;
+  retentionD1: number;
+  retentionD7: number;
+  retentionD30: number;
+}
+
+interface GrowthComparison {
+  thisWeekUsers: number;
+  lastWeekUsers: number;
+  thisWeekDownloads: number;
+  lastWeekDownloads: number;
+  userGrowthRate: number;
+  downloadGrowthRate: number;
+  thisMonthUsers: number;
+  lastMonthUsers: number;
+  monthlyUserGrowthRate: number;
+}
+
+interface DeviceStat {
+  device: string;
+  count: number;
+  percentage: number;
+}
+
+interface BetaStat {
+  totalFeedbacks: number;
+  pendingFeedbacks: number;
+  bugReports: number;
+  featureRequests: number;
+  activeTesters: number;
+  avgActionsPerUser: number;
+}
+
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
 export default function AdminDashboard() {
@@ -86,6 +135,21 @@ export default function AdminDashboard() {
   const [churchStats, setChurchStats] = useState<ChurchStat[]>([]);
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState<7 | 30 | 90>(30);
+  const [searchStats, setSearchStats] = useState<SearchStat[]>([]);
+  const [failedSearches, setFailedSearches] = useState<FailedSearch[]>([]);
+  const [userJourney, setUserJourney] = useState<UserJourney>({
+    totalSignups: 0, usersWithDownload: 0, conversionRate: 0,
+    retentionD1: 0, retentionD7: 0, retentionD30: 0
+  });
+  const [growthComparison, setGrowthComparison] = useState<GrowthComparison>({
+    thisWeekUsers: 0, lastWeekUsers: 0, thisWeekDownloads: 0, lastWeekDownloads: 0,
+    userGrowthRate: 0, downloadGrowthRate: 0, thisMonthUsers: 0, lastMonthUsers: 0, monthlyUserGrowthRate: 0
+  });
+  const [deviceStats, setDeviceStats] = useState<DeviceStat[]>([]);
+  const [betaStats, setBetaStats] = useState<BetaStat>({
+    totalFeedbacks: 0, pendingFeedbacks: 0, bugReports: 0, featureRequests: 0,
+    activeTesters: 0, avgActionsPerUser: 0
+  });
 
   useEffect(() => {
     checkAdminAndLoadData();
@@ -197,6 +261,21 @@ export default function AdminDashboard() {
 
       // 최근 가입자
       await loadRecentUsers();
+
+      // 검색 분석
+      await loadSearchStats(daysAgo);
+
+      // 사용자 여정 분석
+      await loadUserJourney();
+
+      // 성장 비교
+      await loadGrowthComparison();
+
+      // 기기 분석
+      await loadDeviceStats(daysAgo);
+
+      // 베타 지표
+      await loadBetaStats(daysAgo);
 
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -367,6 +446,222 @@ export default function AdminDashboard() {
 
   setRecentUsers(data || []);
 };
+
+  const loadSearchStats = async (startDate: Date) => {
+    const { data } = await supabase
+      .from('activity_logs')
+      .select('metadata')
+      .eq('action_type', 'song_search')
+      .gte('created_at', startDate.toISOString());
+
+    const searchMap = new Map<string, { count: number; totalResults: number }>();
+    const failedMap = new Map<string, number>();
+
+    data?.forEach((log: any) => {
+      const query = log.metadata?.query?.toLowerCase()?.trim();
+      const resultsCount = log.metadata?.results_count || 0;
+
+      if (query) {
+        const existing = searchMap.get(query) || { count: 0, totalResults: 0 };
+        existing.count += 1;
+        existing.totalResults += resultsCount;
+        searchMap.set(query, existing);
+
+        if (resultsCount === 0) {
+          failedMap.set(query, (failedMap.get(query) || 0) + 1);
+        }
+      }
+    });
+
+    const searchArray = Array.from(searchMap.entries())
+      .map(([query, data]) => ({
+        query,
+        count: data.count,
+        avg_results: Math.round(data.totalResults / data.count)
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    const failedArray = Array.from(failedMap.entries())
+      .map(([query, count]) => ({ query, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    setSearchStats(searchArray);
+    setFailedSearches(failedArray);
+  };
+
+  const loadUserJourney = async () => {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, created_at');
+
+    const { data: downloads } = await supabase
+      .from('activity_logs')
+      .select('user_id, created_at')
+      .in('action_type', ['ppt_download', 'pdf_download']);
+
+    const totalSignups = users?.length || 0;
+    const userIdsWithDownload = new Set(downloads?.map(d => d.user_id));
+    const usersWithDownload = userIdsWithDownload.size;
+    const conversionRate = totalSignups > 0 ? (usersWithDownload / totalSignups) * 100 : 0;
+
+    // 리텐션 계산 (가입 후 D1, D7, D30에 활동한 사용자 비율)
+    const now = new Date();
+    const { data: allActivity } = await supabase
+      .from('activity_logs')
+      .select('user_id, created_at');
+
+    let d1Retained = 0, d7Retained = 0, d30Retained = 0;
+    let d1Eligible = 0, d7Eligible = 0, d30Eligible = 0;
+
+    users?.forEach(user => {
+      const signupDate = new Date(user.created_at);
+      const daysSinceSignup = Math.floor((now.getTime() - signupDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      const userActivities = allActivity?.filter(a => a.user_id === user.id) || [];
+
+      if (daysSinceSignup >= 1) {
+        d1Eligible++;
+        const hasD1Activity = userActivities.some(a => {
+          const actDate = new Date(a.created_at);
+          const daysSinceSignupToAct = Math.floor((actDate.getTime() - signupDate.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceSignupToAct >= 1 && daysSinceSignupToAct < 2;
+        });
+        if (hasD1Activity) d1Retained++;
+      }
+
+      if (daysSinceSignup >= 7) {
+        d7Eligible++;
+        const hasD7Activity = userActivities.some(a => {
+          const actDate = new Date(a.created_at);
+          const daysSinceSignupToAct = Math.floor((actDate.getTime() - signupDate.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceSignupToAct >= 7 && daysSinceSignupToAct < 14;
+        });
+        if (hasD7Activity) d7Retained++;
+      }
+
+      if (daysSinceSignup >= 30) {
+        d30Eligible++;
+        const hasD30Activity = userActivities.some(a => {
+          const actDate = new Date(a.created_at);
+          const daysSinceSignupToAct = Math.floor((actDate.getTime() - signupDate.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceSignupToAct >= 30;
+        });
+        if (hasD30Activity) d30Retained++;
+      }
+    });
+
+    setUserJourney({
+      totalSignups,
+      usersWithDownload,
+      conversionRate: Math.round(conversionRate * 10) / 10,
+      retentionD1: d1Eligible > 0 ? Math.round((d1Retained / d1Eligible) * 100) : 0,
+      retentionD7: d7Eligible > 0 ? Math.round((d7Retained / d7Eligible) * 100) : 0,
+      retentionD30: d30Eligible > 0 ? Math.round((d30Retained / d30Eligible) * 100) : 0
+    });
+  };
+
+  const loadGrowthComparison = async () => {
+    const now = new Date();
+    const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
+    const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate() - 14);
+    const oneMonthAgo = new Date(now); oneMonthAgo.setDate(now.getDate() - 30);
+    const twoMonthsAgo = new Date(now); twoMonthsAgo.setDate(now.getDate() - 60);
+
+    const [thisWeekUsers, lastWeekUsers, thisWeekDownloads, lastWeekDownloads, thisMonthUsers, lastMonthUsers] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneWeekAgo.toISOString()),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
+      supabase.from('activity_logs').select('*', { count: 'exact', head: true }).in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', oneWeekAgo.toISOString()),
+      supabase.from('activity_logs').select('*', { count: 'exact', head: true }).in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneMonthAgo.toISOString()),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo.toISOString()).lt('created_at', oneMonthAgo.toISOString())
+    ]);
+
+    const thisWeekUsersCount = thisWeekUsers.count || 0;
+    const lastWeekUsersCount = lastWeekUsers.count || 0;
+    const thisWeekDownloadsCount = thisWeekDownloads.count || 0;
+    const lastWeekDownloadsCount = lastWeekDownloads.count || 0;
+    const thisMonthUsersCount = thisMonthUsers.count || 0;
+    const lastMonthUsersCount = lastMonthUsers.count || 0;
+
+    setGrowthComparison({
+      thisWeekUsers: thisWeekUsersCount,
+      lastWeekUsers: lastWeekUsersCount,
+      thisWeekDownloads: thisWeekDownloadsCount,
+      lastWeekDownloads: lastWeekDownloadsCount,
+      userGrowthRate: lastWeekUsersCount > 0 ? Math.round(((thisWeekUsersCount - lastWeekUsersCount) / lastWeekUsersCount) * 100) : thisWeekUsersCount > 0 ? 100 : 0,
+      downloadGrowthRate: lastWeekDownloadsCount > 0 ? Math.round(((thisWeekDownloadsCount - lastWeekDownloadsCount) / lastWeekDownloadsCount) * 100) : thisWeekDownloadsCount > 0 ? 100 : 0,
+      thisMonthUsers: thisMonthUsersCount,
+      lastMonthUsers: lastMonthUsersCount,
+      monthlyUserGrowthRate: lastMonthUsersCount > 0 ? Math.round(((thisMonthUsersCount - lastMonthUsersCount) / lastMonthUsersCount) * 100) : thisMonthUsersCount > 0 ? 100 : 0
+    });
+  };
+
+  const loadDeviceStats = async (startDate: Date) => {
+    const { data } = await supabase
+      .from('feedbacks')
+      .select('user_agent')
+      .gte('created_at', startDate.toISOString());
+
+    const deviceMap = new Map<string, number>();
+
+    data?.forEach(feedback => {
+      if (feedback.user_agent) {
+        let device = 'Unknown';
+        const ua = feedback.user_agent.toLowerCase();
+
+        if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+          device = 'Mobile';
+        } else if (ua.includes('tablet') || ua.includes('ipad')) {
+          device = 'Tablet';
+        } else {
+          device = 'Desktop';
+        }
+
+        deviceMap.set(device, (deviceMap.get(device) || 0) + 1);
+      }
+    });
+
+    const total = Array.from(deviceMap.values()).reduce((a, b) => a + b, 0);
+    const deviceArray = Array.from(deviceMap.entries())
+      .map(([device, count]) => ({
+        device,
+        count,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    setDeviceStats(deviceArray);
+  };
+
+  const loadBetaStats = async (startDate: Date) => {
+    const [feedbacksResult, activityResult] = await Promise.all([
+      supabase.from('feedbacks').select('type, status'),
+      supabase.from('activity_logs').select('user_id').gte('created_at', startDate.toISOString())
+    ]);
+
+    const feedbacks = feedbacksResult.data || [];
+    const activities = activityResult.data || [];
+
+    const totalFeedbacks = feedbacks.length;
+    const pendingFeedbacks = feedbacks.filter(f => f.status === 'pending').length;
+    const bugReports = feedbacks.filter(f => f.type === 'bug').length;
+    const featureRequests = feedbacks.filter(f => f.type === 'feature').length;
+
+    const uniqueUsers = new Set(activities.map(a => a.user_id));
+    const activeTesters = uniqueUsers.size;
+    const avgActionsPerUser = activeTesters > 0 ? Math.round(activities.length / activeTesters) : 0;
+
+    setBetaStats({
+      totalFeedbacks,
+      pendingFeedbacks,
+      bugReports,
+      featureRequests,
+      activeTesters,
+      avgActionsPerUser
+    });
+  };
 
   const loadRecentActivities = async () => {
     const { data: activitiesData } = await supabase
@@ -657,6 +952,241 @@ export default function AdminDashboard() {
                 <p className="text-3xl font-bold mt-2">{stats.mau.toLocaleString()}</p>
               </div>
               <UserCheck className="w-10 h-10 text-purple-200" />
+            </div>
+          </div>
+        </div>
+
+        {/* 성장 비교 & 사용자 여정 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* 성장 비교 */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+                성장 비교
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">이번 주 가입</span>
+                    {growthComparison.userGrowthRate > 0 ? (
+                      <span className="flex items-center text-green-600 text-sm">
+                        <ArrowUpRight className="w-4 h-4" />
+                        {growthComparison.userGrowthRate}%
+                      </span>
+                    ) : growthComparison.userGrowthRate < 0 ? (
+                      <span className="flex items-center text-red-600 text-sm">
+                        <ArrowDownRight className="w-4 h-4" />
+                        {Math.abs(growthComparison.userGrowthRate)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 text-sm">-</span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">{growthComparison.thisWeekUsers}</p>
+                  <p className="text-xs text-gray-500">지난 주: {growthComparison.lastWeekUsers}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-600">이번 주 다운로드</span>
+                    {growthComparison.downloadGrowthRate > 0 ? (
+                      <span className="flex items-center text-green-600 text-sm">
+                        <ArrowUpRight className="w-4 h-4" />
+                        {growthComparison.downloadGrowthRate}%
+                      </span>
+                    ) : growthComparison.downloadGrowthRate < 0 ? (
+                      <span className="flex items-center text-red-600 text-sm">
+                        <ArrowDownRight className="w-4 h-4" />
+                        {Math.abs(growthComparison.downloadGrowthRate)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 text-sm">-</span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">{growthComparison.thisWeekDownloads}</p>
+                  <p className="text-xs text-gray-500">지난 주: {growthComparison.lastWeekDownloads}</p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg col-span-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-blue-700">월간 가입자 성장</span>
+                    {growthComparison.monthlyUserGrowthRate > 0 ? (
+                      <span className="flex items-center text-green-600 text-sm font-medium">
+                        <ArrowUpRight className="w-4 h-4" />
+                        {growthComparison.monthlyUserGrowthRate}%
+                      </span>
+                    ) : growthComparison.monthlyUserGrowthRate < 0 ? (
+                      <span className="flex items-center text-red-600 text-sm font-medium">
+                        <ArrowDownRight className="w-4 h-4" />
+                        {Math.abs(growthComparison.monthlyUserGrowthRate)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 text-sm">-</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-blue-700">이번 달: <strong>{growthComparison.thisMonthUsers}</strong></span>
+                    <span className="text-blue-600">지난 달: {growthComparison.lastMonthUsers}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 사용자 여정 */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Target className="w-5 h-5 text-purple-600" />
+                사용자 여정 분석
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">가입 → 다운로드 전환율</span>
+                  <span className="text-lg font-bold text-purple-600">{userJourney.conversionRate}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-purple-600 h-3 rounded-full transition-all"
+                    style={{ width: `${Math.min(userJourney.conversionRate, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-500">
+                  <span>가입자: {userJourney.totalSignups}</span>
+                  <span>다운로드: {userJourney.usersWithDownload}</span>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">리텐션 (재방문율)</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-xs text-green-700 mb-1">D1</p>
+                    <p className="text-xl font-bold text-green-700">{userJourney.retentionD1}%</p>
+                  </div>
+                  <div className="text-center p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-700 mb-1">D7</p>
+                    <p className="text-xl font-bold text-blue-700">{userJourney.retentionD7}%</p>
+                  </div>
+                  <div className="text-center p-3 bg-purple-50 rounded-lg">
+                    <p className="text-xs text-purple-700 mb-1">D30</p>
+                    <p className="text-xl font-bold text-purple-700">{userJourney.retentionD30}%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 베타 지표 & 검색 분석 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* 베타 지표 */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-orange-600" />
+                베타 테스트 지표
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <MessageSquare className="w-4 h-4 text-gray-500" />
+                    <span className="text-xs text-gray-600">총 피드백</span>
+                  </div>
+                  <p className="text-xl font-bold text-gray-900">{betaStats.totalFeedbacks}</p>
+                </div>
+                <div className="p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                    <span className="text-xs text-yellow-700">대기 중</span>
+                  </div>
+                  <p className="text-xl font-bold text-yellow-700">{betaStats.pendingFeedbacks}</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bug className="w-4 h-4 text-red-600" />
+                    <span className="text-xs text-red-700">버그 리포트</span>
+                  </div>
+                  <p className="text-xl font-bold text-red-700">{betaStats.bugReports}</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Lightbulb className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs text-blue-700">기능 요청</span>
+                  </div>
+                  <p className="text-xl font-bold text-blue-700">{betaStats.featureRequests}</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">활성 테스터</span>
+                  <span className="font-semibold">{betaStats.activeTesters}명</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">인당 평균 활동</span>
+                  <span className="font-semibold">{betaStats.avgActionsPerUser}회</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 인기 검색어 */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Search className="w-5 h-5 text-green-600" />
+                인기 검색어 TOP 15
+              </h3>
+            </div>
+            <div className="p-6 max-h-80 overflow-y-auto">
+              {searchStats.length === 0 ? (
+                <p className="text-center text-gray-500 py-4">데이터 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {searchStats.map((stat, index) => (
+                    <div key={stat.query} className="flex items-center gap-2">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded text-xs font-medium text-gray-600">
+                        {index + 1}
+                      </span>
+                      <span className="flex-1 text-sm truncate" title={stat.query}>
+                        {stat.query}
+                      </span>
+                      <span className="text-xs text-gray-500">{stat.count}회</span>
+                      <span className="text-xs text-green-600">평균 {stat.avg_results}개</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 검색 실패 키워드 */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                검색 실패 키워드
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">결과 0개인 검색어</p>
+            </div>
+            <div className="p-6 max-h-80 overflow-y-auto">
+              {failedSearches.length === 0 ? (
+                <p className="text-center text-gray-500 py-4">실패한 검색 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {failedSearches.map((stat, index) => (
+                    <div key={stat.query} className="flex items-center justify-between p-2 bg-red-50 rounded">
+                      <span className="text-sm text-red-800">{stat.query}</span>
+                      <span className="text-xs text-red-600 font-medium">{stat.count}회</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

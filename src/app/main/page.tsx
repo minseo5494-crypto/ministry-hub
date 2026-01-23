@@ -42,6 +42,73 @@ declare global {
   }
 }
 
+// ===== 스팸 방지 유틸리티 =====
+
+// 무의미한 한글 문자열 감지 (랜덤 조합 스팸)
+const isSpamContent = (text: string): boolean => {
+  if (!text || text.length < 3) return false
+
+  // 공백 제거 후 검사
+  const cleaned = text.replace(/\s/g, '')
+  if (cleaned.length < 3) return false
+
+  // 1. 숫자나 영문만 있으면 통과 (정상 제목일 수 있음)
+  if (/^[a-zA-Z0-9\s\-_.,:!?]+$/.test(text)) return false
+
+  // 2. 한글이 포함된 경우 검사
+  const koreanChars = cleaned.match(/[가-힣]/g) || []
+  if (koreanChars.length < 3) return false
+
+  // 3. 자주 사용되는 한글 음절 패턴 (정상적인 단어에 자주 등장)
+  const commonSyllables = /[가나다라마바사아자차카타파하고노도로모보소오조초코토포호기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤]/g
+  const commonCount = (cleaned.match(commonSyllables) || []).length
+  const koreanRatio = commonCount / koreanChars.length
+
+  // 4. 흔한 음절 비율이 30% 미만이면 스팸으로 판단
+  if (koreanRatio < 0.3 && koreanChars.length >= 4) {
+    return true
+  }
+
+  // 5. 연속된 희귀 초성 패턴 감지 (ㄲ,ㄸ,ㅃ,ㅆ,ㅉ 등이 연속)
+  const rareInitials = /[꺼-껴|떠-뗘|뻐-뼈|써-쎼|쩌-쪄]{2,}/
+  if (rareInitials.test(cleaned)) return true
+
+  return false
+}
+
+// 업로드 속도 제한 체크
+const checkUploadRateLimit = async (
+  supabaseClient: typeof supabase,
+  userId: string
+): Promise<{ allowed: boolean; message?: string }> => {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  // 최근 1시간 업로드 수
+  const { count: hourlyCount } = await supabaseClient
+    .from('songs')
+    .select('*', { count: 'exact', head: true })
+    .eq('uploaded_by', userId)
+    .gte('created_at', oneHourAgo)
+
+  // 최근 24시간 업로드 수
+  const { count: dailyCount } = await supabaseClient
+    .from('songs')
+    .select('*', { count: 'exact', head: true })
+    .eq('uploaded_by', userId)
+    .gte('created_at', oneDayAgo)
+
+  // 제한: 시간당 5곡, 일일 20곡
+  if ((hourlyCount || 0) >= 5) {
+    return { allowed: false, message: '업로드 제한: 시간당 최대 5곡까지 업로드 가능합니다. 잠시 후 다시 시도해주세요.' }
+  }
+  if ((dailyCount || 0) >= 20) {
+    return { allowed: false, message: '업로드 제한: 일일 최대 20곡까지 업로드 가능합니다. 내일 다시 시도해주세요.' }
+  }
+
+  return { allowed: true }
+}
+
 const initialFilters: Filters = {
   season: '전체',
   themes: [],
@@ -565,6 +632,7 @@ export default function MainPage() {
         const { data, error } = await supabase
           .from('songs')
           .select('*')
+          .or('is_hidden.is.null,is_hidden.eq.false')  // 숨김 처리된 곡 제외
           .order('song_name', { ascending: true })
           .range(from, from + pageSize - 1)
 
@@ -968,6 +1036,19 @@ export default function MainPage() {
       const duplicateInfo = duplicateSongs.map(s => `• "${s.song_name}"${s.team_name ? ` - ${s.team_name}` : ''}`).join('\n')
       const confirmed = confirm(`⚠️ 비슷한 곡이 이미 존재합니다!\n\n${duplicateInfo}\n\n그래도 추가하시겠습니까?`)
       if (!confirmed) return
+    }
+
+    // 스팸 방지: 콘텐츠 검증
+    if (isSpamContent(newSong.song_name.trim()) || isSpamContent(newSong.team_name.trim())) {
+      alert('⚠️ 곡 제목 또는 아티스트명이 유효하지 않습니다.\n올바른 정보를 입력해주세요.')
+      return
+    }
+
+    // 스팸 방지: 업로드 속도 제한
+    const rateLimit = await checkUploadRateLimit(supabase, user!.id)
+    if (!rateLimit.allowed) {
+      alert(`⚠️ ${rateLimit.message}`)
+      return
     }
 
     setUploading(true)

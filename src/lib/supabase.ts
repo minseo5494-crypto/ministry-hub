@@ -179,6 +179,7 @@ export interface Song {
   like_count?: number
   is_official?: boolean
   is_user_uploaded?: boolean
+  is_hidden?: boolean  // 저작권 미해결 등으로 숨김 처리된 곡
   // 악보 버전 관리
   primary_sheet_id?: string
   sheets?: SongSheet[]  // 연결된 악보들

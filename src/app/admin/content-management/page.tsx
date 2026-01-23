@@ -55,6 +55,7 @@ export default function ContentManagementPage() {
   // 필터 상태 (전체 곡 탭용)
   const [songTypeFilter, setSongTypeFilter] = useState<'all' | 'official' | 'user'>('all')
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'teams' | 'private'>('all')
+  const [hiddenFilter, setHiddenFilter] = useState<'all' | 'hidden' | 'visible'>('all')
   const [uploaderFilter, setUploaderFilter] = useState<string>('all')
   const [uploaders, setUploaders] = useState<{ id: string; email: string }[]>([])
   const [showFilters, setShowFilters] = useState(false)
@@ -115,7 +116,7 @@ export default function ContentManagementPage() {
       setPage(1)
       loadData()
     }
-  }, [songTypeFilter, visibilityFilter, uploaderFilter])
+  }, [songTypeFilter, visibilityFilter, hiddenFilter, uploaderFilter])
 
   // 업로더 목록 로드
   useEffect(() => {
@@ -261,6 +262,13 @@ export default function ContentManagementPage() {
         result = result.filter(s => s.visibility === visibilityFilter)
       }
 
+      // 숨김 상태 필터
+      if (hiddenFilter === 'hidden') {
+        result = result.filter(s => s.is_hidden === true)
+      } else if (hiddenFilter === 'visible') {
+        result = result.filter(s => !s.is_hidden)
+      }
+
       // 업로더 필터
       if (uploaderFilter !== 'all') {
         result = result.filter(s => s.uploaded_by === uploaderFilter)
@@ -270,7 +278,7 @@ export default function ContentManagementPage() {
     }
 
     // 검색어 또는 필터가 있을 때는 전체를 가져와서 클라이언트에서 필터링
-    const hasFilters = songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all'
+    const hasFilters = songTypeFilter !== 'all' || visibilityFilter !== 'all' || hiddenFilter !== 'all' || uploaderFilter !== 'all'
 
     if (searchQuery.trim() || hasFilters) {
       const { data, error } = await supabase
@@ -640,6 +648,44 @@ export default function ContentManagementPage() {
       loadData()
     } else {
       showToast('삭제 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 일괄 숨김처리
+  const bulkHide = async () => {
+    if (selectedIds.size === 0) return
+
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase
+      .from('songs')
+      .update({ is_hidden: true })
+      .in('id', ids)
+
+    if (!error) {
+      showToast(`${ids.length}개 곡이 숨김 처리되었습니다.`, 'success')
+      setSelectedIds(new Set())
+      loadData()
+    } else {
+      showToast('숨김 처리 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 일괄 숨김해제
+  const bulkUnhide = async () => {
+    if (selectedIds.size === 0) return
+
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase
+      .from('songs')
+      .update({ is_hidden: false })
+      .in('id', ids)
+
+    if (!error) {
+      showToast(`${ids.length}개 곡의 숨김이 해제되었습니다.`, 'success')
+      setSelectedIds(new Set())
+      loadData()
+    } else {
+      showToast('숨김 해제 중 오류가 발생했습니다.', 'error')
     }
   }
 
@@ -1025,16 +1071,16 @@ export default function ContentManagementPage() {
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition ${
-                      showFilters || songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all'
+                      showFilters || songTypeFilter !== 'all' || visibilityFilter !== 'all' || hiddenFilter !== 'all' || uploaderFilter !== 'all'
                         ? 'bg-violet-50 border-violet-300 text-violet-700'
                         : 'bg-white hover:bg-gray-50'
                     }`}
                   >
                     <Filter size={18} />
                     <span>필터</span>
-                    {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all') && (
+                    {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || hiddenFilter !== 'all' || uploaderFilter !== 'all') && (
                       <span className="ml-1 px-1.5 py-0.5 text-xs bg-violet-600 text-white rounded-full">
-                        {[songTypeFilter !== 'all', visibilityFilter !== 'all', uploaderFilter !== 'all'].filter(Boolean).length}
+                        {[songTypeFilter !== 'all', visibilityFilter !== 'all', hiddenFilter !== 'all', uploaderFilter !== 'all'].filter(Boolean).length}
                       </span>
                     )}
                   </button>
@@ -1077,6 +1123,20 @@ export default function ContentManagementPage() {
                       </select>
                     </div>
 
+                    {/* 숨김 상태 필터 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">숨김 상태</label>
+                      <select
+                        value={hiddenFilter}
+                        onChange={(e) => setHiddenFilter(e.target.value as 'all' | 'hidden' | 'visible')}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 text-base"
+                      >
+                        <option value="all">전체</option>
+                        <option value="visible">공개 중</option>
+                        <option value="hidden">숨겨짐</option>
+                      </select>
+                    </div>
+
                     {/* 업로더 필터 */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">업로더</label>
@@ -1094,12 +1154,13 @@ export default function ContentManagementPage() {
                   </div>
 
                   {/* 필터 초기화 버튼 */}
-                  {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || uploaderFilter !== 'all') && (
+                  {(songTypeFilter !== 'all' || visibilityFilter !== 'all' || hiddenFilter !== 'all' || uploaderFilter !== 'all') && (
                     <div className="flex justify-end">
                       <button
                         onClick={() => {
                           setSongTypeFilter('all')
                           setVisibilityFilter('all')
+                          setHiddenFilter('all')
                           setUploaderFilter('all')
                         }}
                         className="text-sm text-violet-600 hover:text-violet-800"
@@ -1138,6 +1199,18 @@ export default function ContentManagementPage() {
                 className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition"
               >
                 사용자 곡으로
+              </button>
+              <button
+                onClick={bulkHide}
+                className="px-3 py-1.5 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600 transition"
+              >
+                숨김처리
+              </button>
+              <button
+                onClick={bulkUnhide}
+                className="px-3 py-1.5 bg-gray-500 text-white text-sm rounded-lg hover:bg-gray-600 transition"
+              >
+                숨김해제
               </button>
               <button
                 onClick={() => setShowBulkDeleteModal(true)}
@@ -1206,6 +1279,9 @@ export default function ContentManagementPage() {
                               {song.upload_status === 'completed' ? '승인됨' :
                                song.upload_status === 'pending' ? '대기중' : '실패'}
                             </span>
+                          )}
+                          {song.is_hidden && (
+                            <span className="px-1.5 py-0.5 text-[11px] bg-amber-100 text-amber-700 rounded font-medium">숨겨짐</span>
                           )}
                         </div>
 

@@ -8,13 +8,15 @@ import { Team, VerifiedPublisher, OfficialUploader } from '@/lib/supabase'
 import {
   ArrowLeft, Users, Building2, Upload, Shield,
   Search, Check, X, ChevronLeft, ChevronRight,
-  UserPlus, ShieldOff, Crown, Trash2
+  UserPlus, ShieldOff, Crown, Trash2, Edit2, User,
+  Mail, Church, Calendar, MoreVertical
 } from 'lucide-react'
 
-type TabType = 'team-approvals' | 'uploaders' | 'publishers' | 'admins'
+type TabType = 'teams' | 'users' | 'uploaders' | 'publishers' | 'admins'
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
-  { id: 'team-approvals', label: '팀 승인', icon: Users },
+  { id: 'teams', label: '팀 관리', icon: Users },
+  { id: 'users', label: '사용자', icon: User },
   { id: 'uploaders', label: '공식 업로더', icon: Upload },
   { id: 'publishers', label: '퍼블리셔', icon: Building2 },
   { id: 'admins', label: '관리자', icon: Shield },
@@ -24,8 +26,15 @@ interface AdminUser {
   id: string
   email: string
   name?: string
+  church_name?: string
   created_at?: string
   is_admin: boolean
+  email_verified?: boolean
+}
+
+interface EditModal {
+  type: 'team' | 'publisher' | 'user'
+  data: any
 }
 
 export default function AccountManagementPage() {
@@ -33,7 +42,7 @@ export default function AccountManagementPage() {
   const searchParams = useSearchParams()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabType>('team-approvals')
+  const [activeTab, setActiveTab] = useState<TabType>('teams')
 
   // 데이터
   const [teams, setTeams] = useState<Team[]>([])
@@ -57,6 +66,13 @@ export default function AccountManagementPage() {
 
   // 삭제 확인
   const [confirmDelete, setConfirmDelete] = useState<any>(null)
+
+  // 수정 모달
+  const [editModal, setEditModal] = useState<EditModal | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
+
+  // 사용자 목록
+  const [users, setUsers] = useState<AdminUser[]>([])
 
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
@@ -101,8 +117,11 @@ export default function AccountManagementPage() {
 
   const loadData = async () => {
     switch (activeTab) {
-      case 'team-approvals':
-        await loadPendingTeams()
+      case 'teams':
+        await loadTeams()
+        break
+      case 'users':
+        await loadUsers()
         break
       case 'uploaders':
         await loadUploaders()
@@ -116,14 +135,23 @@ export default function AccountManagementPage() {
     }
   }
 
-  const loadPendingTeams = async () => {
-    // 팀 승인 대기 목록 (status가 pending인 팀원이 있는 팀)
+  const loadTeams = async () => {
     const { data } = await supabase
       .from('teams')
-      .select('*')
+      .select('*, team_members(count)')
       .order('created_at', { ascending: false })
 
     setTeams(data || [])
+  }
+
+  const loadUsers = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('id, email, name, church_name, created_at, is_admin, email_verified')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    setUsers(data || [])
   }
 
   const loadUploaders = async () => {
@@ -196,6 +224,200 @@ export default function AccountManagementPage() {
       showToast(publisher.is_active ? '비활성화됨' : '활성화됨', 'success')
       loadPublishers()
     }
+  }
+
+  // 팀 수정
+  const updateTeam = async () => {
+    if (!editModal || editModal.type !== 'team') return
+
+    const { error } = await supabase
+      .from('teams')
+      .update({
+        name: editForm.name,
+        church_name: editForm.church_name,
+        description: editForm.description
+      })
+      .eq('id', editModal.data.id)
+
+    if (!error) {
+      showToast('팀 정보가 수정되었습니다.', 'success')
+      setEditModal(null)
+      loadTeams()
+    } else {
+      showToast('수정 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 팀 삭제
+  const deleteTeam = async (teamId: string) => {
+    try {
+      // team_setlists의 songs 먼저 삭제
+      const { data: setlists } = await supabase
+        .from('team_setlists')
+        .select('id')
+        .eq('team_id', teamId)
+
+      if (setlists && setlists.length > 0) {
+        const setlistIds = setlists.map(s => s.id)
+        await supabase.from('team_setlist_songs').delete().in('setlist_id', setlistIds)
+      }
+
+      // 관련 테이블 순서대로 삭제 또는 NULL 설정
+      await supabase.from('team_setlists').delete().eq('team_id', teamId)
+      await supabase.from('team_members').delete().eq('team_id', teamId)
+      await supabase.from('role_permissions').delete().in('role_id',
+        (await supabase.from('team_roles').select('id').eq('team_id', teamId)).data?.map(r => r.id) || []
+      )
+      await supabase.from('team_roles').delete().eq('team_id', teamId)
+      await supabase.from('team_fixed_songs').delete().eq('team_id', teamId)
+      await supabase.from('folders').delete().eq('team_id', teamId)
+      await supabase.from('download_logs').update({ team_id: null }).eq('team_id', teamId)
+      await supabase.from('song_sheets').update({ team_id: null }).eq('team_id', teamId)
+
+      // 팀 삭제
+      const { error } = await supabase.from('teams').delete().eq('id', teamId)
+
+      if (!error) {
+        showToast('팀이 삭제되었습니다.', 'success')
+        setConfirmDelete(null)
+        loadTeams()
+      } else {
+        console.error('Team delete error:', error)
+        showToast(`삭제 실패: ${error.message}`, 'error')
+      }
+    } catch (err: any) {
+      console.error('Team delete error:', err)
+      showToast(`삭제 중 오류: ${err.message}`, 'error')
+    }
+  }
+
+  // 퍼블리셔 수정
+  const updatePublisher = async () => {
+    if (!editModal || editModal.type !== 'publisher') return
+
+    const { error } = await supabase
+      .from('verified_publishers')
+      .update({
+        name: editForm.name,
+        description: editForm.description,
+        contact_email: editForm.contact_email,
+        website_url: editForm.website_url
+      })
+      .eq('id', editModal.data.id)
+
+    if (!error) {
+      showToast('퍼블리셔 정보가 수정되었습니다.', 'success')
+      setEditModal(null)
+      loadPublishers()
+    } else {
+      showToast('수정 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 퍼블리셔 삭제
+  const deletePublisher = async (publisherId: string) => {
+    try {
+      // songs에서 publisher_id를 NULL로 설정
+      await supabase.from('songs').update({ publisher_id: null }).eq('publisher_id', publisherId)
+      // publisher_accounts 삭제
+      await supabase.from('publisher_accounts').delete().eq('publisher_id', publisherId)
+
+      const { error } = await supabase
+        .from('verified_publishers')
+        .delete()
+        .eq('id', publisherId)
+
+      if (!error) {
+        showToast('퍼블리셔가 삭제되었습니다.', 'success')
+        setConfirmDelete(null)
+        loadPublishers()
+      } else {
+        console.error('Publisher delete error:', error)
+        showToast(`삭제 실패: ${error.message}`, 'error')
+      }
+    } catch (err: any) {
+      console.error('Publisher delete error:', err)
+      showToast(`삭제 중 오류: ${err.message}`, 'error')
+    }
+  }
+
+  // 사용자 수정
+  const updateUser = async () => {
+    if (!editModal || editModal.type !== 'user') return
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        name: editForm.name,
+        church_name: editForm.church_name
+      })
+      .eq('id', editModal.data.id)
+
+    if (!error) {
+      showToast('사용자 정보가 수정되었습니다.', 'success')
+      setEditModal(null)
+      loadUsers()
+    } else {
+      showToast('수정 중 오류가 발생했습니다.', 'error')
+    }
+  }
+
+  // 사용자 삭제
+  const deleteUser = async (userId: string) => {
+    if (userId === currentUser?.id) {
+      showToast('본인 계정은 삭제할 수 없습니다.', 'error')
+      return
+    }
+
+    try {
+      // 관련 테이블 순서대로 삭제 또는 NULL 설정
+      const deleteResults = await Promise.allSettled([
+        supabase.from('team_members').delete().eq('user_id', userId),
+        supabase.from('activity_logs').delete().eq('user_id', userId),
+        supabase.from('download_logs').delete().eq('user_id', userId),
+        supabase.from('folders').delete().eq('user_id', userId),
+        supabase.from('song_likes').delete().eq('user_id', userId),
+        supabase.from('user_favorite_songforms').delete().eq('user_id', userId),
+        supabase.from('user_song_settings').delete().eq('user_id', userId),
+        supabase.from('sheet_music_notes').delete().eq('user_id', userId),
+        supabase.from('feedbacks').delete().eq('user_id', userId),
+        supabase.from('song_sheets').update({ uploaded_by: null }).eq('uploaded_by', userId),
+        supabase.from('songs').update({ uploaded_by: null }).eq('uploaded_by', userId),
+      ])
+
+      // NULL로 설정 (삭제하면 안 되는 데이터)
+      await Promise.allSettled([
+        supabase.from('teams').update({ created_by: null }).eq('created_by', userId),
+        supabase.from('team_setlists').update({ created_by: null }).eq('created_by', userId),
+        supabase.from('team_fixed_songs').update({ created_by: null }).eq('created_by', userId),
+        supabase.from('team_approval_requests').update({ requester_id: null }).eq('requester_id', userId),
+        supabase.from('team_approval_requests').update({ approved_by: null }).eq('approved_by', userId),
+        supabase.from('official_uploaders').update({ created_by: null }).eq('created_by', userId),
+        supabase.from('song_approval_requests').update({ requester_id: null }).eq('requester_id', userId),
+        supabase.from('song_approval_requests').update({ approved_by: null }).eq('approved_by', userId),
+        supabase.from('verified_publishers').update({ created_by: null }).eq('created_by', userId),
+      ])
+
+      const { error } = await supabase.from('users').delete().eq('id', userId)
+
+      if (!error) {
+        showToast('사용자가 삭제되었습니다.', 'success')
+        setConfirmDelete(null)
+        loadUsers()
+      } else {
+        console.error('User delete error:', error)
+        showToast(`삭제 실패: ${error.message}`, 'error')
+      }
+    } catch (err: any) {
+      console.error('User delete error:', err)
+      showToast(`삭제 중 오류: ${err.message}`, 'error')
+    }
+  }
+
+  // 수정 모달 열기
+  const openEditModal = (type: 'team' | 'publisher' | 'user', data: any) => {
+    setEditModal({ type, data })
+    setEditForm({ ...data })
   }
 
   // 관리자 검색
@@ -330,10 +552,12 @@ export default function AccountManagementPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* 팀 승인 탭 */}
-        {activeTab === 'team-approvals' && (
+        {/* 팀 관리 탭 */}
+        {activeTab === 'teams' && (
           <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">팀 목록</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">팀 목록 ({teams.length})</h2>
+            </div>
             {teams.length === 0 ? (
               <p className="text-gray-500 text-center py-8">팀이 없습니다.</p>
             ) : (
@@ -341,16 +565,130 @@ export default function AccountManagementPage() {
                 {teams.map(team => (
                   <div key={team.id} className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{team.name}</h3>
-                        <p className="text-sm text-gray-500">{team.church_name || team.type}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900">{team.name}</h3>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${
+                            team.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            {team.is_active ? '활성' : '비활성'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          {team.church_name || team.type} · 멤버 {team.member_count || 0}명
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(team.created_at || '').toLocaleDateString('ko-KR')} 생성
+                        </p>
                       </div>
-                      <span className="text-xs text-gray-400">
-                        {new Date(team.created_at || '').toLocaleDateString('ko-KR')}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditModal('team', team)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="수정"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'team', data: team })}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          title="삭제"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 사용자 관리 탭 */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">사용자 목록 ({users.length})</h2>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="이메일 또는 이름 검색"
+                  className="px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </div>
+            {users.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">사용자가 없습니다.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">이메일</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">이름</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">교회</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">가입일</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">상태</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users
+                      .filter(user => {
+                        if (!searchQuery) return true
+                        const q = searchQuery.toLowerCase()
+                        return user.email.toLowerCase().includes(q) ||
+                               user.name?.toLowerCase().includes(q)
+                      })
+                      .map(user => (
+                        <tr key={user.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4 text-sm text-gray-900">{user.email}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{user.name || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{user.church_name || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-500">
+                            {new Date(user.created_at || '').toLocaleDateString('ko-KR')}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-wrap gap-1">
+                              {user.is_admin && (
+                                <span className="px-2 py-0.5 text-xs bg-violet-100 text-violet-700 rounded-full">
+                                  관리자
+                                </span>
+                              )}
+                              {user.email_verified === false && (
+                                <span className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">
+                                  미인증
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => openEditModal('user', user)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition"
+                                title="수정"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              {user.id !== currentUser?.id && (
+                                <button
+                                  onClick={() => setConfirmDelete({ type: 'user', data: user })}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded transition"
+                                  title="삭제"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -419,30 +757,51 @@ export default function AccountManagementPage() {
             ) : (
               <div className="space-y-3">
                 {publishers.map(publisher => (
-                  <div key={publisher.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-gray-900">{publisher.name}</h3>
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${
-                          publisher.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {publisher.is_active ? '활성' : '비활성'}
-                        </span>
+                  <div key={publisher.id} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900">{publisher.name}</h3>
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${
+                            publisher.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            {publisher.is_active ? '활성' : '비활성'}
+                          </span>
+                        </div>
+                        {publisher.description && (
+                          <p className="text-sm text-gray-500 mt-1">{publisher.description}</p>
+                        )}
+                        {publisher.contact_email && (
+                          <p className="text-xs text-gray-400 mt-1">{publisher.contact_email}</p>
+                        )}
                       </div>
-                      {publisher.description && (
-                        <p className="text-sm text-gray-500">{publisher.description}</p>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => togglePublisher(publisher)}
+                          className={`px-3 py-1 text-sm rounded-lg transition ${
+                            publisher.is_active
+                              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          }`}
+                        >
+                          {publisher.is_active ? '비활성화' : '활성화'}
+                        </button>
+                        <button
+                          onClick={() => openEditModal('publisher', publisher)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="수정"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'publisher', data: publisher })}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          title="삭제"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => togglePublisher(publisher)}
-                      className={`px-3 py-1 text-sm rounded-lg transition ${
-                        publisher.is_active
-                          ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
-                      }`}
-                    >
-                      {publisher.is_active ? '비활성화' : '활성화'}
-                    </button>
                   </div>
                 ))}
               </div>
@@ -556,11 +915,17 @@ export default function AccountManagementPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h3 className="font-bold text-gray-900 mb-2">
-              {confirmDelete.type === 'admin' ? '관리자 권한 제거' : '삭제 확인'}
+              {confirmDelete.type === 'admin' ? '관리자 권한 제거' :
+               confirmDelete.type === 'team' ? '팀 삭제' :
+               confirmDelete.type === 'user' ? '사용자 삭제' :
+               confirmDelete.type === 'publisher' ? '퍼블리셔 삭제' : '삭제 확인'}
             </h3>
             <p className="text-gray-600 mb-6">
-              <strong>{confirmDelete.data.email}</strong>
-              {confirmDelete.type === 'admin' ? '의 관리자 권한을 제거하시겠습니까?' : '을(를) 삭제하시겠습니까?'}
+              <strong>{confirmDelete.data.email || confirmDelete.data.name}</strong>
+              {confirmDelete.type === 'admin' ? '의 관리자 권한을 제거하시겠습니까?' :
+               confirmDelete.type === 'team' ? ' 팀을 삭제하시겠습니까? 팀원 정보도 함께 삭제됩니다.' :
+               confirmDelete.type === 'user' ? '을(를) 삭제하시겠습니까? 모든 활동 기록이 삭제됩니다.' :
+               '을(를) 삭제하시겠습니까?'}
             </p>
             <div className="flex gap-3">
               <button
@@ -575,11 +940,159 @@ export default function AccountManagementPage() {
                     removeAdmin(confirmDelete.data)
                   } else if (confirmDelete.type === 'uploader') {
                     removeUploader(confirmDelete.data.id)
+                  } else if (confirmDelete.type === 'team') {
+                    deleteTeam(confirmDelete.data.id)
+                  } else if (confirmDelete.type === 'publisher') {
+                    deletePublisher(confirmDelete.data.id)
+                  } else if (confirmDelete.type === 'user') {
+                    deleteUser(confirmDelete.data.id)
                   }
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
               >
                 {confirmDelete.type === 'admin' ? '권한 제거' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수정 모달 */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6">
+            <h3 className="font-bold text-gray-900 mb-4">
+              {editModal.type === 'team' ? '팀 정보 수정' :
+               editModal.type === 'publisher' ? '퍼블리셔 정보 수정' :
+               editModal.type === 'user' ? '사용자 정보 수정' : '수정'}
+            </h3>
+
+            <div className="space-y-4">
+              {/* 팀 수정 폼 */}
+              {editModal.type === 'team' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">팀 이름</label>
+                    <input
+                      type="text"
+                      value={editForm.name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">교회명</label>
+                    <input
+                      type="text"
+                      value={editForm.church_name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, church_name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                    <textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 퍼블리셔 수정 폼 */}
+              {editModal.type === 'publisher' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">퍼블리셔 이름</label>
+                    <input
+                      type="text"
+                      value={editForm.name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                    <textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">연락처 이메일</label>
+                    <input
+                      type="email"
+                      value={editForm.contact_email || ''}
+                      onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">웹사이트 URL</label>
+                    <input
+                      type="url"
+                      value={editForm.website_url || ''}
+                      onChange={(e) => setEditForm({ ...editForm, website_url: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 사용자 수정 폼 */}
+              {editModal.type === 'user' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                    <input
+                      type="email"
+                      value={editForm.email || ''}
+                      disabled
+                      className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                    <input
+                      type="text"
+                      value={editForm.name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">교회명</label>
+                    <input
+                      type="text"
+                      value={editForm.church_name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, church_name: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditModal(null)}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  if (editModal.type === 'team') updateTeam()
+                  else if (editModal.type === 'publisher') updatePublisher()
+                  else if (editModal.type === 'user') updateUser()
+                }}
+                className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition"
+              >
+                저장
               </button>
             </div>
           </div>

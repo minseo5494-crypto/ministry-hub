@@ -47,6 +47,64 @@ interface Team {
   church_name?: string
 }
 
+// ===== 스팸 방지 유틸리티 =====
+
+// 무의미한 한글 문자열 감지 (랜덤 조합 스팸)
+const isSpamContent = (text: string): boolean => {
+  if (!text || text.length < 3) return false
+
+  const cleaned = text.replace(/\s/g, '')
+  if (cleaned.length < 3) return false
+
+  if (/^[a-zA-Z0-9\s\-_.,:!?]+$/.test(text)) return false
+
+  const koreanChars = cleaned.match(/[가-힣]/g) || []
+  if (koreanChars.length < 3) return false
+
+  const commonSyllables = /[가나다라마바사아자차카타파하고노도로모보소오조초코토포호기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤]/g
+  const commonCount = (cleaned.match(commonSyllables) || []).length
+  const koreanRatio = commonCount / koreanChars.length
+
+  if (koreanRatio < 0.3 && koreanChars.length >= 4) {
+    return true
+  }
+
+  const rareInitials = /[꺼-껴|떠-뗘|뻐-뼈|써-쎼|쩌-쪄]{2,}/
+  if (rareInitials.test(cleaned)) return true
+
+  return false
+}
+
+// 업로드 속도 제한 체크
+const checkUploadRateLimit = async (
+  supabaseClient: typeof supabase,
+  userId: string
+): Promise<{ allowed: boolean; message?: string }> => {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const { count: hourlyCount } = await supabaseClient
+    .from('songs')
+    .select('*', { count: 'exact', head: true })
+    .eq('uploaded_by', userId)
+    .gte('created_at', oneHourAgo)
+
+  const { count: dailyCount } = await supabaseClient
+    .from('songs')
+    .select('*', { count: 'exact', head: true })
+    .eq('uploaded_by', userId)
+    .gte('created_at', oneDayAgo)
+
+  if ((hourlyCount || 0) >= 5) {
+    return { allowed: false, message: '업로드 제한: 시간당 최대 5곡까지 업로드 가능합니다. 잠시 후 다시 시도해주세요.' }
+  }
+  if ((dailyCount || 0) >= 20) {
+    return { allowed: false, message: '업로드 제한: 일일 최대 20곡까지 업로드 가능합니다. 내일 다시 시도해주세요.' }
+  }
+
+  return { allowed: true }
+}
+
 export default function MyPagePage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
@@ -720,6 +778,19 @@ setNewSong({ ...newSong, tempo: tempoValue })
     if (!confirmed) {
       return
     }
+  }
+
+  // 스팸 방지: 콘텐츠 검증
+  if (isSpamContent(newSong.song_name.trim()) || isSpamContent(newSong.team_name.trim())) {
+    alert('⚠️ 곡 제목 또는 아티스트명이 유효하지 않습니다.\n올바른 정보를 입력해주세요.')
+    return
+  }
+
+  // 스팸 방지: 업로드 속도 제한
+  const rateLimit = await checkUploadRateLimit(supabase, user.id)
+  if (!rateLimit.allowed) {
+    alert(`⚠️ ${rateLimit.message}`)
+    return
   }
 
   setUploading(true)
