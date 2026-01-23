@@ -25,14 +25,8 @@
 - [x] **화면 캡쳐 스크립트 작성** (Google Stitch 디자인 작업용):
   - `scripts/capture-all-screens.ts` - Playwright 기반 자동 캡쳐
   - 모든 페이지 + 3개 뷰포트 (데스크톱/태블릿/모바일)
-  - 모달, 팝업 등 인터랙션 캡쳐 포함
-- [x] **개발환경 CAPTCHA 비활성화 옵션 추가**:
-  - `NEXT_PUBLIC_SKIP_CAPTCHA=true` 환경변수로 제어
-  - `src/app/login/page.tsx`, `src/lib/auth.ts` 수정
-  - ⚠️ `.env.local`에 설정됨 - 배포 시 제거 필요
-
-### 진행 중인 작업
-- [ ] **스크린샷 캡쳐 실행**: Playwright 스크립트로 전체 화면 캡쳐 중
+- [x] **CAPTCHA 설정 원상복구**: 개발환경 비활성화 옵션 추가 후 다시 복구
+- [x] **Vercel 환경변수 추가**: `ANTHROPIC_API_KEY` 추가로 프로덕션 AI 검색 정상화
 
 ### 이전 세션 요약 (01-23)
 - 스팸 방지 기능, 곡 숨김 기능, 보안 강화
@@ -43,8 +37,7 @@
 ## 3. 다음에 할 일
 
 ### 즉시 (다음 세션)
-- [ ] **스크린샷 캡쳐 완료 후 Google Stitch 작업**
-- [ ] **배포 전 CAPTCHA 설정 복원** (`.env.local`에서 `NEXT_PUBLIC_SKIP_CAPTCHA` 제거)
+- [ ] **스크린샷 캡쳐 후 Google Stitch 작업** (수동 캡쳐 또는 스크립트 활용)
 - [ ] **저작권 미해결 곡 숨김 처리**
 
 ### 단기 (베타 전 - 2월 20일까지)
@@ -90,9 +83,10 @@
 |------|------|
 | 메인 페이지 | `src/app/main/page.tsx` |
 | 로그인 페이지 | `src/app/login/page.tsx` |
+| AI 검색 API | `src/app/api/ai-search/route.ts` |
 | 악보 에디터 | `src/components/SheetMusicEditor/` |
 | 다운로드 훅 | `src/hooks/useDownload.tsx` |
-| AI 검색 | `src/hooks/useAISearch.ts` |
+| AI 검색 훅 | `src/hooks/useAISearch.ts` |
 
 ---
 
@@ -101,10 +95,6 @@
 ### 사업자 등록
 - **현재**: 미등록 (개인 프로젝트)
 - **타이밍**: 정식 출시 전, 결제 받기 전 등록 필요
-
-### 개발환경 CAPTCHA 비활성화
-- **현재**: `.env.local`에 `NEXT_PUBLIC_SKIP_CAPTCHA=true` 설정됨
-- **주의**: 프로덕션 배포 전 반드시 제거할 것
 
 ---
 
@@ -137,6 +127,7 @@
 | Vercel | 배포, 호스팅 |
 | Google Workspace | 비즈니스 이메일 |
 | Cloudflare Turnstile | CAPTCHA (회원가입/로그인) |
+| Anthropic API | AI 검색 (Vercel 환경변수 필요) |
 | 호스팅케이알 | 도메인 (worsheep.org) |
 
 ---
