@@ -539,7 +539,14 @@ export default function MainPage() {
           return bTitleScore - aTitleScore
         }
 
-        // 점수가 같으면 제목 가나다순
+        // 점수가 같으면 좋아요 많은 순으로 정렬
+        const aLikes = (a as any).like_count || 0
+        const bLikes = (b as any).like_count || 0
+        if (bLikes !== aLikes) {
+          return bLikes - aLikes
+        }
+
+        // 좋아요도 같으면 제목 가나다순
         return a.song_name.localeCompare(b.song_name, 'ko')
       })
     } else if (sortBy === 'likes') {
@@ -737,6 +744,9 @@ export default function MainPage() {
     setYoutubeStates(prev => ({ ...prev, [songId]: !prev[songId] }))
   }
 
+  // 좋아요 처리 중인 곡 ID 추적
+  const [likingIds, setLikingIds] = useState<Set<string>>(new Set())
+
   const toggleLike = async (e: React.MouseEvent, songId: string) => {
     e.stopPropagation()
     if (!user) {
@@ -744,25 +754,55 @@ export default function MainPage() {
       return
     }
 
+    // 이미 처리 중이면 무시 (중복 클릭 방지)
+    if (likingIds.has(songId)) return
+
     const isLiked = likedSongs.has(songId)
+
+    // 처리 중 상태 설정
+    setLikingIds(prev => new Set([...prev, songId]))
+
+    // Optimistic UI: 즉시 UI 업데이트
+    if (isLiked) {
+      setLikedSongs(prev => {
+        const next = new Set(prev)
+        next.delete(songId)
+        return next
+      })
+      setSongs(prev => prev.map(s => s.id === songId ? { ...s, like_count: Math.max(0, (s.like_count || 1) - 1) } : s))
+    } else {
+      setLikedSongs(prev => new Set([...prev, songId]))
+      setSongs(prev => prev.map(s => s.id === songId ? { ...s, like_count: (s.like_count || 0) + 1 } : s))
+    }
 
     try {
       if (isLiked) {
         await supabase.from('song_likes').delete().eq('song_id', songId).eq('user_id', user.id)
+      } else {
+        await supabase.from('song_likes').insert({ song_id: songId, user_id: user.id })
+        trackSongLike(songId)
+      }
+    } catch (error) {
+      console.error('좋아요 처리 실패:', error)
+      // 실패 시 롤백
+      if (isLiked) {
+        setLikedSongs(prev => new Set([...prev, songId]))
+        setSongs(prev => prev.map(s => s.id === songId ? { ...s, like_count: (s.like_count || 0) + 1 } : s))
+      } else {
         setLikedSongs(prev => {
           const next = new Set(prev)
           next.delete(songId)
           return next
         })
         setSongs(prev => prev.map(s => s.id === songId ? { ...s, like_count: Math.max(0, (s.like_count || 1) - 1) } : s))
-      } else {
-        await supabase.from('song_likes').insert({ song_id: songId, user_id: user.id })
-        trackSongLike(songId)
-        setLikedSongs(prev => new Set([...prev, songId]))
-        setSongs(prev => prev.map(s => s.id === songId ? { ...s, like_count: (s.like_count || 0) + 1 } : s))
       }
-    } catch (error) {
-      console.error('좋아요 처리 실패:', error)
+    } finally {
+      // 처리 완료 상태 해제
+      setLikingIds(prev => {
+        const next = new Set(prev)
+        next.delete(songId)
+        return next
+      })
     }
   }
 

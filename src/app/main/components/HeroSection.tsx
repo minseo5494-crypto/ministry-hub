@@ -82,7 +82,7 @@ export default function HeroSection({
               <input
                 type="text"
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : `찬양곡 제목, 아티스트${filters.includeLyrics ? ', 가사' : ''}로 검색...`}
-                className={`w-full pl-12 pr-28 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none ${isAISearchEnabled
+                className={`w-full pl-12 pr-36 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none ${isAISearchEnabled
                   ? 'focus:ring-2 focus:ring-purple-400'
                   : 'focus:ring-4 focus:ring-blue-500 border-2 border-white/50'
                   }`}
@@ -104,11 +104,8 @@ export default function HeroSection({
                         ...(aiFilters.lyricsKeywords || [])
                       ]
                       setAiSearchKeywords(allKeywords)
-                      // AI 검색 시 themes 필터는 적용하지 않음 (lyricsKeywords로 충분)
-                      // themes 필터를 적용하면 themes가 없는 곡들이 제외됨
                       setFilters({
                         ...filters,
-                        // themes는 설정하지 않음 - lyricsKeywords가 가사 검색을 담당
                         season: aiFilters.season || filters.season,
                         tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
                         key: aiFilters.key || filters.key,
@@ -118,29 +115,67 @@ export default function HeroSection({
                 }}
                 style={{ backgroundColor: 'white' }}
               />
-              {/* AI 검색 토글 */}
-              <button
-                onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 ${isAISearchEnabled
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/40'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+              {/* 버튼 영역 */}
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                {/* 검색 버튼 - 항상 표시 */}
+                <button
+                  onClick={async (e) => {
+                    // 키보드 닫기 위해 input blur
+                    const input = (e.target as HTMLElement).closest('.relative')?.querySelector('input');
+                    input?.blur();
+
+                    if (isAISearchEnabled && filters.searchText.trim() && !isAISearching) {
+                      // AI 모드: AI 검색 실행
+                      const result = await searchWithAI(filters.searchText)
+                      if (result?.success && result.filters) {
+                        const aiFilters = result.filters
+                        const allKeywords = [
+                          ...(aiFilters.keywords || []),
+                          ...(aiFilters.lyricsKeywords || [])
+                        ]
+                        setAiSearchKeywords(allKeywords)
+                        setFilters({
+                          ...filters,
+                          season: aiFilters.season || filters.season,
+                          tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠른' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
+                          key: aiFilters.key || filters.key,
+                        })
+                      }
+                    }
+                    // 일반 모드: 실시간 검색이라 별도 동작 불필요 (키보드만 닫힘)
+                  }}
+                  disabled={isAISearchEnabled && (!filters.searchText.trim() || isAISearching)}
+                  className={`p-2.5 rounded-xl transition-all ${
+                    isAISearchEnabled
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
-              >
-                {isAISearching ? (
-                  <span className="flex items-center gap-1.5">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  title="검색"
+                >
+                  {isAISearching ? (
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span>검색중</span>
-                  </span>
-                ) : (
+                  ) : (
+                    <Search size={20} />
+                  )}
+                </button>
+                {/* AI 검색 토글 */}
+                <button
+                  onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 ${isAISearchEnabled
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/40'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                    }`}
+                  title={isAISearchEnabled ? 'AI 검색 끄기' : 'AI 검색 켜기'}
+                >
                   <span className="flex items-center gap-1">
                     <span>✨</span>
-                    <span>AI 검색</span>
+                    <span>AI</span>
                   </span>
-                )}
-              </button>
+                </button>
+              </div>
             </div>
           </div>
 

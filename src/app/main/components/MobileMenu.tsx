@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import {
   Music, Plus, Users, UserPlus, X,
-  BarChart3, MessageSquare
+  BarChart3, MessageSquare, Calendar
 } from 'lucide-react'
 import { User } from '../types'
 
@@ -74,6 +74,18 @@ export default function MobileMenu({
               >
                 <Users size={20} />
                 <span>My Team</span>
+              </button>
+
+              {/* 예배 관리 */}
+              <button
+                onClick={() => {
+                  router.push('/services')
+                  onClose()
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <Calendar size={20} />
+                <span>예배 관리</span>
               </button>
 
               {/* My Page */}

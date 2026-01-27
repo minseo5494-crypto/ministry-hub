@@ -771,7 +771,7 @@ const openSelectedFixedSongsViewer = () => {
     }
   }
 
-  // ✅ 필기 노트 전체 저장 핸들러 (다중 곡 모드)
+  // ✅ 필기 노트 전체 저장 핸들러 (다중 곡 모드 - 하나의 노트로 저장)
   const handleSaveAllNotes = async (data: { song: any, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: any, partTags: any[] } }[]) => {
     if (!user) return
 
@@ -782,47 +782,103 @@ const openSelectedFixedSongsViewer = () => {
       hasExtra: !!d.extra
     })))
 
-    let savedCount = 0
-    for (const item of data) {
-      // 실제 필기(strokes) 또는 텍스트가 있는지 체크
-      const hasContent = item.annotations.some(
-        ann => (ann.strokes?.length || 0) > 0 || (ann.textElements?.length || 0) > 0
-      )
+    // 다중 곡 모드: 모든 곡을 하나의 노트로 저장
+    if (data.length > 1) {
+      // 모든 annotations를 합치기 (페이지 번호 연속으로)
+      let allAnnotations: PageAnnotation[] = []
+      let pageOffset = 0
+      const songsInfo = data.map(item => {
+        // 이 곡의 페이지 수 계산
+        const maxPage = item.annotations.length > 0
+          ? Math.max(...item.annotations.map(a => a.pageNumber)) + 1
+          : 1
 
-      // 필기가 있거나, 단일 곡 모드이면 저장
-      if (hasContent || data.length === 1) {
-        console.log(`📝 저장 중: ${item.song.song_name}`, item.annotations, item.extra)
-        const result = await saveNote({
-          user_id: user.id,
+        // 페이지 번호 오프셋 적용
+        const offsetAnnotations = item.annotations.map(ann => ({
+          ...ann,
+          pageNumber: ann.pageNumber + pageOffset
+        }))
+        allAnnotations = [...allAnnotations, ...offsetAnnotations]
+
+        const songInfo = {
           song_id: item.song.song_id,
           song_name: item.song.song_name,
           team_name: item.song.team_name || undefined,
           file_url: item.song.file_url,
-          file_type: item.song.file_type,
-          title: `${noteEditorSetlistTitle} - ${item.song.song_name}`,
-          annotations: item.annotations,
-          // 메인 페이지와 동일하게 송폼 관련 데이터 저장
+          file_type: item.song.file_type as 'pdf' | 'image',
           songForms: item.song.songForms || [],
-          songFormEnabled: item.extra?.songFormEnabled ?? ((item.song.songForms?.length || 0) > 0),
-          songFormStyle: item.extra?.songFormStyle,
-          partTags: item.extra?.partTags,
-        })
-        if (result) {
-          console.log(`✅ 저장 성공: ${item.song.song_name}`)
-          savedCount++
-        } else {
-          console.error(`❌ 저장 실패: ${item.song.song_name}`)
+          pageCount: maxPage,
         }
+
+        pageOffset += maxPage
+        return songInfo
+      })
+
+      // 곡 이름들을 나열
+      const songNames = songsInfo.map(s => s.song_name).join(', ')
+
+      const result = await saveNote({
+        user_id: user.id,
+        song_id: songsInfo[0].song_id, // 첫 번째 곡 ID (호환성)
+        song_name: songNames.length > 30 ? songNames.substring(0, 30) + '...' : songNames,
+        team_name: songsInfo[0].team_name,
+        file_url: songsInfo[0].file_url, // 첫 번째 곡 URL (호환성)
+        file_type: songsInfo[0].file_type,
+        title: noteEditorSetlistTitle || `콘티 (${songsInfo.length}곡)`,
+        annotations: allAnnotations,
+        songForms: [],
+        songFormEnabled: false,
+        songs: songsInfo, // 다중 곡 정보 저장
+      })
+
+      setShowNoteEditor(false)
+      setNoteEditorSongs([])
+      setNoteEditorSetlistTitle('')
+
+      if (result) {
+        alert(`✅ 콘티가 저장되었습니다! (${songsInfo.length}곡)\nmy-page > 내 필기 노트에서 확인하세요.`)
+      } else {
+        alert('저장에 실패했습니다.')
       }
+      return
     }
 
-    setShowNoteEditor(false)
-    setNoteEditorSongs([])
-    setNoteEditorSetlistTitle('')
+    // 단일 곡 모드: 기존 방식대로 저장
+    const item = data[0]
+    const hasContent = item.annotations.some(
+      ann => (ann.strokes?.length || 0) > 0 || (ann.textElements?.length || 0) > 0
+    )
 
-    if (savedCount > 0) {
-      alert(`✅ ${savedCount}개의 필기가 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.`)
+    if (hasContent || data.length === 1) {
+      console.log(`📝 저장 중: ${item.song.song_name}`, item.annotations, item.extra)
+      const result = await saveNote({
+        user_id: user.id,
+        song_id: item.song.song_id,
+        song_name: item.song.song_name,
+        team_name: item.song.team_name || undefined,
+        file_url: item.song.file_url,
+        file_type: item.song.file_type,
+        title: noteEditorSetlistTitle ? `${noteEditorSetlistTitle} - ${item.song.song_name}` : item.song.song_name,
+        annotations: item.annotations,
+        songForms: item.song.songForms || [],
+        songFormEnabled: item.extra?.songFormEnabled ?? ((item.song.songForms?.length || 0) > 0),
+        songFormStyle: item.extra?.songFormStyle,
+        partTags: item.extra?.partTags,
+      })
+
+      setShowNoteEditor(false)
+      setNoteEditorSongs([])
+      setNoteEditorSetlistTitle('')
+
+      if (result) {
+        alert(`✅ 필기가 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.`)
+      } else {
+        alert('저장에 실패했습니다.')
+      }
     } else {
+      setShowNoteEditor(false)
+      setNoteEditorSongs([])
+      setNoteEditorSetlistTitle('')
       alert('저장할 필기가 없습니다.')
     }
   }
@@ -933,14 +989,24 @@ const openSelectedFixedSongsViewer = () => {
               </div>
             </div>
 
-            {/* 데스크톱: 설정 버튼 */}
-            <button
-              onClick={() => router.push(`/my-team/${teamId}/settings`)}
-              className="hidden md:block p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
-              title="팀 설정"
-            >
-              <Settings size={20} />
-            </button>
+            {/* 데스크톱: 예배 관리 & 설정 버튼 */}
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={() => router.push(`/my-team/${teamId}/services`)}
+                className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm font-medium"
+                title="예배 관리"
+              >
+                <Calendar size={18} />
+                <span>예배 관리</span>
+              </button>
+              <button
+                onClick={() => router.push(`/my-team/${teamId}/settings`)}
+                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+                title="팀 설정"
+              >
+                <Settings size={20} />
+              </button>
+            </div>
 
             {/* 모바일: 햄버거 메뉴 */}
             <button
@@ -974,11 +1040,18 @@ const openSelectedFixedSongsViewer = () => {
             </div>
           </div>
 
-          {/* 모바일: 설정 버튼 */}
-          <div className="md:hidden mt-3">
+          {/* 모바일: 예배 관리 & 설정 버튼 */}
+          <div className="md:hidden mt-3 flex gap-2">
+            <button
+              onClick={() => router.push(`/my-team/${teamId}/services`)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"
+            >
+              <Calendar size={18} />
+              <span>예배 관리</span>
+            </button>
             <button
               onClick={() => router.push(`/my-team/${teamId}/settings`)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
             >
               <Settings size={18} />
               <span>팀 설정</span>

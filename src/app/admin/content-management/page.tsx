@@ -9,7 +9,7 @@ import {
   ArrowLeft, Music, CheckCircle, Shield, Tag,
   Search, Check, X, ChevronLeft, ChevronRight,
   FileText, Eye, Edit2, User, Calendar, Lock, Globe, Users,
-  Save, Trash2, ExternalLink, Filter
+  Save, Trash2, ExternalLink, Filter, Heart
 } from 'lucide-react'
 
 // 사용자 정보가 포함된 확장 Song 타입
@@ -22,13 +22,14 @@ interface SongWithUploader extends Song {
   shared_with_teams?: string[]
 }
 
-type TabType = 'approvals' | 'all-songs' | 'official-songs' | 'song-editor'
+type TabType = 'approvals' | 'all-songs' | 'official-songs' | 'song-editor' | 'like-manager'
 
 const TABS: { id: TabType; label: string; icon: any }[] = [
   { id: 'approvals', label: '곡 승인', icon: CheckCircle },
   { id: 'all-songs', label: '전체 곡', icon: FileText },
   { id: 'official-songs', label: '공식 악보', icon: Shield },
   { id: 'song-editor', label: '곡 데이터 편집', icon: Tag },
+  { id: 'like-manager', label: '좋아요 관리', icon: Heart },
 ]
 
 // 🔍 텍스트 정규화 함수 (띄어쓰기, 특수문자 제거, 소문자 변환)
@@ -97,6 +98,16 @@ export default function ContentManagementPage() {
   const [editorSaving, setEditorSaving] = useState(false)
   const [editorFilter, setEditorFilter] = useState<'all' | 'no-lyrics' | 'no-youtube'>('all')
   const editorItemsPerPage = 15
+
+  // 좋아요 관리 탭 상태
+  const [likeSongs, setLikeSongs] = useState<Song[]>([])
+  const [likeSearchQuery, setLikeSearchQuery] = useState('')
+  const [likePage, setLikePage] = useState(1)
+  const [selectedLikeSong, setSelectedLikeSong] = useState<Song | null>(null)
+  const [newLikeCount, setNewLikeCount] = useState<string>('')
+  const [likeSaving, setLikeSaving] = useState(false)
+  const [likeSortBy, setLikeSortBy] = useState<'name' | 'likes'>('likes')
+  const likeItemsPerPage = 20
 
   useEffect(() => {
     checkAdminAndLoad()
@@ -184,6 +195,9 @@ export default function ContentManagementPage() {
         break
       case 'song-editor':
         await loadEditorSongs()
+        break
+      case 'like-manager':
+        await loadLikeSongs()
         break
     }
   }
@@ -418,6 +432,101 @@ export default function ContentManagementPage() {
     setYoutubeUrl((song as any).youtube_url || '')
   }
 
+  // 좋아요 관리 - 전체 곡 로드
+  const loadLikeSongs = async () => {
+    const allSongs: Song[] = []
+    let offset = 0
+    const batchSize = 1000
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('id, song_name, team_name, key, like_count, admin_like_count')
+        .eq('is_hidden', false)
+        .order(likeSortBy === 'likes' ? 'like_count' : 'song_name', { ascending: likeSortBy !== 'likes' })
+        .range(offset, offset + batchSize - 1)
+
+      if (error) break
+      if (!data || data.length === 0) break
+
+      allSongs.push(...data)
+      if (data.length < batchSize) break
+      offset += batchSize
+    }
+
+    // 각 곡의 실제 사용자 좋아요 수 가져오기
+    const songIds = allSongs.map(s => s.id)
+    const { data: likeCounts } = await supabase
+      .from('song_likes')
+      .select('song_id')
+      .in('song_id', songIds)
+
+    // 곡별 사용자 좋아요 수 계산
+    const userLikesMap = new Map<string, number>()
+    likeCounts?.forEach(lc => {
+      userLikesMap.set(lc.song_id, (userLikesMap.get(lc.song_id) || 0) + 1)
+    })
+
+    // 곡에 사용자 좋아요 수 추가
+    const songsWithUserLikes = allSongs.map(song => ({
+      ...song,
+      user_like_count: userLikesMap.get(song.id) || 0
+    }))
+
+    setLikeSongs(songsWithUserLikes)
+  }
+
+  // 좋아요 저장 (관리자 설정 좋아요)
+  const handleLikeSave = async () => {
+    if (!selectedLikeSong || likeSaving) return
+
+    const adminLikeValue = parseInt(newLikeCount)
+    if (isNaN(adminLikeValue) || adminLikeValue < 0) {
+      showToast('유효한 숫자를 입력하세요.', 'error')
+      return
+    }
+
+    setLikeSaving(true)
+
+    try {
+      // 사용자 좋아요 수
+      const userLikes = (selectedLikeSong as any).user_like_count || 0
+      // 총 좋아요 = 관리자 설정 + 사용자 좋아요
+      const totalLikes = adminLikeValue + userLikes
+
+      const { error } = await supabase
+        .from('songs')
+        .update({
+          admin_like_count: adminLikeValue,
+          like_count: totalLikes
+        })
+        .eq('id', selectedLikeSong.id)
+
+      if (error) throw error
+
+      showToast(`관리자 좋아요가 ${adminLikeValue}개로 변경되었습니다. (총 ${totalLikes}개)`, 'success')
+
+      // 목록 업데이트
+      setLikeSongs(prev => prev.map(s =>
+        s.id === selectedLikeSong.id ? { ...s, admin_like_count: adminLikeValue, like_count: totalLikes } : s
+      ))
+      setSelectedLikeSong({ ...selectedLikeSong, admin_like_count: adminLikeValue, like_count: totalLikes } as any)
+
+    } catch (error) {
+      console.error('Error saving like count:', error)
+      showToast('저장 중 오류가 발생했습니다.', 'error')
+    } finally {
+      setLikeSaving(false)
+    }
+  }
+
+  // 좋아요 곡 선택
+  const handleLikeSongSelect = (song: Song) => {
+    setSelectedLikeSong(song)
+    // 관리자 설정 좋아요 값을 입력 필드에 설정
+    setNewLikeCount(String((song as any).admin_like_count || 0))
+  }
+
   // 곡 데이터 저장
   const handleEditorSave = async () => {
     if (!selectedSongId || editorSaving) return
@@ -478,6 +587,20 @@ export default function ContentManagementPage() {
   const editorTotalPages = Math.ceil(filteredEditorSongs.length / editorItemsPerPage)
   const editorStartIndex = (editorPage - 1) * editorItemsPerPage
   const paginatedEditorSongs = filteredEditorSongs.slice(editorStartIndex, editorStartIndex + editorItemsPerPage)
+
+  // 좋아요 관리 - 필터링된 곡 목록
+  const filteredLikeSongs = likeSongs.filter(song => {
+    if (!likeSearchQuery.trim()) return true
+    const query = likeSearchQuery.replace(/\s/g, '').toLowerCase()
+    const songName = (song.song_name || '').replace(/\s/g, '').toLowerCase()
+    const teamName = (song.team_name || '').replace(/\s/g, '').toLowerCase()
+    return songName.includes(query) || teamName.includes(query)
+  })
+
+  // 좋아요 관리 - 페이지네이션
+  const likeTotalPages = Math.ceil(filteredLikeSongs.length / likeItemsPerPage)
+  const likeStartIndex = (likePage - 1) * likeItemsPerPage
+  const paginatedLikeSongs = filteredLikeSongs.slice(likeStartIndex, likeStartIndex + likeItemsPerPage)
 
   // 현재 곡 인덱스
   const currentEditorIndex = filteredEditorSongs.findIndex(s => s.id === selectedSongId)
@@ -840,8 +963,267 @@ export default function ContentManagementPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* 곡 데이터 편집 탭 UI */}
-        {activeTab === 'song-editor' ? (
+        {/* 좋아요 관리 탭 UI */}
+        {activeTab === 'like-manager' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 왼쪽: 곡 선택 */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border p-4">
+                <h2 className="font-semibold text-gray-900 mb-4">곡 선택</h2>
+
+                {/* 검색 */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="곡 또는 팀명 검색..."
+                    value={likeSearchQuery}
+                    onChange={(e) => {
+                      setLikeSearchQuery(e.target.value)
+                      setLikePage(1)
+                    }}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-base"
+                  />
+                </div>
+
+                {/* 정렬 버튼 */}
+                <div className="flex gap-1 mb-4">
+                  <button
+                    onClick={() => { setLikeSortBy('likes'); loadLikeSongs() }}
+                    className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
+                      likeSortBy === 'likes'
+                        ? 'bg-pink-100 text-pink-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    좋아요 순
+                  </button>
+                  <button
+                    onClick={() => { setLikeSortBy('name'); loadLikeSongs() }}
+                    className={`flex-1 px-2 py-1.5 text-xs rounded-lg transition ${
+                      likeSortBy === 'name'
+                        ? 'bg-pink-100 text-pink-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    이름 순
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-500 mb-2">
+                  총 {filteredLikeSongs.length}곡
+                </p>
+
+                {/* 곡 목록 */}
+                <div className="max-h-[calc(100vh-450px)] overflow-y-auto space-y-1">
+                  {paginatedLikeSongs.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-4">
+                      {likeSongs.length === 0 ? '곡이 없습니다.' : '검색 결과가 없습니다.'}
+                    </p>
+                  ) : (
+                    paginatedLikeSongs.map((song) => (
+                      <button
+                        key={song.id}
+                        onClick={() => handleLikeSongSelect(song)}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition text-sm ${
+                          selectedLikeSong?.id === song.id
+                            ? 'bg-pink-100 text-pink-700 font-medium'
+                            : 'hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{song.song_name}</div>
+                            {song.team_name && (
+                              <div className="text-xs text-gray-500 truncate">{song.team_name}</div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end shrink-0">
+                            <div className="flex items-center gap-1 text-pink-600">
+                              <Heart size={12} fill="currentColor" />
+                              <span className="text-xs font-medium">{song.like_count || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                              <span className="text-violet-500">{(song as any).admin_like_count || 0}</span>
+                              <span>+</span>
+                              <span className="text-blue-500">{(song as any).user_like_count || 0}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* 페이지네이션 */}
+                {likeTotalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <button
+                      onClick={() => setLikePage(p => Math.max(1, p - 1))}
+                      disabled={likePage <= 1}
+                      className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                    >
+                      <ChevronLeft size={16} />
+                      이전
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      {likePage} / {likeTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setLikePage(p => Math.min(likeTotalPages, p + 1))}
+                      disabled={likePage >= likeTotalPages}
+                      className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition text-sm"
+                    >
+                      다음
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 오른쪽: 좋아요 수정 */}
+            <div className="lg:col-span-2">
+              {selectedLikeSong ? (
+                <div className="bg-white rounded-xl shadow-sm border p-6">
+                  {/* 선택된 곡 정보 */}
+                  <div className="mb-6">
+                    <h2 className="text-xl font-bold text-gray-900">{selectedLikeSong.song_name}</h2>
+                    <p className="text-gray-500">{selectedLikeSong.team_name || '아티스트 미입력'}</p>
+                    {selectedLikeSong.key && (
+                      <span className="inline-block mt-2 px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded">
+                        키: {selectedLikeSong.key}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 좋아요 현황 */}
+                  <div className="mb-6 grid grid-cols-3 gap-3">
+                    {/* 총 좋아요 */}
+                    <div className="p-4 bg-pink-50 rounded-xl">
+                      <div className="flex items-center gap-1 text-pink-600 mb-1">
+                        <Heart size={16} fill="currentColor" />
+                        <span className="text-sm font-medium">총 좋아요</span>
+                      </div>
+                      <p className="text-2xl font-bold text-pink-700">{selectedLikeSong.like_count || 0}</p>
+                    </div>
+                    {/* 관리자 설정 */}
+                    <div className="p-4 bg-violet-50 rounded-xl">
+                      <div className="flex items-center gap-1 text-violet-600 mb-1">
+                        <Shield size={16} />
+                        <span className="text-sm font-medium">관리자 설정</span>
+                      </div>
+                      <p className="text-2xl font-bold text-violet-700">{(selectedLikeSong as any).admin_like_count || 0}</p>
+                    </div>
+                    {/* 사용자 좋아요 */}
+                    <div className="p-4 bg-blue-50 rounded-xl">
+                      <div className="flex items-center gap-1 text-blue-600 mb-1">
+                        <User size={16} />
+                        <span className="text-sm font-medium">사용자</span>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-700">{(selectedLikeSong as any).user_like_count || 0}</p>
+                    </div>
+                  </div>
+
+                  {/* 관리자 좋아요 수정 */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      관리자 설정 좋아요 (사용자 좋아요와 별도)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newLikeCount}
+                      onChange={(e) => setNewLikeCount(e.target.value)}
+                      placeholder="숫자 입력"
+                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-lg text-base"
+                    />
+                    <p className="mt-2 text-sm text-gray-500">
+                      총 좋아요 = 관리자 설정 ({newLikeCount || 0}) + 사용자 ({(selectedLikeSong as any).user_like_count || 0}) = <span className="font-bold text-pink-600">{(parseInt(newLikeCount) || 0) + ((selectedLikeSong as any).user_like_count || 0)}</span>
+                    </p>
+                  </div>
+
+                  {/* 빠른 조절 버튼 */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      빠른 조절
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[10, 50, 100, 200, 500, 1000].map(val => (
+                        <button
+                          key={val}
+                          onClick={() => setNewLikeCount(String(val))}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition text-sm"
+                        >
+                          {val}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        onClick={() => setNewLikeCount(String(Math.max(0, parseInt(newLikeCount || '0') - 10)))}
+                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition text-sm"
+                      >
+                        -10
+                      </button>
+                      <button
+                        onClick={() => setNewLikeCount(String(Math.max(0, parseInt(newLikeCount || '0') - 50)))}
+                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition text-sm"
+                      >
+                        -50
+                      </button>
+                      <button
+                        onClick={() => setNewLikeCount(String(parseInt(newLikeCount || '0') + 10))}
+                        className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition text-sm"
+                      >
+                        +10
+                      </button>
+                      <button
+                        onClick={() => setNewLikeCount(String(parseInt(newLikeCount || '0') + 50))}
+                        className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition text-sm"
+                      >
+                        +50
+                      </button>
+                      <button
+                        onClick={() => setNewLikeCount(String(Math.floor(parseInt(newLikeCount || '0') / 4)))}
+                        className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition text-sm"
+                      >
+                        ÷4
+                      </button>
+                      <button
+                        onClick={() => setNewLikeCount(String(parseInt(newLikeCount || '0') * 2))}
+                        className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition text-sm"
+                      >
+                        ×2
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 저장 버튼 */}
+                  <button
+                    onClick={handleLikeSave}
+                    disabled={likeSaving || newLikeCount === String((selectedLikeSong as any).admin_like_count || 0)}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 text-white font-medium rounded-xl transition"
+                  >
+                    {likeSaving ? (
+                      <>저장 중...</>
+                    ) : (
+                      <>
+                        <Save size={20} />
+                        저장
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-500">
+                  <Heart size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>왼쪽에서 곡을 선택하세요.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : activeTab === 'song-editor' ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* 왼쪽: 곡 선택 */}
             <div className="lg:col-span-1">
