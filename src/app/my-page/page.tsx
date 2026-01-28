@@ -61,7 +61,8 @@ const isSpamContent = (text: string): boolean => {
   const koreanChars = cleaned.match(/[가-힣]/g) || []
   if (koreanChars.length < 3) return false
 
-  const commonSyllables = /[가나다라마바사아자차카타파하고노도로모보소오조초코토포호기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤]/g
+  // ㅏ,ㅓ,ㅗ,ㅜ,ㅡ,ㅣ 모음 조합 + 조사/어미 + 흔한 받침 글자
+  const commonSyllables = /[가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤한글음절상중하인신문원선전정명성현진영민준빛곡팀힘찬양배워러브제이어]/g
   const commonCount = (cleaned.match(commonSyllables) || []).length
   const koreanRatio = commonCount / koreanChars.length
 
