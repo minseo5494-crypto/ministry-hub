@@ -32,6 +32,7 @@ import {
 } from './components'
 import { AddSongModal, SaveSetlistModal, PreviewModal, PPTModal, YoutubeModal, LyricsModal } from './modals'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
+import OnboardingGuide from '@/components/OnboardingGuide'
 
 // Types
 import { Filters, SortBy, SongFilter, ViewMode, NewSongForm, UserTeam, LocalSheetMusicNote } from './types'
@@ -1574,6 +1575,8 @@ export default function MainPage() {
           onClose={handleCloseMultiSongEditor}
         />
       )}
+
+      <OnboardingGuide />
     </div>
   )
 }

@@ -117,6 +117,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [adminIds, setAdminIds] = useState<string[]>([]);
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalTeams: 0,
@@ -191,8 +192,22 @@ export default function AdminDashboard() {
     }
   };
 
+  // 관리자 ID 목록 로드
+  const loadAdminIds = async (): Promise<string[]> => {
+    const { data } = await supabase
+      .from('users')
+      .select('id')
+      .eq('is_admin', true);
+
+    return data?.map(u => u.id) || [];
+  };
+
   const loadStatistics = async () => {
     try {
+      // 관리자 ID 목록 먼저 로드
+      const admins = await loadAdminIds();
+      setAdminIds(admins);
+
       const daysAgo = new Date();
       daysAgo.setDate(daysAgo.getDate() - timeRange);
 
@@ -211,12 +226,12 @@ export default function AdminDashboard() {
         supabase.from('team_setlists').select('*', { count: 'exact', head: true }),
         supabase.from('activity_logs').select('*', { count: 'exact', head: true })
           .gte('created_at', daysAgo.toISOString()),
-        supabase.from('activity_logs').select('*', { count: 'exact', head: true })
+        supabase.from('activity_logs').select('user_id')
           .in('action_type', ['ppt_download', 'pdf_download'])
           .gte('created_at', daysAgo.toISOString())
       ]);
 
-      // DAU/WAU/MAU 계산
+      // DAU/WAU/MAU 계산 (관리자 제외)
       const now = new Date();
       const oneDayAgo = new Date(now); oneDayAgo.setDate(now.getDate() - 1);
       const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
@@ -228,69 +243,76 @@ export default function AdminDashboard() {
         supabase.from('activity_logs').select('user_id').gte('created_at', oneMonthAgo.toISOString())
       ]);
 
-      const dau = new Set(dauResult.data?.map(d => d.user_id)).size;
-      const wau = new Set(wauResult.data?.map(d => d.user_id)).size;
-      const mau = new Set(mauResult.data?.map(d => d.user_id)).size;
+      // 관리자 제외하고 unique user 계산
+      const filterAdmins = (data: { user_id: string }[] | null) =>
+        new Set(data?.filter(d => !admins.includes(d.user_id)).map(d => d.user_id)).size;
+
+      const dau = filterAdmins(dauResult.data);
+      const wau = filterAdmins(wauResult.data);
+      const mau = filterAdmins(mauResult.data);
+
+      // 다운로드 수 (관리자 제외)
+      const totalDownloads = downloadsResult.data?.filter(d => !admins.includes(d.user_id)).length || 0;
 
       setStats({
         totalUsers: usersResult.count || 0,
         totalTeams: teamsResult.count || 0,
         totalSongs: songsResult.count || 0,
         totalSetlists: setlistsResult.count || 0,
-        totalDownloads: downloadsResult.count || 0,
+        totalDownloads,
         recentActivityCount: activityResult.count || 0,
         dau,
         wau,
         mau
       });
 
-      // 일별 추세 데이터
-      await loadDailyTrends(daysAgo);
+      // 일별 추세 데이터 (관리자 제외)
+      await loadDailyTrends(daysAgo, admins);
 
-      // 인기 곡 TOP 10
-      await loadPopularSongs(daysAgo);
+      // 인기 곡 TOP 10 (관리자 제외)
+      await loadPopularSongs(daysAgo, admins);
 
-      // 저작권자별 통계
-      await loadCopyrightStats(daysAgo);
+      // 저작권자별 통계 (관리자 제외)
+      await loadCopyrightStats(daysAgo, admins);
 
       // 교회별 분포
       await loadChurchStats();
 
-      // 최근 활동 로그
-      await loadRecentActivities();
+      // 최근 활동 로그 (관리자 제외)
+      await loadRecentActivities(admins);
 
       // 최근 가입자
       await loadRecentUsers();
 
-      // 검색 분석
-      await loadSearchStats(daysAgo);
+      // 검색 분석 (관리자 제외)
+      await loadSearchStats(daysAgo, admins);
 
-      // 사용자 여정 분석
-      await loadUserJourney();
+      // 사용자 여정 분석 (관리자 제외)
+      await loadUserJourney(admins);
 
-      // 성장 비교
-      await loadGrowthComparison();
+      // 성장 비교 (관리자 제외)
+      await loadGrowthComparison(admins);
 
       // 기기 분석
       await loadDeviceStats(daysAgo);
 
-      // 베타 지표
-      await loadBetaStats(daysAgo);
+      // 베타 지표 (관리자 제외)
+      await loadBetaStats(daysAgo, admins);
 
     } catch (error) {
       console.error('Error loading statistics:', error);
     }
   };
 
-  const loadDailyTrends = async (startDate: Date) => {
+  const loadDailyTrends = async (startDate: Date, admins: string[]) => {
     const { data: activityData } = await supabase
       .from('activity_logs')
-      .select('created_at, action_type')
+      .select('created_at, action_type, user_id')
       .gte('created_at', startDate.toISOString());
 
     const { data: signupData } = await supabase
       .from('activity_logs')
-      .select('created_at')
+      .select('created_at, user_id')
       .eq('action_type', 'user_signup')
       .gte('created_at', startDate.toISOString());
 
@@ -305,7 +327,8 @@ export default function AdminDashboard() {
       trendMap.set(dateStr, { 활동수: 0, 다운로드: 0, 신규가입: 0 });
     }
 
-    activityData?.forEach((log) => {
+    // 관리자 제외하고 집계
+    activityData?.filter(log => !admins.includes(log.user_id)).forEach((log) => {
       const dateStr = log.created_at.split('T')[0];
       const existing = trendMap.get(dateStr);
       if (existing) {
@@ -316,6 +339,7 @@ export default function AdminDashboard() {
       }
     });
 
+    // 신규가입은 관리자도 포함 (가입 자체는 통계에 포함)
     signupData?.forEach((log) => {
       const dateStr = log.created_at.split('T')[0];
       const existing = trendMap.get(dateStr);
@@ -331,12 +355,13 @@ export default function AdminDashboard() {
     setDailyTrends(trends);
   };
 
-  const loadPopularSongs = async (startDate: Date) => {
+  const loadPopularSongs = async (startDate: Date, admins: string[]) => {
     const { data: popularSongsData } = await supabase
       .from('activity_logs')
       .select(`
         song_id,
         action_type,
+        user_id,
         songs:song_id (
           song_name,
           team_name
@@ -347,7 +372,8 @@ export default function AdminDashboard() {
 
     const songUsageMap = new Map<string, { song: any; usage: number; downloads: number }>();
 
-    popularSongsData?.forEach((log: any) => {
+    // 관리자 제외
+    popularSongsData?.filter((log: any) => !admins.includes(log.user_id)).forEach((log: any) => {
       if (log.song_id && log.songs) {
         const existing = songUsageMap.get(log.song_id) || {
           song: log.songs,
@@ -376,11 +402,12 @@ export default function AdminDashboard() {
     setPopularSongs(popularSongsArray);
   };
 
-  const loadCopyrightStats = async (startDate: Date) => {
+  const loadCopyrightStats = async (startDate: Date, admins: string[]) => {
     const { data } = await supabase
       .from('activity_logs')
       .select(`
         action_type,
+        user_id,
         songs:song_id (
           team_name
         )
@@ -390,7 +417,8 @@ export default function AdminDashboard() {
 
     const copyrightMap = new Map<string, { usage: number; downloads: number }>();
 
-    data?.forEach((log: any) => {
+    // 관리자 제외
+    data?.filter((log: any) => !admins.includes(log.user_id)).forEach((log: any) => {
       if (log.songs?.team_name) {
         const teamName = log.songs.team_name;
         const existing = copyrightMap.get(teamName) || { usage: 0, downloads: 0 };
@@ -447,17 +475,18 @@ export default function AdminDashboard() {
   setRecentUsers(data || []);
 };
 
-  const loadSearchStats = async (startDate: Date) => {
+  const loadSearchStats = async (startDate: Date, admins: string[]) => {
     const { data } = await supabase
       .from('activity_logs')
-      .select('metadata')
+      .select('metadata, user_id')
       .eq('action_type', 'song_search')
       .gte('created_at', startDate.toISOString());
 
     const searchMap = new Map<string, { count: number; totalResults: number }>();
     const failedMap = new Map<string, number>();
 
-    data?.forEach((log: any) => {
+    // 관리자 제외
+    data?.filter((log: any) => !admins.includes(log.user_id)).forEach((log: any) => {
       const query = log.metadata?.query?.toLowerCase()?.trim();
       const resultsCount = log.metadata?.results_count || 0;
 
@@ -491,7 +520,7 @@ export default function AdminDashboard() {
     setFailedSearches(failedArray);
   };
 
-  const loadUserJourney = async () => {
+  const loadUserJourney = async (admins: string[]) => {
     const { data: users } = await supabase
       .from('users')
       .select('id, created_at');
@@ -501,25 +530,33 @@ export default function AdminDashboard() {
       .select('user_id, created_at')
       .in('action_type', ['ppt_download', 'pdf_download']);
 
-    const totalSignups = users?.length || 0;
-    const userIdsWithDownload = new Set(downloads?.map(d => d.user_id));
+    // 관리자 제외한 사용자만 대상
+    const nonAdminUsers = users?.filter(u => !admins.includes(u.id)) || [];
+    const totalSignups = nonAdminUsers.length;
+
+    // 관리자 제외한 다운로드
+    const nonAdminDownloads = downloads?.filter(d => !admins.includes(d.user_id)) || [];
+    const userIdsWithDownload = new Set(nonAdminDownloads.map(d => d.user_id));
     const usersWithDownload = userIdsWithDownload.size;
     const conversionRate = totalSignups > 0 ? (usersWithDownload / totalSignups) * 100 : 0;
 
-    // 리텐션 계산 (가입 후 D1, D7, D30에 활동한 사용자 비율)
+    // 리텐션 계산 (가입 후 D1, D7, D30에 활동한 사용자 비율) - 관리자 제외
     const now = new Date();
     const { data: allActivity } = await supabase
       .from('activity_logs')
       .select('user_id, created_at');
 
+    // 관리자 제외한 활동만
+    const nonAdminActivity = allActivity?.filter(a => !admins.includes(a.user_id)) || [];
+
     let d1Retained = 0, d7Retained = 0, d30Retained = 0;
     let d1Eligible = 0, d7Eligible = 0, d30Eligible = 0;
 
-    users?.forEach(user => {
+    nonAdminUsers.forEach(user => {
       const signupDate = new Date(user.created_at);
       const daysSinceSignup = Math.floor((now.getTime() - signupDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      const userActivities = allActivity?.filter(a => a.user_id === user.id) || [];
+      const userActivities = nonAdminActivity.filter(a => a.user_id === user.id);
 
       if (daysSinceSignup >= 1) {
         d1Eligible++;
@@ -562,26 +599,28 @@ export default function AdminDashboard() {
     });
   };
 
-  const loadGrowthComparison = async () => {
+  const loadGrowthComparison = async (admins: string[]) => {
     const now = new Date();
     const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
     const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate() - 14);
     const oneMonthAgo = new Date(now); oneMonthAgo.setDate(now.getDate() - 30);
     const twoMonthsAgo = new Date(now); twoMonthsAgo.setDate(now.getDate() - 60);
 
+    // 가입자 수는 count로, 다운로드는 user_id를 가져와서 필터링
     const [thisWeekUsers, lastWeekUsers, thisWeekDownloads, lastWeekDownloads, thisMonthUsers, lastMonthUsers] = await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneWeekAgo.toISOString()),
       supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
-      supabase.from('activity_logs').select('*', { count: 'exact', head: true }).in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', oneWeekAgo.toISOString()),
-      supabase.from('activity_logs').select('*', { count: 'exact', head: true }).in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
+      supabase.from('activity_logs').select('user_id').in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', oneWeekAgo.toISOString()),
+      supabase.from('activity_logs').select('user_id').in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
       supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneMonthAgo.toISOString()),
       supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo.toISOString()).lt('created_at', oneMonthAgo.toISOString())
     ]);
 
     const thisWeekUsersCount = thisWeekUsers.count || 0;
     const lastWeekUsersCount = lastWeekUsers.count || 0;
-    const thisWeekDownloadsCount = thisWeekDownloads.count || 0;
-    const lastWeekDownloadsCount = lastWeekDownloads.count || 0;
+    // 다운로드는 관리자 제외
+    const thisWeekDownloadsCount = thisWeekDownloads.data?.filter(d => !admins.includes(d.user_id)).length || 0;
+    const lastWeekDownloadsCount = lastWeekDownloads.data?.filter(d => !admins.includes(d.user_id)).length || 0;
     const thisMonthUsersCount = thisMonthUsers.count || 0;
     const lastMonthUsersCount = lastMonthUsers.count || 0;
 
@@ -635,14 +674,15 @@ export default function AdminDashboard() {
     setDeviceStats(deviceArray);
   };
 
-  const loadBetaStats = async (startDate: Date) => {
+  const loadBetaStats = async (startDate: Date, admins: string[]) => {
     const [feedbacksResult, activityResult] = await Promise.all([
       supabase.from('feedbacks').select('type, status'),
       supabase.from('activity_logs').select('user_id').gte('created_at', startDate.toISOString())
     ]);
 
     const feedbacks = feedbacksResult.data || [];
-    const activities = activityResult.data || [];
+    // 관리자 제외
+    const activities = activityResult.data?.filter(a => !admins.includes(a.user_id)) || [];
 
     const totalFeedbacks = feedbacks.length;
     const pendingFeedbacks = feedbacks.filter(f => f.status === 'pending').length;
@@ -663,26 +703,31 @@ export default function AdminDashboard() {
     });
   };
 
-  const loadRecentActivities = async () => {
+  const loadRecentActivities = async (admins: string[]) => {
     const { data: activitiesData } = await supabase
       .from('activity_logs')
       .select(`
         id,
         action_type,
         created_at,
+        user_id,
         users:user_id (email),
         songs:song_id (song_name)
       `)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(50); // 더 많이 가져와서 필터링 후 20개 표시
 
-    const activities = activitiesData?.map((log: any) => ({
-      id: log.id,
-      action_type: log.action_type,
-      created_at: log.created_at,
-      user_email: log.users?.email || '알 수 없음',
-      song_name: log.songs?.song_name
-    })) || [];
+    // 관리자 제외하고 최근 20개
+    const activities = activitiesData
+      ?.filter((log: any) => !admins.includes(log.user_id))
+      .slice(0, 20)
+      .map((log: any) => ({
+        id: log.id,
+        action_type: log.action_type,
+        created_at: log.created_at,
+        user_email: log.users?.email || '알 수 없음',
+        song_name: log.songs?.song_name
+      })) || [];
 
     setRecentActivities(activities);
   };
