@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import {
   Music, Plus, Users, UserPlus, MoreVertical,
-  BarChart3, Menu, MessageSquare, Calendar
+  BarChart3, Menu, MessageSquare
 } from 'lucide-react'
 import { User } from '../types'
 
@@ -65,14 +65,6 @@ export default function Header({
                     className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap"
                   >
                     My Team
-                  </button>
-
-                  <button
-                    onClick={() => router.push('/services')}
-                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap flex items-center gap-1"
-                  >
-                    <Calendar size={16} />
-                    예배 관리
                   </button>
 
                   <button

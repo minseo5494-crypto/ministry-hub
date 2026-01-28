@@ -989,16 +989,8 @@ const openSelectedFixedSongsViewer = () => {
               </div>
             </div>
 
-            {/* 데스크톱: 예배 관리 & 설정 버튼 */}
+            {/* 데스크톱: 설정 버튼 */}
             <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={() => router.push(`/my-team/${teamId}/services`)}
-                className="flex items-center gap-2 px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm font-medium"
-                title="예배 관리"
-              >
-                <Calendar size={18} />
-                <span>예배 관리</span>
-              </button>
               <button
                 onClick={() => router.push(`/my-team/${teamId}/settings`)}
                 className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
@@ -1040,15 +1032,8 @@ const openSelectedFixedSongsViewer = () => {
             </div>
           </div>
 
-          {/* 모바일: 예배 관리 & 설정 버튼 */}
+          {/* 모바일: 설정 버튼 */}
           <div className="md:hidden mt-3 flex gap-2">
-            <button
-              onClick={() => router.push(`/my-team/${teamId}/services`)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition text-sm"
-            >
-              <Calendar size={18} />
-              <span>예배 관리</span>
-            </button>
             <button
               onClick={() => router.push(`/my-team/${teamId}/settings`)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
