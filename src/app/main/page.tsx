@@ -87,8 +87,14 @@ const isSpamContent = (text: string): boolean => {
 // 업로드 속도 제한 체크
 const checkUploadRateLimit = async (
   supabaseClient: typeof supabase,
-  userId: string
+  userId: string,
+  isAdmin?: boolean
 ): Promise<{ allowed: boolean; message?: string }> => {
+  // 관리자는 제한 없음
+  if (isAdmin) {
+    return { allowed: true }
+  }
+
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
@@ -1093,7 +1099,7 @@ export default function MainPage() {
     }
 
     // 스팸 방지: 업로드 속도 제한
-    const rateLimit = await checkUploadRateLimit(supabase, user!.id)
+    const rateLimit = await checkUploadRateLimit(supabase, user!.id, user?.is_admin)
     if (!rateLimit.allowed) {
       alert(`⚠️ ${rateLimit.message}`)
       return
