@@ -93,9 +93,9 @@ export default function SongListToolbar({
                   </button>
                   <button
                     onClick={() => { setSortBy('weekly'); setShowSortDropdown(false); }}
-                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'weekly' ? 'text-orange-600 font-medium' : 'text-gray-700'}`}
+                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'weekly' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
                   >
-                    🔥 많이 찾은 순
+                    많이 찾은 순
                   </button>
                 </div>
               </>
@@ -189,7 +189,7 @@ export default function SongListToolbar({
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
           <option value="name">이름순</option>
-          <option value="weekly">🔥 많이 찾은 순</option>
+          <option value="weekly">많이 찾은 순</option>
         </select>
         {/* 공식/사용자 악보 필터 - 모바일 */}
         <select

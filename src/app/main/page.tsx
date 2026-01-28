@@ -28,8 +28,7 @@ import {
   DownloadLoadingModal,
   ImagePreviewModal,
   SheetMusicEditor,
-  SheetMusicViewer,
-  PopularSongsSection
+  SheetMusicViewer
 } from './components'
 import { AddSongModal, SaveSetlistModal, PreviewModal, PPTModal, YoutubeModal, LyricsModal } from './modals'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
@@ -250,9 +249,7 @@ export default function MainPage() {
   const [seasonsList, setSeasonsList] = useState<SeasonCount[]>([])
   const [seasonsLoading, setSeasonsLoading] = useState(true)
 
-  // Popular songs state (이번 주 인기곡)
-  const [popularSongs, setPopularSongs] = useState<{ song: Song; usage_count: number; download_count: number }[]>([])
-  const [popularSongsLoading, setPopularSongsLoading] = useState(true)
+  // Weekly popular song IDs for sorting (이번 주 많이 찾은 곡 정렬용)
   const [weeklyPopularSongIds, setWeeklyPopularSongIds] = useState<Map<string, number>>(new Map())
 
   // Filter state
@@ -329,68 +326,40 @@ export default function MainPage() {
     loadSeasons()
   }, [])
 
-  // 이번 주 인기곡 로드
+  // 이번 주 많이 찾은 곡 ID 로드 (정렬용)
   useEffect(() => {
-    const loadPopularSongs = async () => {
+    const loadWeeklyPopularIds = async () => {
       if (songs.length === 0) return
 
-      setPopularSongsLoading(true)
       try {
         const oneWeekAgo = new Date()
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
 
-        // 이번 주 활동 로그에서 곡 사용량 집계
         const { data: activityData } = await supabase
           .from('activity_logs')
-          .select('song_id, action_type')
+          .select('song_id')
           .not('song_id', 'is', null)
           .gte('created_at', oneWeekAgo.toISOString())
 
-        const songUsageMap = new Map<string, { usage: number; downloads: number }>()
-
+        const songUsageMap = new Map<string, number>()
         activityData?.forEach(log => {
-            if (log.song_id) {
-              const existing = songUsageMap.get(log.song_id) || { usage: 0, downloads: 0 }
-              existing.usage += 1
-              if (log.action_type === 'ppt_download' || log.action_type === 'pdf_download') {
-                existing.downloads += 1
-              }
-              songUsageMap.set(log.song_id, existing)
-            }
-          })
-
-        // songs 배열과 매칭하여 인기곡 배열 생성
-        const popularArray: { song: Song; usage_count: number; download_count: number }[] = []
-        songUsageMap.forEach((data, songId) => {
-          const song = songs.find(s => s.id === songId)
-          if (song) {
-            popularArray.push({
-              song,
-              usage_count: data.usage,
-              download_count: data.downloads
-            })
+          if (log.song_id) {
+            songUsageMap.set(log.song_id, (songUsageMap.get(log.song_id) || 0) + 1)
           }
         })
 
-        // 사용량 순으로 정렬
-        popularArray.sort((a, b) => b.usage_count - a.usage_count)
+        // 사용량 순으로 정렬하여 순위 맵 생성
+        const sortedIds = [...songUsageMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([id], index) => [id, index] as [string, number])
 
-        setPopularSongs(popularArray.slice(0, 10))
-
-        // 주간 인기곡 ID와 순위 맵 저장 (정렬용)
-        const idMap = new Map<string, number>()
-        popularArray.forEach((item, index) => {
-          idMap.set(item.song.id, index)
-        })
-        setWeeklyPopularSongIds(idMap)
+        setWeeklyPopularSongIds(new Map(sortedIds))
       } catch (error) {
-        console.error('Error loading popular songs:', error)
-      } finally {
-        setPopularSongsLoading(false)
+        console.error('Error loading weekly popular ids:', error)
       }
     }
 
-    loadPopularSongs()
+    loadWeeklyPopularIds()
   }, [songs])
 
   useEffect(() => {
@@ -1392,13 +1361,6 @@ export default function MainPage() {
         setAiSearchKeywords={setAiSearchKeywords}
         searchWithAI={searchWithAI}
         clearAIResult={clearAIResult}
-      />
-
-      <PopularSongsSection
-        popularSongs={popularSongs}
-        loading={popularSongsLoading}
-        onSongClick={toggleSongSelection}
-        selectedSongIds={selectedSongs.map(s => s.id)}
       />
 
       <SelectedSongsBar
