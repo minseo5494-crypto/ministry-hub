@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 
 // 검색 필터 타입 정의
 export interface AISearchFilters {
@@ -35,10 +36,17 @@ export function useAISearch() {
     setError(null)
 
     try {
+      // 인증 토큰 가져오기
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('로그인이 필요합니다.')
+      }
+
       const response = await fetch('/api/ai-search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ query }),
       })
