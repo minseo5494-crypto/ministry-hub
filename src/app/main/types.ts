@@ -15,7 +15,7 @@ export type Filters = {
   includeLyrics: boolean
 }
 
-export type SortBy = 'recent' | 'likes' | 'name'
+export type SortBy = 'recent' | 'likes' | 'name' | 'weekly'
 export type SongFilter = 'all' | 'official' | 'user'
 export type ViewMode = 'grid' | 'list'
 

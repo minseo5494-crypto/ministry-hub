@@ -9,7 +9,7 @@ import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useDownload } from '@/hooks/useDownload'
 import { useAISearch } from '@/hooks/useAISearch'
-import { logSongSearch } from '@/lib/activityLogger'
+import { logSongSearch, logSongView } from '@/lib/activityLogger'
 import { trackSetlistCreate, trackSongView, trackSongLike } from '@/lib/analytics'
 import { getErrorMessage } from '@/lib/errorMessages'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
@@ -28,7 +28,8 @@ import {
   DownloadLoadingModal,
   ImagePreviewModal,
   SheetMusicEditor,
-  SheetMusicViewer
+  SheetMusicViewer,
+  PopularSongsSection
 } from './components'
 import { AddSongModal, SaveSetlistModal, PreviewModal, PPTModal, YoutubeModal, LyricsModal } from './modals'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
@@ -249,6 +250,11 @@ export default function MainPage() {
   const [seasonsList, setSeasonsList] = useState<SeasonCount[]>([])
   const [seasonsLoading, setSeasonsLoading] = useState(true)
 
+  // Popular songs state (이번 주 인기곡)
+  const [popularSongs, setPopularSongs] = useState<{ song: Song; usage_count: number; download_count: number }[]>([])
+  const [popularSongsLoading, setPopularSongsLoading] = useState(true)
+  const [weeklyPopularSongIds, setWeeklyPopularSongIds] = useState<Map<string, number>>(new Map())
+
   // Filter state
   const [filters, setFilters] = useState<Filters>(initialFilters)
 
@@ -322,6 +328,70 @@ export default function MainPage() {
     }
     loadSeasons()
   }, [])
+
+  // 이번 주 인기곡 로드
+  useEffect(() => {
+    const loadPopularSongs = async () => {
+      if (songs.length === 0) return
+
+      setPopularSongsLoading(true)
+      try {
+        const oneWeekAgo = new Date()
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+
+        // 이번 주 활동 로그에서 곡 사용량 집계
+        const { data: activityData } = await supabase
+          .from('activity_logs')
+          .select('song_id, action_type')
+          .not('song_id', 'is', null)
+          .gte('created_at', oneWeekAgo.toISOString())
+
+        const songUsageMap = new Map<string, { usage: number; downloads: number }>()
+
+        activityData?.forEach(log => {
+            if (log.song_id) {
+              const existing = songUsageMap.get(log.song_id) || { usage: 0, downloads: 0 }
+              existing.usage += 1
+              if (log.action_type === 'ppt_download' || log.action_type === 'pdf_download') {
+                existing.downloads += 1
+              }
+              songUsageMap.set(log.song_id, existing)
+            }
+          })
+
+        // songs 배열과 매칭하여 인기곡 배열 생성
+        const popularArray: { song: Song; usage_count: number; download_count: number }[] = []
+        songUsageMap.forEach((data, songId) => {
+          const song = songs.find(s => s.id === songId)
+          if (song) {
+            popularArray.push({
+              song,
+              usage_count: data.usage,
+              download_count: data.downloads
+            })
+          }
+        })
+
+        // 사용량 순으로 정렬
+        popularArray.sort((a, b) => b.usage_count - a.usage_count)
+
+        setPopularSongs(popularArray.slice(0, 10))
+
+        // 주간 인기곡 ID와 순위 맵 저장 (정렬용)
+        const idMap = new Map<string, number>()
+        popularArray.forEach((item, index) => {
+          idMap.set(item.song.id, index)
+        })
+        setWeeklyPopularSongIds(idMap)
+      } catch (error) {
+        console.error('Error loading popular songs:', error)
+      } finally {
+        setPopularSongsLoading(false)
+      }
+    }
+
+    loadPopularSongs()
+  }, [songs])
 
   useEffect(() => {
     if (user) fetchLikeData()
@@ -568,6 +638,15 @@ export default function MainPage() {
       result.sort((a, b) => ((b as any).like_count || 0) - ((a as any).like_count || 0))
     } else if (sortBy === 'name') {
       result.sort((a, b) => a.song_name.localeCompare(b.song_name, 'ko'))
+    } else if (sortBy === 'weekly') {
+      // 이번 주 인기순 정렬
+      result.sort((a, b) => {
+        const aRank = weeklyPopularSongIds.get(a.id) ?? Infinity
+        const bRank = weeklyPopularSongIds.get(b.id) ?? Infinity
+        if (aRank !== bRank) return aRank - bRank
+        // 인기곡에 없는 곡들은 좋아요 순으로
+        return ((b as any).like_count || 0) - ((a as any).like_count || 0)
+      })
     }
 
     if (filters.includeMyNotes && mySheetNotes.length > 0) {
@@ -592,7 +671,7 @@ export default function MainPage() {
       }, 1000)
       return () => clearTimeout(debounceTimer)
     }
-  }, [songs, filters, user, sortBy, songFilter, mySheetNotes, aiSearchKeywords])
+  }, [songs, filters, user, sortBy, songFilter, mySheetNotes, aiSearchKeywords, weeklyPopularSongIds])
 
   useEffect(() => {
     setDisplayCount(20)
@@ -743,6 +822,10 @@ export default function MainPage() {
       setSelectedSongs(selectedSongs.filter(s => s.id !== song.id))
     } else {
       setSelectedSongs([...selectedSongs, song])
+      // 곡 선택 시 활동 로깅 (인기 차트 집계용)
+      if (user) {
+        logSongView(song.id, user.id)
+      }
     }
   }
 
@@ -750,7 +833,13 @@ export default function MainPage() {
     const isCurrentlyOpen = previewStates[songId]
     if (!isCurrentlyOpen) {
       const song = songs.find(s => s.id === songId)
-      if (song) trackSongView(songId, song.song_name)
+      if (song) {
+        trackSongView(songId, song.song_name)
+        // 미리보기 클릭 시 활동 로깅 (인기 차트 집계용)
+        if (user) {
+          logSongView(songId, user.id)
+        }
+      }
     }
     setPreviewStates(prev => ({ ...prev, [songId]: !prev[songId] }))
   }
@@ -870,9 +959,17 @@ export default function MainPage() {
 
       setMultiSongEditorSongs(songsForEditor)
       setShowMultiSongEditor(true)
+      // 멀티 에디터 열 때 각 곡에 대해 활동 로깅
+      if (user) {
+        songsWithSheets.forEach(song => logSongView(song.id, user.id))
+      }
     } else {
       setEditingSong(clickedSong)
       setShowNoteEditor(true)
+      // 악보 필기 보드 열 때 활동 로깅 (인기 차트 집계용)
+      if (user) {
+        logSongView(clickedSong.id, user.id)
+      }
     }
   }
 
@@ -1238,6 +1335,10 @@ export default function MainPage() {
       if (songsError) throw songsError
 
       trackSetlistCreate(selectedSongs.length)
+
+      // 콘티에 추가된 각 곡에 대해 활동 로깅 (인기 차트 집계용)
+      selectedSongs.forEach(song => logSongView(song.id, user!.id))
+
       alert('✅ 콘티가 저장되었습니다!')
 
       setShowSaveModal(false)
@@ -1291,6 +1392,13 @@ export default function MainPage() {
         setAiSearchKeywords={setAiSearchKeywords}
         searchWithAI={searchWithAI}
         clearAIResult={clearAIResult}
+      />
+
+      <PopularSongsSection
+        popularSongs={popularSongs}
+        loading={popularSongsLoading}
+        onSongClick={toggleSongSelection}
+        selectedSongIds={selectedSongs.map(s => s.id)}
       />
 
       <SelectedSongsBar

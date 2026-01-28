@@ -66,7 +66,7 @@ export default function SongListToolbar({
               onClick={() => setShowSortDropdown(!showSortDropdown)}
               className="flex items-center gap-1 h-7 px-2 bg-gray-100 text-gray-700 rounded-md text-[11px] font-medium hover:bg-gray-200 transition-all"
             >
-              <span>{sortBy === 'recent' ? '최신순' : sortBy === 'likes' ? '좋아요순' : '이름순'}</span>
+              <span>{sortBy === 'recent' ? '최신순' : sortBy === 'likes' ? '좋아요순' : sortBy === 'weekly' ? '많이 찾은 순' : '이름순'}</span>
               <ChevronDown size={10} className={`transition-transform ${showSortDropdown ? 'rotate-180' : ''}`} />
             </button>
             {showSortDropdown && (
@@ -90,6 +90,12 @@ export default function SongListToolbar({
                     className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'name' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
                   >
                     이름순
+                  </button>
+                  <button
+                    onClick={() => { setSortBy('weekly'); setShowSortDropdown(false); }}
+                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${sortBy === 'weekly' ? 'text-orange-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    🔥 많이 찾은 순
                   </button>
                 </div>
               </>
@@ -178,11 +184,12 @@ export default function SongListToolbar({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
-          className="h-8 w-[76px] px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
+          className="h-8 px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
         >
           <option value="recent">최신순</option>
           <option value="likes">좋아요순</option>
           <option value="name">이름순</option>
+          <option value="weekly">🔥 많이 찾은 순</option>
         </select>
         {/* 공식/사용자 악보 필터 - 모바일 */}
         <select

@@ -6,6 +6,7 @@ export { default as SongListToolbar } from './SongListToolbar'
 export { default as SongList } from './SongList'
 export { default as SongGridItem } from './SongGridItem'
 export { default as SongListItem } from './SongListItem'
+export { default as PopularSongsSection } from './PopularSongsSection'
 
 // Re-export from @/components
 export { default as FilterPanel } from '@/components/FilterPanel'
