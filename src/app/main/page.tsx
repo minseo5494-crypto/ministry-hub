@@ -112,12 +112,12 @@ const checkUploadRateLimit = async (
     .eq('uploaded_by', userId)
     .gte('created_at', oneDayAgo)
 
-  // 제한: 시간당 5곡, 일일 20곡
-  if ((hourlyCount || 0) >= 5) {
-    return { allowed: false, message: '업로드 제한: 시간당 최대 5곡까지 업로드 가능합니다. 잠시 후 다시 시도해주세요.' }
+  // 제한: 시간당 20곡, 일일 100곡
+  if ((hourlyCount || 0) >= 20) {
+    return { allowed: false, message: '업로드 제한: 시간당 최대 20곡까지 업로드 가능합니다. 잠시 후 다시 시도해주세요.' }
   }
-  if ((dailyCount || 0) >= 20) {
-    return { allowed: false, message: '업로드 제한: 일일 최대 20곡까지 업로드 가능합니다. 내일 다시 시도해주세요.' }
+  if ((dailyCount || 0) >= 100) {
+    return { allowed: false, message: '업로드 제한: 일일 최대 100곡까지 업로드 가능합니다. 내일 다시 시도해주세요.' }
   }
 
   return { allowed: true }
