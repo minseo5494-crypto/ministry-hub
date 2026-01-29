@@ -32,7 +32,13 @@ export default function Header({
         <div className="flex items-center justify-between">
           {/* 로고 */}
           <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">WORSHEEP</h1>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-2xl font-bold text-gray-900 hover:text-indigo-600 transition-colors"
+              title="새로고침"
+            >
+              WORSHEEP
+            </button>
           </div>
 
           {/* 네비게이션 */}
