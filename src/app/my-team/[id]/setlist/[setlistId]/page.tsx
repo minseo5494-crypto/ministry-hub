@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase, Song } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { logDownload } from '@/lib/downloadLogger'
@@ -57,7 +58,7 @@ interface SetlistDetail {
   service_type?: string
   notes?: string
   team_id: string
-   created_by: string // ✅ 추가
+  created_by: string
 }
 
 // 🆕 송폼 위치 타입 정의
@@ -128,329 +129,187 @@ function SortableSongItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-4 hover:bg-gray-50 print-song ${isDragging ? 'shadow-2xl z-50' : ''}`}
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group print-song ${isDragging ? 'shadow-2xl z-50 ring-2 ring-indigo-500' : ''}`}
     >
-      {/* 데스크톱: 가로 배치 / 모바일: 세로 배치 */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between">
-        {/* 메인 정보 영역 */}
-        <div className="flex-1">
-          {/* 첫 줄: 드래그 핸들 + 번호 + 제목 */}
-          <div className="flex items-start gap-2">
-            {/* 드래그 핸들 */}
-            {canEdit && (
-              <div
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing pt-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
-                style={{ touchAction: 'none' }}
-                title="드래그하여 순서 변경"
-              >
-                <GripVertical size={20} />
-              </div>
-            )}
-            <span className="text-lg font-bold text-blue-600 w-8 mt-1 flex-shrink-0">
-              {index + 1}.
-            </span>
-            {/* 데스크톱: 제목+정보 같은 줄, 모바일: 제목만 */}
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-gray-900 text-xl">
+      <div className="p-6 flex flex-col md:flex-row gap-6">
+        {/* 왼쪽: 드래그 핸들 + 번호 */}
+        <div className="flex items-start gap-3">
+          {canEdit && (
+            <div
+              {...attributes}
+              {...listeners}
+              className="mt-1 cursor-grab active:cursor-grabbing text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              style={{ touchAction: 'none' }}
+              title="드래그하여 순서 변경"
+            >
+              <span className="material-symbols-outlined">drag_indicator</span>
+            </div>
+          )}
+          <span className="text-2xl font-bold text-gray-400">{String(index + 1).padStart(2, '0')}</span>
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <div className="flex-grow space-y-4">
+          {/* 제목 + 버튼 행 */}
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold mb-1 hover:text-indigo-600 cursor-pointer transition-colors">
                 {song.songs.song_name}
               </h3>
-              {/* 데스크톱에서만 제목 옆에 표시 */}
-              <div className="hidden md:block">
-                <p className="text-sm text-gray-600 mb-2">
-                  {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
-                </p>
-                {song.selected_form && song.selected_form.length > 0 && (
-                  <div className="text-sm text-purple-600 mb-2 flex">
-                    <span className="flex-shrink-0">송폼:&nbsp;</span>
-                    <span className="flex-1">{song.selected_form.join(' - ')}</span>
-                  </div>
-                )}
-                {/* 내 버전 선택 UI - 데스크톱 */}
-                {userNotes && userNotes.length > 0 && (
-                  <div className="mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">내 버전:</span>
-                      <select
-                        value={personalNote?.id || ''}
-                        onChange={(e) => {
-                          const noteId = e.target.value || null
-                          onSelectPersonalNote?.(song.songs.id, noteId)
-                        }}
-                        className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
-                      >
-                        <option value="">원본 사용</option>
-                        {userNotes.map(note => (
-                          <option key={note.id} value={note.id}>
-                            {note.title || note.song_name} ({new Date(note.updated_at).toLocaleDateString()})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {personalNote && (
-                      <p className="text-xs text-green-600 mt-1">
-                        ✓ 내 필기 노트 적용됨
-                      </p>
-                    )}
-                  </div>
-                )}
-                {/* 메모 - 데스크톱 */}
-                {song.notes ? (
-                  <div className="mb-2">
-                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="text-sm text-yellow-800 flex-1">
-                          <span className="font-medium">📝 메모:</span>
-                          <pre className="whitespace-pre-wrap font-sans mt-1">
-                            {song.notes.length > 100 && !isNoteExpanded
-                              ? `${song.notes.slice(0, 100)}...`
-                              : song.notes
-                            }
-                          </pre>
-                        </div>
-                        {canEdit && (
-                          <button
-                            onClick={() => onOpenNoteModal(song)}
-                            className="text-xs text-yellow-700 hover:text-yellow-900 font-medium whitespace-nowrap px-2 py-1 hover:bg-yellow-100 rounded"
-                          >
-                            수정
-                          </button>
-                        )}
-                      </div>
-                      {song.notes.length > 100 && (
-                        <button
-                          onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-                          className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
-                        >
-                          {isNoteExpanded ? (
-                            <>
-                              <ChevronUp size={14} />
-                              접기
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown size={14} />
-                              더보기
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  canEdit && (
-                    <button
-                      onClick={() => onOpenNoteModal(song)}
-                      className="text-sm text-blue-600 hover:text-blue-800 mb-2"
-                    >
-                      + 메모 추가
-                    </button>
-                  )
-                )}
-              </div>
+              <p className="text-sm text-gray-500">
+                {song.songs.team_name} • <span className="text-indigo-600 font-semibold">Key: {song.key_transposed || song.songs.key || '-'}</span>
+              </p>
+            </div>
+
+            {/* 아이콘 버튼들 */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {(song.songs.lyrics || song.songs.file_url) && (
+                <button
+                  onClick={() => onTogglePreview(song.id)}
+                  className={`p-2 rounded-full transition-colors ${isPreviewOpen ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-gray-100 text-gray-500'}`}
+                  title={isPreviewOpen ? '접기' : '펼치기'}
+                >
+                  <span className="material-symbols-outlined">{isPreviewOpen ? 'visibility_off' : 'visibility'}</span>
+                </button>
+              )}
+              {song.songs.file_url && (
+                <button
+                  onClick={() => onOpenSheetViewer(song)}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                  title="악보 에디터"
+                >
+                  <span className="material-symbols-outlined">tv</span>
+                </button>
+              )}
+              <button
+                onClick={() => song.songs.youtube_url && onOpenYoutubeModal(song.songs)}
+                disabled={!song.songs.youtube_url}
+                className={`p-2 rounded-full transition-colors ${song.songs.youtube_url ? 'hover:bg-rose-50 text-rose-500' : 'text-gray-300 cursor-not-allowed'}`}
+                title={song.songs.youtube_url ? '유튜브' : '유튜브 링크 없음'}
+              >
+                <span className="material-symbols-outlined">play_circle</span>
+              </button>
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => onOpenSongForm(song)}
+                    className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                    title="송폼 편집"
+                  >
+                    <span className="material-symbols-outlined">edit_note</span>
+                  </button>
+                  <div className="w-px h-4 bg-gray-200 mx-1 hidden md:block"></div>
+                  <button
+                    onClick={() => onMoveUp(index)}
+                    disabled={index === 0}
+                    className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                    title="위로"
+                  >
+                    <span className="material-symbols-outlined">keyboard_arrow_up</span>
+                  </button>
+                  <button
+                    onClick={() => onMoveDown(index)}
+                    disabled={index === totalSongs - 1}
+                    className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                    title="아래로"
+                  >
+                    <span className="material-symbols-outlined">keyboard_arrow_down</span>
+                  </button>
+                  <button
+                    onClick={() => onRemove(song.id)}
+                    className="p-2 rounded-full hover:bg-red-50 text-red-400 transition-colors"
+                    title="삭제"
+                  >
+                    <span className="material-symbols-outlined">delete</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          {/* 모바일: 전체 너비 사용하는 정보 영역 (좌우 동일 여백) */}
-          <div className="md:hidden mt-2 px-4">
-            <p className="text-sm text-gray-600 mb-2">
-              {song.songs.team_name} • Key: {song.key_transposed || song.songs.key || '-'}
-            </p>
-            {song.selected_form && song.selected_form.length > 0 && (
-              <div className="text-sm text-purple-600 mb-2 flex">
-                <span className="flex-shrink-0">송폼:&nbsp;</span>
-                <span className="flex-1">{song.selected_form.join(' - ')}</span>
-              </div>
-            )}
-            {/* 내 버전 선택 UI - 모바일 */}
-            {userNotes && userNotes.length > 0 && (
-              <div className="mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">내 버전:</span>
-                  <select
-                    value={personalNote?.id || ''}
-                    onChange={(e) => {
-                      const noteId = e.target.value || null
-                      onSelectPersonalNote?.(song.songs.id, noteId)
-                    }}
-                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white text-base"
+          {/* 송폼 */}
+          {song.selected_form && song.selected_form.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-3 text-sm font-mono text-gray-600 border border-gray-100">
+              <span className="text-gray-400 mr-2 uppercase text-[10px] font-sans font-bold">Song Form:</span>
+              {song.selected_form.join(' - ')}
+            </div>
+          )}
+
+          {/* 메모 */}
+          {song.notes ? (
+            <div className="bg-amber-50/30 border border-amber-100/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">sticky_note_2</span> MEMO
+                </span>
+                {canEdit && (
+                  <button
+                    onClick={() => onOpenNoteModal(song)}
+                    className="text-[10px] font-bold text-amber-600/60 hover:text-amber-600 uppercase"
                   >
-                    <option value="">원본 사용</option>
-                    {userNotes.map(note => (
-                      <option key={note.id} value={note.id}>
-                        {note.title || note.song_name} ({new Date(note.updated_at).toLocaleDateString()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {personalNote && (
-                  <p className="text-xs text-green-600 mt-1">
-                    ✓ 내 필기 노트 적용됨
-                  </p>
+                    Edit
+                  </button>
                 )}
               </div>
-            )}
-            {/* 메모 - 모바일 (전체 너비) */}
-            {song.notes ? (
-              <div className="mb-2">
-                <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm text-yellow-800 flex-1">
-                      <span className="font-medium">📝 메모:</span>
-                      <pre className="whitespace-pre-wrap font-sans mt-1">
-                        {song.notes.length > 100 && !isNoteExpanded
-                          ? `${song.notes.slice(0, 100)}...`
-                          : song.notes
-                        }
-                      </pre>
-                    </div>
-                    {canEdit && (
-                      <button
-                        onClick={() => onOpenNoteModal(song)}
-                        className="text-xs text-yellow-700 hover:text-yellow-900 font-medium whitespace-nowrap px-2 py-1 hover:bg-yellow-100 rounded"
-                      >
-                        수정
-                      </button>
-                    )}
-                  </div>
-                  {song.notes.length > 100 && (
-                    <button
-                      onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-                      className="text-xs text-yellow-700 hover:text-yellow-900 mt-1 font-medium flex items-center gap-1"
-                    >
-                      {isNoteExpanded ? (
-                        <>
-                          <ChevronUp size={14} />
-                          접기
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown size={14} />
-                          더보기
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
+              <div className="text-sm text-amber-900/80 leading-relaxed">
+                <pre className="whitespace-pre-wrap font-sans">
+                  {song.notes.length > 150 && !isNoteExpanded
+                    ? `${song.notes.slice(0, 150)}...`
+                    : song.notes
+                  }
+                </pre>
               </div>
-            ) : (
-              canEdit && (
+              {song.notes.length > 150 && (
                 <button
-                  onClick={() => onOpenNoteModal(song)}
-                  className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+                  onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+                  className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-medium flex items-center gap-1"
                 >
-                  + 메모 추가
+                  <span className="material-symbols-outlined text-sm">{isNoteExpanded ? 'expand_less' : 'expand_more'}</span>
+                  {isNoteExpanded ? '접기' : '더보기'}
                 </button>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* 버튼들 - 모바일: 아래로 가운데 정렬, 데스크톱: 오른쪽 */}
-        <div className="flex gap-2 no-print mt-4 md:mt-0 md:ml-4 flex-shrink-0 flex-wrap justify-center md:justify-end">
-          {/* 미리보기 토글 버튼 */}
-          {(song.songs.lyrics || song.songs.file_url) && (
-            <button
-              onClick={() => onTogglePreview(song.id)}
-              className={`p-2 rounded-lg ${
-                isPreviewOpen
-                  ? 'text-blue-600 bg-blue-100'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-              title={isPreviewOpen ? '접기' : '펼치기'}
-            >
-              {isPreviewOpen ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          )}
-          {/* 악보 에디터 버튼 */}
-          {song.songs.file_url && (
-            <button
-              onClick={() => onOpenSheetViewer(song)}
-              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
-              title="악보 에디터"
-            >
-              <Presentation size={18} />
-            </button>
-          )}
-          {/* 유튜브 영상 버튼 */}
-          <button
-            onClick={() => {
-              if (song.songs.youtube_url) {
-                onOpenYoutubeModal(song.songs)
-              }
-            }}
-            disabled={!song.songs.youtube_url}
-            className="p-2 rounded-lg"
-            style={{
-              color: !song.songs.youtube_url ? '#d1d5db' : '#dc2626',
-              backgroundColor: 'transparent',
-              cursor: song.songs.youtube_url ? 'pointer' : 'not-allowed',
-              opacity: song.songs.youtube_url ? 1 : 0.5
-            }}
-            title={!song.songs.youtube_url ? '유튜브 링크 없음' : '유튜브 열기'}
-          >
-            <Youtube size={18} />
-          </button>
-          {canEdit && (
-            <>
+              )}
+            </div>
+          ) : (
+            canEdit && (
               <button
-                onClick={() => onOpenSongForm(song)}
-                className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
-                title="송폼 편집"
+                onClick={() => onOpenNoteModal(song)}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors font-medium"
               >
-                <Edit size={18} />
+                <span className="material-symbols-outlined text-sm">add</span> 메모 추가
               </button>
-              {/* 순서 변경 화살표 - 데스크톱에서만 표시 (모바일은 드래그로 변경) */}
-              <button
-                onClick={() => onMoveUp(index)}
-                disabled={index === 0}
-                className="hidden md:block p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-              >
-                <ChevronUp size={18} />
-              </button>
-              <button
-                onClick={() => onMoveDown(index)}
-                disabled={index === totalSongs - 1}
-                className="hidden md:block p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30"
-              >
-                <ChevronDown size={18} />
-              </button>
-              <button
-                onClick={() => onRemove(song.id)}
-                className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
-              >
-                <Trash2 size={18} />
-              </button>
-            </>
+            )
           )}
         </div>
       </div>
 
-      {/* 하단: 펼쳐지는 콘텐츠 (악보/가사) - 버튼 아래 별도 영역 */}
+      {/* 미리보기 영역 */}
       {isPreviewOpen && (
-        <div className="mt-4 border-t pt-4">
+        <div className="border-t border-gray-100 bg-gray-50/50 p-6">
           {song.songs.lyrics && (
             <div className="mb-4">
-              <h4 className="font-semibold text-gray-700 mb-2">가사</h4>
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 p-3 rounded max-h-60 overflow-y-auto">
+              <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
+                <span className="material-symbols-outlined text-base">lyrics</span> 가사
+              </h4>
+              <pre className="text-sm text-gray-600 whitespace-pre-wrap font-sans bg-white p-4 rounded-lg border border-gray-100 max-h-60 overflow-y-auto">
                 {song.songs.lyrics}
               </pre>
             </div>
           )}
           {song.songs.file_url && (
-            <div className="-mx-4">
-              <h4 className="font-semibold text-gray-700 mb-2 px-4">악보</h4>
+            <div>
+              <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
+                <span className="material-symbols-outlined text-base">description</span> 악보
+              </h4>
               {song.songs.file_type === 'pdf' ? (
                 <iframe
                   src={`${song.songs.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                  className="w-full h-[700px] border-y"
+                  className="w-full h-[700px] rounded-lg border border-gray-200"
                 />
               ) : (
                 <img
                   src={song.songs.file_url}
                   alt={`${song.songs.song_name} 악보`}
-                  className="w-full h-auto"
+                  className="w-full h-auto rounded-lg border border-gray-200"
                 />
               )}
             </div>
@@ -474,6 +333,14 @@ export default function TeamSetlistDetailPage() {
   const [songs, setSongs] = useState<SetlistSong[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+
+  // 사이드바: 팀의 다른 콘티 목록
+  const [otherSetlists, setOtherSetlists] = useState<{
+    id: string
+    title: string
+    service_date: string
+    service_type?: string
+  }[]>([])
 
   // 편집 상태
   const [editTitle, setEditTitle] = useState('')
@@ -535,16 +402,6 @@ const [noteModal, setNoteModal] = useState<{
   currentNote: ''
 })
 const [savingNote, setSavingNote] = useState(false)
-
-// 🆕 끼워넣기 모달 상태
-const [insertModal, setInsertModal] = useState<{
-  show: boolean
-  afterOrder: number
-}>({
-  show: false,
-  afterOrder: 0
-})
-const [insertSearchQuery, setInsertSearchQuery] = useState('')
 
 // 🆕 useDownload 훅용 데이터 변환 (songs 상태 이후에 위치해야 함)
 const downloadSongs = songs.map(s => s.songs)
@@ -613,7 +470,6 @@ const {
   personalView,
   fetchPersonalView,
   replaceSongWithNote,
-  insertNoteAfter,
   removeCustomization
 } = usePersonalSetlistView()
 
@@ -641,47 +497,6 @@ const handleSelectPersonalNote = async (songId: string, noteId: string | null) =
   await fetchPersonalView(user.id, setlistId)
 }
 
-// 🆕 끼워넣기 핸들러
-const handleInsertNote = async (noteId: string) => {
-  if (!user?.id || !setlistId) return
-
-  await insertNoteAfter(user.id, setlistId, insertModal.afterOrder, noteId)
-  setInsertModal({ show: false, afterOrder: 0 })
-  setInsertSearchQuery('')
-  // 개인 뷰 다시 로드
-  await fetchPersonalView(user.id, setlistId)
-}
-
-// 🆕 끼워넣은 노트 제거 핸들러
-const handleRemoveInsertedNote = async (noteId: string) => {
-  if (!user?.id || !setlistId) return
-
-  await removeCustomization(user.id, setlistId, noteId)
-  await fetchPersonalView(user.id, setlistId)
-}
-
-// 🆕 끼워넣은 노트 목록 계산
-const getInsertedNotesAfter = (orderNumber: number) => {
-  if (!personalView?.customizations) return []
-
-  return personalView.customizations
-    .filter(c => c.type === 'insert' && c.afterOrder === orderNumber)
-    .map(c => {
-      const note = userSheetNotes.find(n => n.id === c.noteId)
-      return note ? { ...note, customization: c } : null
-    })
-    .filter(Boolean) as (LocalSheetMusicNote & { customization: { noteId: string } })[]
-}
-
-// 🆕 끼워넣기 모달에서 노트 필터링
-const filteredInsertNotes = insertSearchQuery.trim()
-  ? userSheetNotes.filter(note =>
-      note.song_name.toLowerCase().includes(insertSearchQuery.toLowerCase()) ||
-      note.title.toLowerCase().includes(insertSearchQuery.toLowerCase()) ||
-      (note.team_name && note.team_name.toLowerCase().includes(insertSearchQuery.toLowerCase()))
-    )
-  : userSheetNotes
-
 useEffect(() => {
   checkUser()
 }, [])
@@ -689,6 +504,7 @@ useEffect(() => {
   useEffect(() => {
     if (user && teamId && setlistId) {
       fetchSetlistDetail()
+      fetchOtherSetlists()
       // 개인 뷰와 필기 노트 로드
       fetchPersonalView(user.id, setlistId)
       fetchUserNotes(user.id)
@@ -799,6 +615,23 @@ useEffect(() => {
       router.push(`/my-team/${teamId}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 사이드바용: 팀의 다른 콘티 목록 가져오기
+  const fetchOtherSetlists = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('team_setlists')
+        .select('id, title, service_date, service_type')
+        .eq('team_id', teamId)
+        .order('service_date', { ascending: false })
+        .limit(20)
+
+      if (error) throw error
+      setOtherSetlists(data || [])
+    } catch (error) {
+      console.error('Error fetching other setlists:', error)
     }
   }
 
@@ -1269,17 +1102,7 @@ const removeSongForm = (index: number) => {
     }
   }
 
-  // 🎵 플레이리스트 공유
-  const handleSharePlaylist = () => {
-    const playlistUrl = `${window.location.origin}/playlist/${setlistId}`
-    
-    // 새 탭에서 플레이리스트 열기
-    window.open(playlistUrl, '_blank')
-    
-    // 링크도 자동 복사 (공유용)
-    navigator.clipboard.writeText(playlistUrl)
-  }
-
+  
   
 
   // 🎵 악보 에디터 열기 (SheetMusicEditor 사용)
@@ -1438,164 +1261,238 @@ const saveNote = async () => {
   if (!setlist) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          {/* 상단: 제목 + 뒤로가기 */}
-          <div className="flex items-center gap-2 mb-3">
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* 사이드바 - 다른 콘티 목록 */}
+      <aside className="hidden lg:flex w-64 flex-shrink-0 bg-white border-r border-gray-200 flex-col sticky top-0 h-screen overflow-hidden">
+        {/* 로고 */}
+        <div className="p-6 pb-4">
+          <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+            WORSHEEP
+          </Link>
+        </div>
+        <div className="px-4 pb-3 border-b border-gray-100">
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg text-indigo-500">queue_music</span>
+            콘티 목록
+          </h2>
+        </div>
+        <nav className="flex-1 overflow-y-auto p-2">
+          {otherSetlists.map((item) => (
             <button
-              onClick={() => router.push(`/my-team/${teamId}`)}
-              className="p-2 hover:bg-gray-100 rounded-lg flex-shrink-0"
+              key={item.id}
+              onClick={() => router.push(`/my-team/${teamId}/setlist/${item.id}`)}
+              className={`w-full text-left p-3 rounded-lg mb-1 transition-all ${
+                item.id === setlistId
+                  ? 'bg-indigo-50 border-l-2 border-indigo-500 text-indigo-700'
+                  : 'hover:bg-gray-50 text-gray-700'
+              }`}
             >
-              <ArrowLeft size={20} />
+              <p className={`text-sm font-medium truncate ${item.id === setlistId ? 'text-indigo-700' : 'text-gray-900'}`}>
+                {item.title}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {new Date(item.service_date).toLocaleDateString('ko-KR')}
+                {item.service_type && ` • ${item.service_type}`}
+              </p>
             </button>
-            {isEditing ? (
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="text-xl md:text-2xl font-bold border-b-2 border-blue-500 focus:outline-none flex-1 min-w-0"
-              />
-            ) : (
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">{setlist.title}</h1>
-            )}
-          </div>
-
-          {/* 콘티 정보 (날짜, 유형, 곡수) */}
-          {!isEditing && (
-            <div className="text-sm text-gray-600 mb-3">
-              {new Date(setlist.service_date).toLocaleDateString('ko-KR')} • {setlist.service_type} • {songs.length}곡
-            </div>
+          ))}
+          {otherSetlists.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-8">콘티가 없습니다</p>
           )}
-
-          {/* 버튼 영역 */}
-          <div className="flex flex-wrap items-center gap-2">
-            {isEditing ? (
-              <>
-                {/* 편집 모드: 저장/취소 버튼 */}
-                <button
-                  onClick={handleSaveEdit}
-                  className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center text-sm"
-                >
-                  <Save size={16} />
-                  <span className="ml-1.5">저장</span>
-                </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-3 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
-                >
-                  취소
-                </button>
-              </>
-            ) : (
-              <>
-                {/* PPT 다운로드 */}
-                <button
-                  onClick={generatePPTFile}
-                  disabled={downloadingPPT || songs.length === 0}
-                  className="px-3 py-2 bg-[#C4BEE2] text-white rounded-lg hover:bg-[#A9A1D1] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
-                  title="PPT 다운로드"
-                >
-                  <Download size={16} />
-                  <span className="ml-1.5 hidden sm:inline">{downloadingPPT ? '생성중...' : 'PPT'}</span>
-                </button>
-
-                {/* 플레이리스트 공유 */}
-                <button
-                  onClick={handleSharePlaylist}
-                  disabled={songs.length === 0}
-                  className="px-3 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
-                  title="유튜브 플레이리스트 공유"
-                >
-                  <Youtube size={16} />
-                  <span className="ml-1.5 hidden sm:inline">플레이리스트</span>
-                </button>
-
-                {/* 악보 다운로드 */}
-                <button
-                  onClick={handleDownload}
-                  disabled={downloadingPDF || downloadingImage || songs.length === 0}
-                  className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center disabled:opacity-50 text-sm whitespace-nowrap"
-                  title="악보 다운로드"
-                >
-                  <FileDown size={16} />
-                  <span className="ml-1.5 hidden sm:inline">{downloadingPDF || downloadingImage ? '다운로드중...' : '악보 다운로드'}</span>
-                </button>
-
-                {/* 수정/삭제 버튼 - leader/admin만 */}
-                {canEdit() && (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-3 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center text-sm whitespace-nowrap"
-                    >
-                      <Edit size={16} />
-                      <span className="ml-1.5 hidden sm:inline">수정</span>
-                    </button>
-                    <button
-                      onClick={handleDeleteSetlist}
-                      className="px-3 py-2 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] flex items-center text-sm whitespace-nowrap"
-                    >
-                      <Trash2 size={16} />
-                      <span className="ml-1.5 hidden sm:inline">삭제</span>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* 편집 모드: 날짜/유형 수정 */}
-          {isEditing && (
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">예배 날짜</label>
-                <input
-                  type="date"
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
+        </nav>
+        {/* 뒤로가기 버튼 + 사용자 프로필 */}
+        <div className="p-3 border-t border-gray-100 space-y-2">
+          <button
+            onClick={() => router.push(`/my-team/${teamId}`)}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-lg">arrow_back</span>
+            뒤로가기 (팀 페이지)
+          </button>
+          {user && (
+            <button
+              onClick={() => router.push('/my-page/settings')}
+              className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 hover:shadow-sm transition-all w-full text-left"
+              title="내 계정 관리"
+            >
+              <div className="w-10 h-10 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                {user.email?.charAt(0).toUpperCase()}
               </div>
-              <div>
-                <label className="text-sm text-gray-600">예배 유형</label>
-                <input
-                  type="text"
-                  value={editType}
-                  onChange={(e) => setEditType(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
+              <div className="overflow-hidden flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate">{user.user_metadata?.name || '사용자'}</p>
+                <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
               </div>
-            </div>
+            </button>
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* 메인 콘텐츠 */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="p-6 border-b flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-900">곡 목록</h2>
+      {/* 메인 영역 */}
+      <div className="flex-grow flex flex-col min-w-0">
+        {/* 헤더 */}
+        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200">
+          <div className="max-w-5xl mx-auto px-6 py-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <button
+                    onClick={() => router.push(`/my-team/${teamId}`)}
+                    className="lg:hidden p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
+                    title="뒤로가기 (팀 페이지)"
+                  >
+                    <span className="material-symbols-outlined text-xl">arrow_back</span>
+                  </button>
+                  {/* 모바일: 로고 */}
+                  <Link href="/main" className="lg:hidden text-lg font-black tracking-tighter text-slate-700">
+                    WORSHEEP
+                  </Link>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="text-xl font-bold border-b-2 border-indigo-500 focus:outline-none flex-1 min-w-0 bg-transparent"
+                    />
+                  ) : (
+                    <h1 className="text-xl font-bold tracking-tight text-gray-900">{setlist.title}</h1>
+                  )}
+                </div>
+                {!isEditing && (
+                  <div className="flex items-center gap-3 text-xs text-gray-500 ml-0 lg:ml-0">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">calendar_today</span>
+                      {new Date(setlist.service_date).toLocaleDateString('ko-KR')}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">church</span>
+                      {setlist.service_type || '예배'}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">music_note</span>
+                      {songs.length}곡
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 버튼 영역 */}
+              <div className="flex flex-wrap items-center gap-2">
+                {isEditing ? (
+                  <>
+                    <button
+                      onClick={handleSaveEdit}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-600 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-sm">save</span>
+                      저장
+                    </button>
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+                    >
+                      취소
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={generatePPTFile}
+                      disabled={downloadingPPT || songs.length === 0}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-all"
+                      title="PPT 다운로드"
+                    >
+                      <span className="material-symbols-outlined text-sm">present_to_all</span>
+                      <span className="hidden sm:inline">{downloadingPPT ? '생성중...' : 'PPT'}</span>
+                    </button>
+                                        <button
+                      onClick={handleDownload}
+                      disabled={downloadingPDF || downloadingImage || songs.length === 0}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 transition-all shadow-sm shadow-indigo-200"
+                      title="악보 다운로드"
+                    >
+                      <span className="material-symbols-outlined text-sm">file_download</span>
+                      <span className="hidden sm:inline">{downloadingPDF || downloadingImage ? '...' : 'Download'}</span>
+                    </button>
+                    {canEdit() && (
+                      <>
+                        <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                        <button
+                          onClick={() => setIsEditing(true)}
+                          className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                          title="수정"
+                        >
+                          <span className="material-symbols-outlined text-lg">edit</span>
+                        </button>
+                        <button
+                          onClick={handleDeleteSetlist}
+                          className="p-2 rounded-full hover:bg-red-50 text-red-500 transition-colors"
+                          title="삭제"
+                        >
+                          <span className="material-symbols-outlined text-lg">delete</span>
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 편집 모드: 날짜/유형 수정 */}
+            {isEditing && (
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600">예배 날짜</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">예배 유형</label>
+                  <input
+                    type="text"
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg mt-1"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* 메인 콘텐츠 */}
+        <main className="max-w-5xl mx-auto px-6 py-8 w-full">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              곡 목록
+              <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{songs.length}</span>
+            </h2>
             {canEdit() && (
               <button
                 onClick={openAddSongModal}
-                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
+                className="flex items-center gap-1.5 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-all"
               >
-                <Plus className="mr-2" size={18} />
+                <span className="material-symbols-outlined text-lg">add</span>
                 곡 추가
               </button>
             )}
           </div>
 
           {songs.length === 0 ? (
-            <div className="p-12 text-center">
-              <Music className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">아직 추가된 곡이 없습니다.</p>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-16 text-center">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-4xl text-gray-300">music_note</span>
+              </div>
+              <p className="text-gray-500 mb-4">아직 추가된 곡이 없습니다.</p>
               {canEdit() && (
                 <button
                   onClick={openAddSongModal}
-                  className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
+                  className="px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 font-semibold transition-colors"
                 >
                   첫 곡 추가하기
                 </button>
@@ -1612,88 +1509,41 @@ const saveNote = async () => {
       strategy={verticalListSortingStrategy}
       disabled={!canEdit()}
     >
-      <div className="divide-y">
-        {songs.map((song, index) => {
-          const insertedNotes = getInsertedNotesAfter(song.order_number)
-
-          return (
-            <div key={song.id}>
-              <SortableSongItem
-                song={song}
-                index={index}
-                canEdit={canEdit()}
-                onRemove={removeSongFromSetlist}
-                onMoveUp={() => moveSong(index, 'up')}
-                onMoveDown={() => moveSong(index, 'down')}
-                onTogglePreview={togglePreview}
-                onOpenSongForm={openSongFormModal}
-                onOpenSheetViewer={openSheetViewerForSong}
-                onOpenYoutubeModal={setYoutubeModalSong}
-                onOpenNoteModal={openNoteModal}
-                isPreviewOpen={previewStates[song.id] || false}
-                totalSongs={songs.length}
-                userNotes={songNotesMap[song.songs.id] || []}
-                personalNote={
-                  personalView?.customizations.find(
+      <div className="space-y-4">
+        {songs.map((song, index) => (
+          <SortableSongItem
+            key={song.id}
+            song={song}
+            index={index}
+            canEdit={canEdit()}
+            onRemove={removeSongFromSetlist}
+            onMoveUp={() => moveSong(index, 'up')}
+            onMoveDown={() => moveSong(index, 'down')}
+            onTogglePreview={togglePreview}
+            onOpenSongForm={openSongFormModal}
+            onOpenSheetViewer={openSheetViewerForSong}
+            onOpenYoutubeModal={setYoutubeModalSong}
+            onOpenNoteModal={openNoteModal}
+            isPreviewOpen={previewStates[song.id] || false}
+            totalSongs={songs.length}
+            userNotes={songNotesMap[song.songs.id] || []}
+            personalNote={
+              personalView?.customizations.find(
+                c => c.type === 'replace' && c.originalSongId === song.songs.id
+              )?.noteId
+                ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
                     c => c.type === 'replace' && c.originalSongId === song.songs.id
-                  )?.noteId
-                    ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
-                        c => c.type === 'replace' && c.originalSongId === song.songs.id
-                      )?.noteId)
-                    : undefined
-                }
-                onSelectPersonalNote={handleSelectPersonalNote}
-              />
-
-              {/* 🆕 끼워넣은 노트 표시 */}
-              {insertedNotes.map((note) => (
-                <div
-                  key={`inserted-${note.id}`}
-                  className="p-4 bg-amber-50 border-l-4 border-amber-400"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📝</span>
-                      <div>
-                        <h4 className="font-semibold text-amber-900">
-                          {note.title || note.song_name}
-                        </h4>
-                        <p className="text-sm text-amber-700">
-                          나만 보임 · {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveInsertedNote(note.customization.noteId)}
-                      className="px-3 py-1 text-sm text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded"
-                    >
-                      제거
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* 🆕 끼워넣기 버튼 (hover 시 표시) */}
-              {userSheetNotes.length > 0 && (
-                <div className="group relative h-0">
-                  <div className="absolute left-0 right-0 top-0 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button
-                      onClick={() => setInsertModal({ show: true, afterOrder: song.order_number })}
-                      className="px-4 py-1 text-sm bg-amber-100 text-amber-700 rounded-full border border-amber-300 hover:bg-amber-200 shadow-sm"
-                    >
-                      + 끼워넣기
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                  )?.noteId)
+                : undefined
+            }
+            onSelectPersonalNote={handleSelectPersonalNote}
+          />
+        ))}
       </div>
     </SortableContext>
   </DndContext>
 )}
-        </div>
+        </main>
       </div>
 
       {/* 곡 추가 모달 */}
@@ -1745,55 +1595,64 @@ const saveNote = async () => {
       {/* 송폼 편집 모달 */}
 {showSongFormModal && selectedSongForForm && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 md:p-4">
-    <div className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] overflow-y-auto p-4 md:p-6">
-      <h3 className="text-lg md:text-2xl font-bold mb-4">
-        {selectedSongForForm.songs.song_name} - 송폼 편집
-      </h3>
-
-      {/* 모바일: 선택된 순서 먼저 표시 */}
-      <div className="md:hidden mb-4">
-        {tempSongForm.length > 0 && (
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm font-bold text-blue-900 mb-1">현재 송폼:</p>
-            <p className="text-blue-800 text-sm">
-              {tempSongForm.join(' - ')}
-            </p>
-          </div>
-        )}
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden border border-gray-200 flex flex-col">
+      {/* 헤더 */}
+      <div className="px-6 md:px-8 py-5 md:py-6 border-b border-gray-100 flex justify-between items-center">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+            {selectedSongForForm.songs.song_name} - 송폼 설정
+          </h1>
+          <p className="text-sm mt-1 text-gray-500">
+            곡의 구성을 자유롭게 배치하고 저장하세요.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowSongFormModal(false)}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <span className="material-symbols-outlined text-3xl">close</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {/* 송폼 추가 */}
-        <div>
-          <h4 className="font-bold mb-3 text-base md:text-lg">송폼 추가</h4>
-          {/* 모바일: 그리드, 데스크톱: 리스트 */}
-          <div className="grid grid-cols-4 gap-2 md:grid-cols-1 md:space-y-2 md:gap-0 mb-4 max-h-[200px] md:max-h-[400px] overflow-y-auto">
-            {songFormOptions.map((form) => (
-              <button
-                key={form}
-                onClick={() => addSongForm(form)}
-                className="px-2 py-2 md:px-4 md:py-3 rounded text-center md:text-left bg-blue-50 hover:bg-blue-100 text-blue-900 font-medium text-sm md:text-base"
-              >
-                {form}
-              </button>
-            ))}
+      {/* 메인 콘텐츠 */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* 왼쪽: 사용 가능한 섹션 */}
+        <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-gray-100 p-4 md:p-6 flex flex-col gap-4 md:gap-6 bg-slate-50/50">
+          <div>
+            <h2 className="text-sm font-bold mb-3 md:mb-4 flex items-center gap-2 text-gray-700">
+              <span className="material-symbols-outlined text-lg">list_alt</span>
+              사용 가능한 섹션
+            </h2>
+            <div className="grid grid-cols-4 md:grid-cols-1 gap-2 md:space-y-2 md:gap-0 overflow-y-auto max-h-[150px] md:max-h-[350px] pr-2">
+              {songFormOptions.map((form) => (
+                <button
+                  key={form}
+                  onClick={() => addSongForm(form)}
+                  className="flex items-center justify-between w-full p-2 md:p-3 border rounded-lg md:rounded-xl transition-all cursor-pointer bg-white border-gray-200 hover:border-indigo-500 text-sm md:text-base"
+                >
+                  <span className="font-medium text-gray-700">{form}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* 커스텀 송폼 입력 */}
-          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
-            <h5 className="font-bold mb-2 text-sm md:text-base">커스텀 송폼</h5>
+          {/* 직접 입력 */}
+          <div className="border-t border-gray-100 pt-4 md:pt-6">
+            <h2 className="text-sm font-bold mb-3 text-gray-700">직접 입력</h2>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={customFormInput}
                 onChange={(e) => setCustomFormInput(e.target.value)}
-                placeholder="예: Special"
-                className="flex-1 px-3 py-2 border rounded text-base"
+                placeholder="예: 기도회, 멘트"
+                className="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white border-gray-200 text-gray-900 focus:ring-indigo-500 focus:border-indigo-500"
+                style={{ fontSize: '16px' }}
                 onKeyPress={(e) => e.key === 'Enter' && addCustomSongForm()}
               />
               <button
                 onClick={addCustomSongForm}
-                className="px-3 md:px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm md:text-base"
+                className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap bg-slate-700 hover:bg-slate-800 transition-colors"
+                style={{ color: '#ffffff' }}
               >
                 추가
               </button>
@@ -1801,44 +1660,59 @@ const saveNote = async () => {
           </div>
         </div>
 
-        {/* 선택된 송폼 순서 */}
-        <div className="flex flex-col h-[250px] md:h-[500px]">
-          <h4 className="font-bold mb-3 text-base md:text-lg">선택된 순서</h4>
-          <div className="border-2 border-dashed rounded-lg p-3 md:p-4 flex-1 overflow-y-auto bg-gray-50">
+        {/* 오른쪽: 선택된 순서 */}
+        <div className="flex-1 p-4 md:p-6 flex flex-col gap-4 overflow-hidden">
+          <h2 className="text-sm font-bold flex items-center gap-2 text-gray-700">
+            <span className="material-symbols-outlined text-lg">format_list_numbered</span>
+            선택된 순서
+          </h2>
+
+          {/* 선택된 순서 리스트 */}
+          <div className="flex-1 border-2 border-dashed rounded-2xl p-4 overflow-y-auto border-gray-200 bg-gray-50/30 min-h-[200px] md:min-h-0">
             {tempSongForm.length === 0 ? (
-              <p className="text-gray-400 text-center mt-8 md:mt-20 text-sm md:text-base">
-                위에서 송폼을 선택하세요
-              </p>
+              <div className="flex flex-col items-center justify-center h-full py-8">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-sm mb-4 bg-white">
+                  <span className="material-symbols-outlined text-3xl text-gray-300">queue_music</span>
+                </div>
+                <p className="text-sm text-gray-500">왼쪽에서 섹션을 선택하세요</p>
+              </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {tempSongForm.map((form, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 bg-white border-2 border-green-200 px-2 md:px-3 py-2 md:py-3 rounded-lg"
+                    className="flex items-center gap-4 p-3 md:p-4 rounded-xl border shadow-sm bg-white border-gray-100"
                   >
-                    <span className="font-bold text-green-900 flex-1 text-base md:text-lg">
-                      {index + 1}. {form}
-                    </span>
-                    <div className="flex gap-1">
+                    <span className="font-bold w-6 text-gray-400">{index + 1}.</span>
+                    <span className="flex-1 font-semibold text-gray-800">{form}</span>
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => moveSongForm(index, 'up')}
                         disabled={index === 0}
-                        className="w-8 h-8 flex items-center justify-center bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                        className={`p-1 rounded transition-colors ${
+                          index === 0
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-indigo-500 hover:bg-indigo-50'
+                        }`}
                       >
-                        ↑
+                        <span className="material-symbols-outlined">expand_less</span>
                       </button>
                       <button
                         onClick={() => moveSongForm(index, 'down')}
                         disabled={index === tempSongForm.length - 1}
-                        className="w-8 h-8 flex items-center justify-center bg-[#84B9C0] text-white rounded hover:bg-[#6FA5AC] disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                        className={`p-1 rounded transition-colors ${
+                          index === tempSongForm.length - 1
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-indigo-500 hover:bg-indigo-50'
+                        }`}
                       >
-                        ↓
+                        <span className="material-symbols-outlined">expand_more</span>
                       </button>
                       <button
                         onClick={() => removeSongForm(index)}
-                        className="w-8 h-8 flex items-center justify-center bg-[#E26559] text-white rounded hover:bg-[#D14E42] text-sm"
+                        className="p-1 ml-2 text-red-400 hover:text-red-600 transition-colors"
                       >
-                        ✕
+                        <span className="material-symbols-outlined">close</span>
                       </button>
                     </div>
                   </div>
@@ -1847,31 +1721,32 @@ const saveNote = async () => {
             )}
           </div>
 
-          {/* 데스크톱에서만 미리보기 표시 */}
+          {/* 미리보기 */}
           {tempSongForm.length > 0 && (
-            <div className="hidden md:block mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-              <p className="text-sm font-bold text-blue-900 mb-1">미리보기:</p>
-              <p className="text-blue-800 font-mono">
-                {tempSongForm.join(' - ')}
+            <div className="p-4 rounded-xl border bg-blue-50 border-blue-100">
+              <span className="text-xs font-bold block mb-1 uppercase tracking-wider text-blue-600">Preview</span>
+              <p className="text-base md:text-lg font-bold text-blue-900">
+                {tempSongForm.join(' — ')}
               </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* 버튼 */}
-      <div className="mt-4 md:mt-6 flex justify-end gap-3">
+      {/* 푸터 버튼 */}
+      <div className="px-6 md:px-8 py-4 md:py-5 border-t border-gray-100 bg-white flex justify-end gap-3">
         <button
           onClick={() => setShowSongFormModal(false)}
-          className="px-4 md:px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-medium text-sm md:text-base"
+          className="px-6 py-2.5 border font-semibold rounded-xl transition-colors border-gray-200 text-gray-600 hover:bg-gray-50"
         >
           취소
         </button>
         <button
           onClick={saveSongForm}
-          className="px-4 md:px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] font-bold text-sm md:text-base"
+          className="px-8 py-2.5 bg-indigo-500 font-semibold rounded-xl shadow-lg shadow-indigo-500/20 hover:opacity-90 transition-all"
+          style={{ color: '#ffffff' }}
         >
-          저장
+          저장하기
         </button>
       </div>
     </div>
@@ -1972,70 +1847,6 @@ const saveNote = async () => {
     </div>
   </div>
 )}
-
-      {/* 🆕 끼워넣기 노트 선택 모달 */}
-      {insertModal.show && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-lg max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">끼워넣을 노트 선택</h3>
-              <button
-                onClick={() => {
-                  setInsertModal({ show: false, afterOrder: 0 })
-                  setInsertSearchQuery('')
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-4 border-b">
-              <input
-                type="text"
-                value={insertSearchQuery}
-                onChange={(e) => setInsertSearchQuery(e.target.value)}
-                placeholder="노트 검색..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              {filteredInsertNotes.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  {userSheetNotes.length === 0
-                    ? '아직 저장된 필기 노트가 없습니다.'
-                    : '검색 결과가 없습니다.'
-                  }
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredInsertNotes.map((note) => (
-                    <button
-                      key={note.id}
-                      onClick={() => handleInsertNote(note.id)}
-                      className="w-full p-4 border rounded-lg hover:bg-amber-50 hover:border-amber-300 text-left transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">📝</span>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 truncate">
-                            {note.title || note.song_name}
-                          </h4>
-                          <p className="text-sm text-gray-500 truncate">
-                            {note.team_name || '빈 노트'} · 수정: {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                          </p>
-                        </div>
-                        <span className="text-amber-600 text-sm font-medium">선택</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 🎵 SheetMusicEditor - 다중 곡 악보 에디터 */}
       {showSheetMusicEditor && sheetEditorSongs.length > 0 && (

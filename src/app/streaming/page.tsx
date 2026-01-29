@@ -112,12 +112,12 @@ const isMobile = useMobile()
             </div>
             {/* WORSHEEP으로 돌아가기 */}
             <button
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/main')}
               className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1"
-              title="WORSHEEP으로 돌아가기"
+              title="뒤로가기 (메인)"
             >
               <ArrowLeft className="w-3 h-3" />
-              <span>WORSHEEP</span>
+              <span>뒤로가기 (메인)</span>
             </button>
           </div>
         </div>

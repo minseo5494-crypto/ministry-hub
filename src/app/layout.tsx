@@ -49,6 +49,11 @@ export default function RootLayout({
           src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
           crossOrigin="anonymous"
         />
+        {/* Material Symbols for Sheet Music Editor */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
         {/* PWA 메타태그 */}
         <meta name="application-name" content="WORSHEEP" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

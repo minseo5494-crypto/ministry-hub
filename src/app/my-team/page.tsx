@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { Users, Plus, UserPlus, ChevronRight, Building2, Crown, User } from 'lucide-react'
+import Link from 'next/link'
 
 interface Team {
   id: string
@@ -105,16 +106,24 @@ export default function MyTeamPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">My Team</h1>
-            <button
-              onClick={() => router.push('/')}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg touch-manipulation"
-            >
-              메인으로
-            </button>
+            <div className="flex items-center gap-3">
+              {/* 뒤로가기 */}
+              <button
+                onClick={() => router.push('/main')}
+                className="p-2 -ml-2 hover:bg-slate-100 rounded-lg transition"
+                title="뒤로가기 (메인)"
+              >
+                <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
+              </button>
+              {/* 로고 */}
+              <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+                WORSHEEP
+              </Link>
+            </div>
+            <h1 className="text-lg font-bold text-gray-900">My Team</h1>
           </div>
         </div>
       </div>

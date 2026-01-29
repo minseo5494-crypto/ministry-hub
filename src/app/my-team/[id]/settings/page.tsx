@@ -10,6 +10,7 @@ import {
   ArrowLeft, Save, Trash2, RefreshCw, Users,
   Crown, Shield, User, UserX, Copy, Check, Settings
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface TeamInfo {
   id: string
@@ -406,22 +407,31 @@ export default function TeamSettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center">
-            <button
-              onClick={() => router.push(`/my-team/${teamId}`)}
-              className="mr-4 p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">팀 설정</h1>
-              {isSystemAdmin && (
-                <span className="text-xs text-purple-600 font-semibold">
-                  시스템 관리자 권한
-                </span>
-              )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* 뒤로가기 */}
+              <button
+                onClick={() => router.push(`/my-team/${teamId}`)}
+                className="p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+                title="뒤로가기 (팀 페이지)"
+              >
+                <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
+              </button>
+              {/* 로고 */}
+              <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+                WORSHEEP
+              </Link>
+              <span className="text-slate-300">|</span>
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">팀 설정</h1>
+                {isSystemAdmin && (
+                  <span className="text-xs text-purple-600 font-semibold">
+                    시스템 관리자 권한
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>

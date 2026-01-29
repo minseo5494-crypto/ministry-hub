@@ -6,6 +6,7 @@ import { supabase, Song, SheetMusicNote } from '@/lib/supabase'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import SheetMusicEditor from '@/components/SheetMusicEditor'
 import { Plus, X, Search } from 'lucide-react'
+import Link from 'next/link'
 
 export default function MyNotesPage() {
   const router = useRouter()
@@ -265,13 +266,20 @@ export default function MyNotesPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              {/* 뒤로가기 */}
               <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                onClick={() => router.push('/main')}
+                className="p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+                title="뒤로가기 (메인)"
               >
-                ←
+                <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
               </button>
-              <h1 className="text-xl font-bold text-gray-900">내 필기 노트</h1>
+              {/* 로고 */}
+              <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+                WORSHEEP
+              </Link>
+              <span className="hidden sm:inline text-slate-300">|</span>
+              <h1 className="hidden sm:inline text-lg font-bold text-gray-900">내 필기 노트</h1>
             </div>
             <button
               onClick={openNewNoteModal}

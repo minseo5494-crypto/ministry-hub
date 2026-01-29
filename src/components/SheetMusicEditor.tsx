@@ -191,8 +191,16 @@ export default function SheetMusicEditor({
   const [tool, setTool] = useState<Tool>('pan') // 기본: 손 모드 (화면 이동)
   const [color, setColor] = useState('#000000')
   const [showColorPicker, setShowColorPicker] = useState(false) // 색상 선택 팝업
-  const [strokeSize, setStrokeSize] = useState(3)
+  const [strokeSize, setStrokeSize] = useState(5) // 기본 펜 크기
   const [eraserSize, setEraserSize] = useState(20) // 지우개 크기
+
+  // ===== 새 디자인: 다크모드 & 팝오버 상태 =====
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [showPenPopover, setShowPenPopover] = useState(false)
+  const [showHighlighterPopover, setShowHighlighterPopover] = useState(false)
+  const [showEraserPopover, setShowEraserPopover] = useState(false)
+  const [showTextPopover, setShowTextPopover] = useState(false)
+  const [highlighterColor, setHighlighterColor] = useState('#FFFF00') // 형광펜 색상
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [scale, setScale] = useState(0.5)  // 초기값을 작게 설정
@@ -2842,6 +2850,34 @@ export default function SheetMusicEditor({
     })
   }, [])
 
+  // 선택된 텍스트 삭제
+  const deleteSelectedTexts = useCallback(() => {
+    // 올가미로 선택된 텍스트들
+    const lassoSelectedIds = lassoSelection.selectedTextIds
+    // 개별 선택된 텍스트
+    const singleSelectedId = selectedTextId
+
+    if (lassoSelectedIds.length === 0 && !singleSelectedId) return
+
+    setAnnotations(prev => prev.map(a => {
+      if (a.pageNumber !== currentPage) return a
+      return {
+        ...a,
+        textElements: a.textElements.filter(t => {
+          // 올가미 선택 또는 개별 선택된 텍스트 삭제
+          if (lassoSelectedIds.includes(t.id)) return false
+          if (t.id === singleSelectedId) return false
+          return true
+        })
+      }
+    }))
+
+    // 선택 해제
+    setSelectedTextId(null)
+    clearLassoSelection()
+    saveToHistory()
+  }, [lassoSelection.selectedTextIds, selectedTextId, currentPage, clearLassoSelection, saveToHistory])
+
   // 도구 전환 시 진행 중인 스트로크 저장 후 도구 변경
   const switchTool = useCallback((newTool: Tool) => {
     // 현재 그리는 중인 스트로크가 있으면 먼저 저장 (ref 사용)
@@ -2887,10 +2923,16 @@ export default function SheetMusicEditor({
 
     // 도구 변경
     setTool(newTool)
+
+    // 형광펜으로 전환 시 형광펜 색상 적용
+    if (newTool === 'highlighter') {
+      setColor(highlighterColor)
+    }
+
     if (newTool !== 'lasso') {
       clearLassoSelection()
     }
-  }, [isDrawing, currentStroke, color, strokeSize, currentPage, clearLassoSelection])
+  }, [isDrawing, currentStroke, color, strokeSize, currentPage, clearLassoSelection, highlighterColor])
 
   // ===== 키보드 단축키 =====
   useEffect(() => {
@@ -2965,6 +3007,14 @@ export default function SheetMusicEditor({
         }
       }
 
+      // Delete/Backspace: 선택된 텍스트 삭제 (데스크톱)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedTextId || lassoSelection.selectedTextIds.length > 0) {
+          e.preventDefault()
+          deleteSelectedTexts()
+        }
+      }
+
       // 줌 단축키
       if (isCmd && (e.key === '+' || e.key === '=')) {
         e.preventDefault()
@@ -2982,7 +3032,7 @@ export default function SheetMusicEditor({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isViewMode, isAddingText, editingTextId, currentPage, totalPages, isMultiSongMode, currentSongIndex, songs.length, isMobile, undo, redo, switchTool, handleZoom, handleFitToScreen])
+  }, [isViewMode, isAddingText, editingTextId, currentPage, totalPages, isMultiSongMode, currentSongIndex, songs.length, isMobile, undo, redo, switchTool, handleZoom, handleFitToScreen, deleteSelectedTexts, selectedTextId, lassoSelection.selectedTextIds])
 
   // 커서 스타일 결정
   const getCursorStyle = () => {
@@ -3010,636 +3060,458 @@ export default function SheetMusicEditor({
   }, [hasUnsavedChanges, onClose])
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* 상단 툴바 - 밝은 테마 (모바일 최적화) */}
-      {/* 보기 모드에서 hideToolbar가 true면 숨김 */}
-      <div className={`bg-white border-b border-gray-200 shadow-sm ${isMobile ? 'px-1.5 py-1' : 'p-2'} ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
-        {/* 1줄 레이아웃: 왼쪽(닫기+곡정보) | 중앙(네비게이션) | 오른쪽(모드+버튼) */}
-        <div className={`flex items-center ${isMobile ? 'justify-between gap-1' : 'justify-between gap-4'}`}>
-          {/* 왼쪽: 닫기 + 페이지 */}
-          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'} flex-shrink-0`}>
-            <button
-              onClick={handleCloseRequest}
-              className={`hover:bg-gray-100 rounded text-gray-700 ${isMobile ? 'p-1.5 text-base' : 'p-2'}`}
-            >
-              ✕
-            </button>
+    <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden ${isDarkMode ? 'editor-dark' : 'editor-light'} ${isDarkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
+      {/* ===== 헤더 (새 디자인) ===== */}
+      <header className={`h-14 md:h-16 border-b px-3 md:px-6 flex items-center justify-between z-50 ${
+        isDarkMode
+          ? 'bg-slate-900/80 border-slate-800'
+          : 'bg-white/80 border-slate-200'
+      } backdrop-blur-md ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
+        {/* 왼쪽: 닫기 + 페이지 네비게이션 */}
+        <div className="flex items-center gap-2 md:gap-4">
+          <button
+            onClick={handleCloseRequest}
+            className={`p-2 rounded-full transition-colors ${
+              isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
 
-            {/* 페이지 네비게이션 */}
-            {totalPages > 1 && (
-              <div className={`flex items-center text-gray-700 bg-gray-100 rounded-lg ${isMobile ? 'gap-0 px-1 py-0.5' : 'gap-1 px-2 py-1'}`}>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-0.5 text-xs' : 'p-1'}`}
-                >
-                  ◀
-                </button>
-                <span className={`font-medium text-center ${isMobile ? 'text-xs min-w-[28px]' : 'text-sm min-w-[35px]'}`}>
-                  {currentPage}/{totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className={`hover:bg-gray-200 rounded disabled:opacity-50 ${isMobile ? 'p-0.5 text-xs' : 'p-1'}`}
-                >
-                  ▶
-                </button>
-              </div>
-            )}
+          <div className={`h-8 w-px mx-1 md:mx-2 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+          {/* 페이지 네비게이션 */}
+          <div className={`flex items-center rounded-lg p-1 ${
+            isDarkMode ? 'bg-slate-800' : 'bg-slate-100'
+          }`}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`p-1.5 rounded-md shadow-sm transition-all disabled:opacity-30 ${
+                isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg leading-none">chevron_left</span>
+            </button>
+            <span className="px-3 md:px-4 text-sm font-medium">{currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className={`p-1.5 rounded-md shadow-sm transition-all disabled:opacity-30 ${
+                isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg leading-none">chevron_right</span>
+            </button>
           </div>
 
-          {/* 중앙: 곡 정보 (모바일에서는 숨김) */}
-          {!isMobile && (
-            <div className="flex items-center gap-2 flex-shrink min-w-0">
-              <div className="flex flex-col min-w-0">
-                {isMultiSongMode && setlistTitle && (
-                  <span className="text-xs text-purple-600 font-medium truncate">{setlistTitle}</span>
-                )}
-                <span className="font-medium truncate text-gray-800 max-w-[200px]">
-                  {effectiveSongName}
-                </span>
-                {effectiveArtistName && (
-                  <span className="text-xs text-gray-500 truncate max-w-[200px]">{effectiveArtistName}</span>
-                )}
-              </div>
-              {isMultiSongMode && (
-                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full whitespace-nowrap ml-2">
+          {/* 다중 곡 모드: 곡 네비게이션 */}
+          {isMultiSongMode && songs.length > 1 && (
+            <>
+              <div className={`h-8 w-px mx-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'} hidden md:block`} />
+              <div className={`hidden md:flex items-center rounded-lg p-1 ${
+                isDarkMode ? 'bg-purple-900/30' : 'bg-purple-50'
+              }`}>
+                <button
+                  onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
+                  disabled={currentSongIndex === 0}
+                  className={`p-1.5 rounded-md transition-all disabled:opacity-30 ${
+                    isDarkMode ? 'hover:bg-purple-800/50' : 'hover:bg-purple-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-lg leading-none">skip_previous</span>
+                </button>
+                <span className={`px-3 text-sm font-medium ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>
                   {currentSongIndex + 1}/{songs.length}
                 </span>
-              )}
-              {!isMultiSongMode && queueInfo && (
-                <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full whitespace-nowrap">
-                  {queueInfo.current}/{queueInfo.total}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* 중앙: 곡 네비게이션 (다중 곡 모드, 데스크톱) */}
-          {!isMobile && isMultiSongMode && songs.length > 1 && (
-            <div className="flex items-center gap-1.5 text-gray-700 bg-purple-50 rounded-lg px-2 py-1">
-              <button
-                onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
-                disabled={currentSongIndex === 0}
-                className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
-                title="이전 곡"
-              >
-                ⏮
-              </button>
-              <span className="text-sm font-medium text-purple-700 text-center min-w-[70px]">
-                {effectiveSongName.length > 8 ? effectiveSongName.slice(0, 8) + '..' : effectiveSongName}
-              </span>
-              <button
-                onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
-                disabled={currentSongIndex === songs.length - 1}
-                className="p-1 hover:bg-purple-100 rounded disabled:opacity-30"
-                title="다음 곡"
-              >
-                ⏭
-              </button>
-            </div>
-          )}
-
-          {/* 오른쪽: 모드 전환 + 저장/내보내기 버튼 */}
-          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'} flex-shrink-0`}>
-            {!isMultiSongMode && queueInfo && queueInfo.nextSongName && !isMobile && (
-              <span className="text-xs text-gray-500">
-                다음: {queueInfo.nextSongName}
-              </span>
-            )}
-
-            {/* 모드 전환 버튼 - 더 명확한 시각적 구분 */}
-            <div className={`flex items-center rounded-lg p-0.5 transition-colors ${
-              isViewMode ? 'bg-blue-100' : 'bg-orange-100'
-            }`}>
-              <button
-                onClick={() => setEditorMode('view')}
-                className={`rounded-md font-medium transition-all duration-200 ${
-                  isMobile ? 'px-2 py-1 text-sm' : 'px-3 py-1.5 text-sm'
-                } ${
-                  isViewMode
-                    ? 'bg-blue-100 text-blue-700 shadow-md'
-                    : 'text-blue-600 hover:bg-blue-200'
-                }`}
-                title="악보 보기 (스와이프로 페이지 넘기기)"
-              >
-                {isMobile ? '👁' : '👁 보기'}
-              </button>
-              <button
-                onClick={() => setEditorMode('edit')}
-                className={`rounded-md font-medium transition-all duration-200 ${
-                  isMobile ? 'px-2 py-1 text-sm' : 'px-3 py-1.5 text-sm'
-                } ${
-                  !isViewMode
-                    ? 'bg-orange-500 text-white shadow-md'
-                    : 'text-orange-600 hover:bg-orange-200'
-                }`}
-                title="필기 모드 (Apple Pencil/펜으로 필기)"
-              >
-                {isMobile ? '✏️' : '✏️ 필기'}
-              </button>
-            </div>
-
-            {/* 줌 컨트롤 - 뷰 모드에서 표시 */}
-            {isViewMode && (
-              <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'} bg-gray-100 rounded-lg px-2 py-1`}>
                 <button
-                  onClick={() => handleZoom(-0.1)}
-                  className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
-                  title="축소 (Cmd+-)"
+                  onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
+                  disabled={currentSongIndex === songs.length - 1}
+                  className={`p-1.5 rounded-md transition-all disabled:opacity-30 ${
+                    isDarkMode ? 'hover:bg-purple-800/50' : 'hover:bg-purple-100'
+                  }`}
                 >
-                  ➖
-                </button>
-                <div className="relative group">
-                  <button
-                    onClick={handleFitToScreen}
-                    className={`hover:bg-gray-200 rounded text-xs font-medium ${isMobile ? 'px-1 py-1' : 'px-2 py-1'}`}
-                    title="화면에 맞추기 (Cmd+0)"
-                  >
-                    {Math.round(scale * 100)}%
-                  </button>
-                  {/* 줌 옵션 드롭다운 (데스크탑 호버시) */}
-                  {!isMobile && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 py-1 min-w-[100px]">
-                      <button
-                        onClick={() => { handleResetZoom(); }}
-                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
-                      >
-                        100%
-                      </button>
-                      <button
-                        onClick={() => { handleFitToWidth(); }}
-                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
-                      >
-                        너비에 맞추기
-                      </button>
-                      <button
-                        onClick={() => { handleFitToScreen(); }}
-                        className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left"
-                      >
-                        화면에 맞추기
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleZoom(0.1)}
-                  className={`hover:bg-gray-200 rounded ${isMobile ? 'p-1.5 text-sm' : 'p-1'}`}
-                  title="확대 (Cmd++)"
-                >
-                  ➕
+                  <span className="material-symbols-outlined text-lg leading-none">skip_next</span>
                 </button>
               </div>
-            )}
-
-            {/* 내보내기/저장 버튼 - 편집 모드에서만 표시 */}
-            {!isViewMode && (
-              <>
-                <button
-                  onClick={() => setShowExportModal(true)}
-                  className={`bg-green-50 hover:bg-green-100 border border-green-200 rounded font-medium text-green-700 ${
-                    isMobile ? 'px-2 py-1 text-sm' : 'px-4 py-2'
-                  }`}
-                  disabled={exporting}
-                >
-                  {exporting ? '...' : (isMobile ? '📤' : '내보내기')}
-                </button>
-                <button
-                  onClick={handleSave}
-                  className={`bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded font-medium text-blue-700 ${
-                    isMobile ? 'px-2 py-1 text-sm' : 'px-4 py-2'
-                  }`}
-                >
-                  {isMobile ? '💾' : (isMultiSongMode ? '전체 저장' : (queueInfo && queueInfo.current < queueInfo.total ? '저장 & 다음' : '저장'))}
-                </button>
-              </>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
-        {/* 모바일에서 곡 네비게이션 (다중 곡 모드) 두 번째 줄에 표시 */}
-        {isMobile && isMultiSongMode && songs.length > 1 && (
-          <div className="flex items-center justify-center gap-4 mt-1.5 pt-1.5 border-t border-gray-100">
-            <div className="flex items-center gap-2 text-gray-700 bg-purple-50 rounded-lg px-2 py-1">
-              <button
-                onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
-                disabled={currentSongIndex === 0}
-                className="p-1.5 hover:bg-purple-100 rounded disabled:opacity-30"
-                title="이전 곡"
-              >
-                ⏮
-              </button>
-              <span className="text-xs font-medium text-purple-700 text-center min-w-[50px]">
-                {effectiveSongName.length > 6 ? effectiveSongName.slice(0, 6) + '..' : effectiveSongName}
-              </span>
-              <button
-                onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
-                disabled={currentSongIndex === songs.length - 1}
-                className="p-1.5 hover:bg-purple-100 rounded disabled:opacity-30"
-                title="다음 곡"
-              >
-                ⏭
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+        {/* 중앙: 곡 정보 (데스크톱) */}
+        <div className="absolute left-1/2 -translate-x-1/2 text-center hidden md:block">
+          {isMultiSongMode && setlistTitle && (
+            <p className={`text-xs font-medium ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>{setlistTitle}</p>
+          )}
+          <h1 className="text-lg font-bold leading-tight">{effectiveSongName}</h1>
+          {effectiveArtistName && (
+            <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{effectiveArtistName}</p>
+          )}
+        </div>
 
-      {/* 도구 모음 - 밝은 테마 (모바일 최적화) - 편집 모드에서만 표시 */}
-      <div className={`bg-gray-50 border-b border-gray-200 flex items-center flex-wrap transition-all duration-300 ${
-        isViewMode ? 'max-h-0 overflow-hidden opacity-0 p-0 border-b-0' : `${isMobile ? 'p-1.5 gap-1.5 gap-y-1 opacity-100' : 'p-2 gap-3 gap-y-1.5 opacity-100'}`
-      }`}>
-        {/* 도구 선택 - 굿노트 스타일 순서 */}
-        <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'}`}>
-          {/* 손 모드 (기본) - 화면 이동 */}
+        {/* 오른쪽: 모드 전환 + 버튼 */}
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* 모드 전환 */}
+          <div className={`flex p-1 rounded-xl ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+            <button
+              onClick={() => setEditorMode('view')}
+              className={`px-3 md:px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                isViewMode
+                  ? `shadow-sm ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-white text-slate-900'}`
+                  : `${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">visibility</span>
+            </button>
+            <button
+              onClick={() => setEditorMode('edit')}
+              className={`px-3 md:px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                !isViewMode
+                  ? `shadow-sm ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-white text-slate-900'}`
+                  : `${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+            </button>
+          </div>
+
+          <div className={`h-8 w-px mx-1 hidden md:block ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+          {/* Export 버튼 */}
           <button
-            onClick={() => switchTool('pan')}
-            className={`rounded ${tool === 'pan' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'} ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
-            title="이동 (기본)"
+            onClick={() => setShowExportModal(true)}
+            disabled={exporting}
+            className={`flex items-center gap-2 px-3 md:px-4 py-2 border rounded-xl transition-colors ${
+              isDarkMode
+                ? 'border-slate-700 hover:bg-slate-800'
+                : 'border-slate-200 hover:bg-slate-50'
+            }`}
           >
-            ✋
+            <span className="material-symbols-outlined text-lg">upload</span>
+            <span className="text-sm font-medium hidden md:inline">{exporting ? '...' : '내보내기'}</span>
           </button>
 
-          {/* 올가미 - 모바일에서는 숨김 */}
-          {!isMobile && (
+          {/* Save 버튼 */}
+          <button
+            onClick={handleSave}
+            className="bg-[#ff6b00] text-white px-4 md:px-5 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/20"
+          >
+            {isMobile ? <span className="material-symbols-outlined">save</span> : (isMultiSongMode ? '모두 저장' : '저장')}
+          </button>
+        </div>
+      </header>
+
+      {/* 모바일 곡 네비게이션 (다중 곡 모드) */}
+      {isMobile && isMultiSongMode && songs.length > 1 && !hideToolbar && (
+        <div className={`flex items-center justify-center py-2 border-b ${
+          isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200'
+        }`}>
+          <div className={`flex items-center rounded-lg p-1 ${isDarkMode ? 'bg-purple-900/30' : 'bg-purple-50'}`}>
             <button
-              onClick={() => switchTool('lasso')}
-              className={`p-2 rounded ${tool === 'lasso' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'}`}
+              onClick={() => setCurrentSongIndex(i => Math.max(0, i - 1))}
+              disabled={currentSongIndex === 0}
+              className="p-1.5 rounded-md disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined text-lg">skip_previous</span>
+            </button>
+            <span className={`px-3 text-sm font-medium ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>
+              {effectiveSongName.length > 10 ? effectiveSongName.slice(0, 10) + '..' : effectiveSongName}
+            </span>
+            <button
+              onClick={() => setCurrentSongIndex(i => Math.min(songs.length - 1, i + 1))}
+              disabled={currentSongIndex === songs.length - 1}
+              className="p-1.5 rounded-md disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined text-lg">skip_next</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 메인 컨텐츠 영역 (새 디자인) ===== */}
+      <main className="flex-1 flex overflow-hidden relative">
+        {/* ===== 왼쪽 도구 사이드바 (새 디자인) ===== */}
+        <aside className={`absolute z-40 transition-all duration-300 ${
+          isViewMode ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        } ${isMobile ? 'bottom-20 left-4' : 'left-6 top-1/2 -translate-y-1/2'}`}>
+          <div className={`p-1.5 rounded-2xl shadow-xl flex gap-1.5 border ${
+            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          } ${isMobile ? 'flex-row' : 'flex-col'}`}>
+            {/* 손 모드 */}
+            <button
+              onClick={() => { switchTool('pan'); setShowPenPopover(false); setShowHighlighterPopover(false); setShowEraserPopover(false); setShowTextPopover(false); }}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                tool === 'pan' ? 'editor-active-tool' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+              }`}
+              title="이동"
+            >
+              <span className="material-symbols-outlined">pan_tool</span>
+            </button>
+
+            {/* 올가미 */}
+            <button
+              onClick={() => { switchTool('lasso'); setShowPenPopover(false); setShowHighlighterPopover(false); setShowEraserPopover(false); setShowTextPopover(false); }}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                tool === 'lasso' ? 'editor-active-tool' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+              }`}
               title="올가미 선택"
             >
-              ⭕
+              <span className="material-symbols-outlined">lasso_select</span>
             </button>
-          )}
 
-          {/* 구분선 */}
-          <div className={`bg-gray-300 mx-0.5 ${isMobile ? 'w-px h-5' : 'w-px h-6 mx-1'}`} />
+            <div className={`mx-2 ${isMobile ? 'w-px h-auto' : 'h-px w-auto'} ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`} />
 
-          {/* 펜 */}
-          <button
-            onClick={() => switchTool('pen')}
-            className={`rounded ${tool === 'pen' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'} ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
-            title="펜"
-          >
-            ✏️
-          </button>
-
-          {/* 형광펜 */}
-          <button
-            onClick={() => switchTool('highlighter')}
-            className={`rounded ${tool === 'highlighter' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'} ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
-            title="형광펜"
-          >
-            🖍️
-          </button>
-
-          {/* 지우개 */}
-          <button
-            onClick={() => switchTool('eraser')}
-            className={`rounded ${tool === 'eraser' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'} ${isMobile ? 'p-2.5 text-lg' : 'p-2'}`}
-            title="지우개"
-          >
-            🧽
-          </button>
-
-          {/* 텍스트 - 모바일에서는 숨김 */}
-          {!isMobile && (
-            <button
-              onClick={() => switchTool('text')}
-              className={`p-2 rounded ${tool === 'text' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'}`}
-              title="텍스트"
-            >
-              <span className="font-bold">T</span>
-            </button>
-          )}
-        </div>
-
-        {/* 구분선 */}
-        <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-
-        {/* 색상 선택 */}
-        {(tool === 'pen' || tool === 'highlighter' || tool === 'text') && (
-          <>
-            <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1.5'} relative`}>
-              {/* 모바일: 4개 색상 + 더보기 버튼, 데스크탑: 모든 색상 */}
-              {(tool === 'highlighter' ? HIGHLIGHTER_COLORS : COLORS).slice(0, isMobile ? 4 : undefined).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => { setColor(c); setShowColorPicker(false) }}
-                  className={`rounded-full border-2 flex-shrink-0 ${
-                    color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
-                  }`}
-                  style={{
-                    backgroundColor: c,
-                    width: isMobile ? 24 : 28,
-                    height: isMobile ? 24 : 28,
-                    minWidth: isMobile ? 24 : 28,
-                    minHeight: isMobile ? 24 : 28,
-                  }}
-                />
-              ))}
-              {/* 모바일에서 더보기 버튼 */}
-              {isMobile && (
-                <button
-                  onClick={() => setShowColorPicker(!showColorPicker)}
-                  className={`rounded-full border-2 flex-shrink-0 flex items-center justify-center text-xs ${
-                    showColorPicker ? 'border-blue-500 bg-blue-100' : 'border-gray-300 bg-gray-100'
-                  }`}
-                  style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
-                  title="더 많은 색상"
+            {/* 펜 + 팝오버 */}
+            <div className="relative flex items-center">
+              <button
+                onClick={() => {
+                  switchTool('pen')
+                  setShowPenPopover(!showPenPopover)
+                  setShowHighlighterPopover(false)
+                  setShowEraserPopover(false)
+                  setShowTextPopover(false)
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                  tool === 'pen' ? 'editor-active-tool shadow-md' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+                }`}
+                title="펜"
+              >
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+              {/* 펜 팝오버 */}
+              {showPenPopover && tool === 'pen' && (
+                <div className={`pen-popover absolute flex items-center gap-4 p-3 px-4 rounded-2xl shadow-2xl whitespace-nowrap editor-animate-in border z-50 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                } ${isMobile ? 'bottom-full left-0 mb-2' : 'left-[calc(100%+12px)]'}`}
+                style={isMobile ? {} : { top: '50%', transform: 'translateY(-50%)' }}
                 >
-                  +
-                </button>
-              )}
-              {/* 색상 선택 팝업 (모바일) */}
-              {isMobile && showColorPicker && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 p-3 z-50">
-                  <div className="grid grid-cols-5 gap-2">
-                    {(tool === 'highlighter' ? HIGHLIGHTER_COLORS : COLORS).map((c) => (
+                  <div className="flex gap-2">
+                    {COLORS.slice(0, 5).map((c) => (
                       <button
                         key={c}
-                        onClick={() => { setColor(c); setShowColorPicker(false) }}
-                        className={`rounded-full border-2 ${
-                          color === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
-                        }`}
-                        style={{ backgroundColor: c, width: 32, height: 32 }}
+                        onClick={() => setColor(c)}
+                        className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${
+                          color === c ? 'ring-2 ring-offset-2 ring-[#ff6b00]' : ''
+                        } ${isDarkMode ? 'ring-offset-slate-900' : 'ring-offset-white'}`}
+                        style={{ backgroundColor: c }}
                       />
                     ))}
+                  </div>
+                  <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Size</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={strokeSize}
+                      onChange={(e) => setStrokeSize(Number(e.target.value))}
+                      className="w-20 h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00]"
+                      style={{ background: isDarkMode ? '#1e293b' : '#e2e8f0' }}
+                    />
+                    <span className={`text-xs font-bold w-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{strokeSize}</span>
                   </div>
                 </div>
               )}
             </div>
-            <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-          </>
-        )}
 
-        {/* 텍스트 크기 조절 */}
-        {tool === 'text' && (
-          <>
-            <div className="flex items-center gap-1.5">
-              {/* 텍스트 크기 미리보기 */}
-              <span
-                className="font-bold text-gray-700"
-                style={{ fontSize: Math.min(textFontSize / 2, 16) + 'px' }}
+            {/* 형광펜 + 팝오버 */}
+            <div className="relative flex items-center">
+              <button
+                onClick={() => {
+                  switchTool('highlighter')
+                  setShowHighlighterPopover(!showHighlighterPopover)
+                  setShowPenPopover(false)
+                  setShowEraserPopover(false)
+                  setShowTextPopover(false)
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                  tool === 'highlighter' ? 'editor-active-tool shadow-md' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+                }`}
+                title="형광펜"
               >
-                A
-              </span>
-              <select
-                value={textFontSize}
-                onChange={(e) => setTextFontSize(Number(e.target.value))}
-                className="text-sm border border-gray-300 rounded px-1 py-0.5 bg-white"
+                <span className="material-symbols-outlined">ink_highlighter</span>
+              </button>
+              {/* 형광펜 팝오버 */}
+              {showHighlighterPopover && tool === 'highlighter' && (
+                <div className={`pen-popover absolute flex items-center gap-4 p-3 px-4 rounded-2xl shadow-2xl whitespace-nowrap editor-animate-in border z-50 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                } ${isMobile ? 'bottom-full left-0 mb-2' : 'left-[calc(100%+12px)]'}`}
+                style={isMobile ? {} : { top: '50%', transform: 'translateY(-50%)' }}
+                >
+                  <div className="flex gap-2">
+                    {HIGHLIGHTER_COLORS.slice(0, 5).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setHighlighterColor(c); setColor(c); }}
+                        className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${
+                          highlighterColor === c ? 'ring-2 ring-offset-2 ring-[#ff6b00]' : ''
+                        } ${isDarkMode ? 'ring-offset-slate-900' : 'ring-offset-white'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Size</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={strokeSize}
+                      onChange={(e) => setStrokeSize(Number(e.target.value))}
+                      className="w-20 h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00]"
+                      style={{ background: isDarkMode ? '#1e293b' : '#e2e8f0' }}
+                    />
+                    <span className={`text-xs font-bold w-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{strokeSize}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 텍스트 + 팝오버 */}
+            <div className="relative flex items-center">
+              <button
+                onClick={() => {
+                  switchTool('text')
+                  setShowTextPopover(!showTextPopover)
+                  setShowPenPopover(false)
+                  setShowHighlighterPopover(false)
+                  setShowEraserPopover(false)
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                  tool === 'text' ? 'editor-active-tool shadow-md' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+                }`}
+                title="텍스트"
               >
-                <option value={12}>12</option>
-                <option value={16}>16</option>
-                <option value={20}>20</option>
-                <option value={24}>24</option>
-                <option value={32}>32</option>
-                <option value={40}>40</option>
-                <option value={48}>48</option>
-                <option value={64}>64</option>
-              </select>
-              <span className="text-xs text-gray-500">pt</span>
+                <span className="material-symbols-outlined">title</span>
+              </button>
+              {/* 텍스트 팝오버 */}
+              {showTextPopover && tool === 'text' && (
+                <div className={`pen-popover absolute flex items-center gap-4 p-3 px-4 rounded-2xl shadow-2xl whitespace-nowrap editor-animate-in border z-50 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                } ${isMobile ? 'bottom-full left-0 mb-2' : 'left-[calc(100%+12px)]'}`}
+                style={isMobile ? {} : { top: '50%', transform: 'translateY(-50%)' }}
+                >
+                  <div className="flex gap-2">
+                    {COLORS.slice(0, 5).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setColor(c)}
+                        className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${
+                          color === c ? 'ring-2 ring-offset-2 ring-[#ff6b00]' : ''
+                        } ${isDarkMode ? 'ring-offset-slate-900' : 'ring-offset-white'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Size</span>
+                    <select
+                      value={textFontSize}
+                      onChange={(e) => setTextFontSize(Number(e.target.value))}
+                      className={`text-xs font-bold border rounded px-2 py-1 ${
+                        isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {[12, 16, 20, 24, 32, 40, 48, 64].map(size => (
+                        <option key={size} value={size}>{size}pt</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-          </>
-        )}
 
-        {/* 지우개 크기 조절 */}
-        {tool === 'eraser' && (
-          <>
-            <div className="flex items-center gap-1">
-              {!isMobile && <span className="text-sm text-gray-600">크기:</span>}
-              <input
-                type="range"
-                min="10"
-                max="50"
-                value={eraserSize}
-                onChange={(e) => setEraserSize(Number(e.target.value))}
-                className={isMobile ? 'w-16' : 'w-24'}
-              />
-              {!isMobile && <span className="text-sm text-gray-500 w-8">{eraserSize}</span>}
+            {/* 지우개 + 팝오버 */}
+            <div className="relative flex items-center">
+              <button
+                onClick={() => {
+                  switchTool('eraser')
+                  setShowEraserPopover(!showEraserPopover)
+                  setShowPenPopover(false)
+                  setShowHighlighterPopover(false)
+                  setShowTextPopover(false)
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                  tool === 'eraser' ? 'editor-active-tool shadow-md' : `${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`
+                }`}
+                title="지우개"
+              >
+                <span className="material-symbols-outlined">ink_eraser</span>
+              </button>
+              {/* 지우개 팝오버 */}
+              {showEraserPopover && tool === 'eraser' && (
+                <div className={`pen-popover absolute flex items-center gap-4 p-3 px-4 rounded-2xl shadow-2xl whitespace-nowrap editor-animate-in border z-50 ${
+                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                } ${isMobile ? 'bottom-full left-0 mb-2' : 'left-[calc(100%+12px)]'}`}
+                style={isMobile ? {} : { top: '50%', transform: 'translateY(-50%)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-tighter ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Size</span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="50"
+                      value={eraserSize}
+                      onChange={(e) => setEraserSize(Number(e.target.value))}
+                      className="w-24 h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00]"
+                      style={{ background: isDarkMode ? '#1e293b' : '#e2e8f0' }}
+                    />
+                    <span className={`text-xs font-bold w-6 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{eraserSize}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-          </>
-        )}
 
-        {/* 굵기 조절 */}
-        {(tool === 'pen' || tool === 'highlighter') && (
-          <>
-            <div className="flex items-center gap-2">
-              {/* 굵기 미리보기 - 작은 점 */}
-              <div
-                className="rounded-full flex-shrink-0"
-                style={{
-                  width: 4,
-                  height: 4,
-                  backgroundColor: '#666',
-                }}
-              />
-              {/* 슬라이더 */}
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={strokeSize}
-                onChange={(e) => setStrokeSize(Number(e.target.value))}
-                className={`${isMobile ? 'w-16' : 'w-24'} h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500`}
-                style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(strokeSize - 1) / 9 * 100}%, #e5e7eb ${(strokeSize - 1) / 9 * 100}%, #e5e7eb 100%)`,
-                }}
-              />
-              {/* 굵기 미리보기 - 큰 점 */}
-              <div
-                className="rounded-full flex-shrink-0"
-                style={{
-                  width: 12,
-                  height: 12,
-                  backgroundColor: color,
-                  opacity: tool === 'highlighter' ? 0.5 : 1,
-                }}
-              />
-              {/* 숫자 표시 */}
-              <span className="text-sm font-medium text-gray-600 w-5 text-center">{strokeSize}</span>
-            </div>
-            <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-          </>
-        )}
+            <div className={`mx-2 ${isMobile ? 'w-px h-auto' : 'h-px w-auto'} ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`} />
 
-        {/* 실행 취소/다시 실행 */}
-        <div className={`flex items-center ${isMobile ? 'gap-0' : 'gap-1'}`}>
-          <button
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            className={`hover:bg-gray-200 rounded disabled:opacity-30 text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="실행 취소"
-          >
-            ↩️
-          </button>
-          <button
-            onClick={redo}
-            disabled={historyIndex >= history.length - 1}
-            className={`hover:bg-gray-200 rounded disabled:opacity-30 text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="다시 실행"
-          >
-            ↪️
-          </button>
-        </div>
-
-        {/* 구분선 */}
-        <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-
-        {/* 줌 컨트롤 */}
-        <div className={`flex items-center ${isMobile ? 'gap-0' : 'gap-1'}`}>
-          <button
-            onClick={() => handleZoom(-0.1)}
-            className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="축소 (Cmd+-)"
-          >
-            ➖
-          </button>
-          <div className="relative group">
+            {/* Undo */}
             <button
-              onClick={handleFitToScreen}
-              className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'text-xs w-10 py-1' : 'text-sm w-12 py-1'}`}
-              title="화면에 맞추기 (Cmd+0)"
+              onClick={undo}
+              disabled={historyIndex <= 0}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors disabled:opacity-30 ${
+                isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+              }`}
+              title="실행 취소"
             >
-              {Math.round(scale * 100)}%
+              <span className="material-symbols-outlined">undo</span>
             </button>
-            {/* 줌 옵션 드롭다운 */}
-            {!isMobile && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 py-1 min-w-[100px]">
-                <button
-                  onClick={() => { handleResetZoom(); }}
-                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
-                >
-                  100%
-                </button>
-                <button
-                  onClick={() => { handleFitToWidth(); }}
-                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
-                >
-                  너비에 맞추기
-                </button>
-                <button
-                  onClick={() => { handleFitToScreen(); }}
-                  className="w-full px-3 py-1.5 text-xs hover:bg-gray-100 text-left text-gray-700"
-                >
-                  화면에 맞추기
-                </button>
-              </div>
-            )}
+
+            {/* Redo */}
+            <button
+              onClick={redo}
+              disabled={historyIndex >= history.length - 1}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors disabled:opacity-30 ${
+                isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+              }`}
+              title="다시 실행"
+            >
+              <span className="material-symbols-outlined">redo</span>
+            </button>
+
+            <div className={`mx-2 ${isMobile ? 'w-px h-auto' : 'h-px w-auto'} ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`} />
+
+            {/* 전체 지우기 */}
+            <button
+              onClick={clearCurrentPage}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors text-red-500 ${
+                isDarkMode ? 'hover:bg-red-900/20' : 'hover:bg-red-50'
+              }`}
+              title="전체 지우기"
+            >
+              <span className="material-symbols-outlined">delete</span>
+            </button>
           </div>
-          <button
-            onClick={() => handleZoom(0.1)}
-            className={`hover:bg-gray-200 rounded text-gray-700 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-            title="확대 (Cmd++)"
-          >
-            ➕
-          </button>
-        </div>
+        </aside>
 
-        {/* 구분선 */}
-        <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-
-        {/* 전체 지우기 */}
-        <button
-          onClick={clearCurrentPage}
-          className={`hover:bg-red-100 rounded text-red-500 ${isMobile ? 'p-2 text-lg' : 'p-2'}`}
-          title="전체 지우기"
-        >
-          🗑️
-        </button>
-
-        {/* 구분선 */}
-        <div className={`bg-gray-300 ${isMobile ? 'w-px h-5' : 'w-px h-6'}`} />
-
-        {/* 송폼 버튼 - songForms가 있을 때만 표시 */}
-        {effectiveSongForms.length > 0 && (
-          <button
-            onClick={() => {
-              // 송폼이 비활성화 상태면 활성화하고 패널 열기
-              if (!songFormEnabled) {
-                setSongFormEnabled(true)
-                setShowSongFormPanel(true)
-              } else {
-                // 이미 활성화 상태면 패널만 토글
-                setShowSongFormPanel(!showSongFormPanel)
-              }
-            }}
-            className={`rounded font-medium flex items-center gap-1 flex-shrink-0 ${
-              songFormEnabled
-                ? 'bg-purple-100 text-purple-700 border border-purple-300'
-                : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
-            } ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
-            title="송폼 & 파트 태그"
-          >
-            🎵 {isMobile ? '' : '송폼'} {songFormEnabled ? '✓' : ''}
-          </button>
-        )}
-
-        {/* 피아노 악보 버튼 */}
-        <button
-          onClick={() => {
-            setEditingPianoScoreId(null)
-            setShowPianoModal(true)
-          }}
-          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
-          title="피아노 악보 추가"
-        >
-          🎹 {isMobile ? '' : '피아노'}
-        </button>
-
-        {/* 드럼 악보 버튼 */}
-        <button
-          onClick={() => {
-            setEditingDrumScoreId(null)
-            setShowDrumModal(true)
-          }}
-          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 bg-orange-50 text-orange-600 hover:bg-orange-100 ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
-          title="드럼 악보 추가"
-        >
-          🥁 {isMobile ? '' : '드럼'}
-        </button>
-
-        {/* 송폼 버튼 */}
-        <button
-          onClick={() => {
-            if (!songFormEnabled) setSongFormEnabled(true)
-            setShowPartTagPanel(false)
-            setShowSongFormPanel(!showSongFormPanel)
-          }}
-          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 ${
-            showSongFormPanel
-              ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300'
-              : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
-          } ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
-          title="송폼 추가/설정"
-        >
-          🎵 {isMobile ? '' : '송폼'}
-        </button>
-
-        {/* 파트태그 버튼 */}
-        <button
-          onClick={() => {
-            if (!songFormEnabled) setSongFormEnabled(true)
-            setShowSongFormPanel(false)
-            setShowPartTagPanel(!showPartTagPanel)
-          }}
-          className={`rounded font-medium flex items-center gap-1 flex-shrink-0 ${
-            showPartTagPanel
-              ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
-              : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
-          } ${isMobile ? 'px-2 py-1.5 text-xs' : 'px-3 py-1.5 text-sm'}`}
-          title="파트태그 추가"
-        >
-          🏷️ {isMobile ? '' : '파트'}
-        </button>
-      </div>
-
-      {/* 캔버스 영역 */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto flex items-center justify-center bg-black select-none"
+        {/* ===== 캔버스 영역 (새 디자인) ===== */}
+        <section
+          ref={containerRef}
+          className={`flex-1 overflow-auto flex items-center justify-center select-none editor-scroll p-4 md:p-8 ${
+            isDarkMode ? 'bg-slate-950/40' : 'bg-slate-200/40'
+          }`}
         style={{
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
@@ -3682,19 +3554,18 @@ export default function SheetMusicEditor({
         onClick={handleViewModeClick}
       >
         {/* 모드 전환 토스트 */}
+        {/* 모드 전환 토스트 */}
         {modeToast.show && (
-          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-6 py-3 rounded-xl shadow-2xl text-white font-medium text-lg transition-all duration-300 ${
+          <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 px-6 py-3 rounded-2xl shadow-2xl font-semibold text-lg transition-all duration-300 ${
             modeToast.mode === 'view'
-              ? 'bg-blue-100'
-              : 'bg-orange-500'
+              ? `${isDarkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`
+              : 'bg-[#ff6b00] text-white'
           }`}
-          style={{
-            animation: 'fadeInScale 0.2s ease-out',
-          }}
+          style={{ animation: 'fadeInScale 0.2s ease-out' }}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{modeToast.mode === 'view' ? '👁' : '✏️'}</span>
-              <span>{modeToast.mode === 'view' ? '보기 모드' : '필기 모드'}</span>
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl">{modeToast.mode === 'view' ? 'visibility' : 'edit'}</span>
+              <span>{modeToast.mode === 'view' ? 'View Mode' : 'Annotate Mode'}</span>
             </div>
           </div>
         )}
@@ -3738,67 +3609,82 @@ export default function SheetMusicEditor({
             }}
           />
 
-          {/* 텍스트 입력 모달 */}
+          {/* 텍스트 입력 모달 - 화면 중앙 고정 */}
           {isAddingText && (
-            <div
-              className="absolute bg-white border-2 border-blue-500 rounded shadow-lg p-2"
-              style={{ left: textPosition.x, top: textPosition.y, zIndex: 200 }}
-            >
-              <input
-                ref={textInputRef}
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') addTextElement()
-                  if (e.key === 'Escape') setIsAddingText(false)
-                }}
-                placeholder="텍스트 입력..."
-                className="border-none outline-none text-black"
-                autoFocus
-              />
-              <button
-                onClick={addTextElement}
-                className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm"
+            <div className="fixed inset-0 flex items-center justify-center z-[300] pointer-events-none">
+              <div
+                className="bg-white border-2 border-blue-500 rounded-xl shadow-2xl p-4 flex items-center gap-3 pointer-events-auto"
+                style={{ minWidth: '320px' }}
               >
-                확인
-              </button>
+                <input
+                  ref={textInputRef}
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addTextElement()
+                    if (e.key === 'Escape') setIsAddingText(false)
+                  }}
+                  placeholder="텍스트 입력..."
+                  className="flex-1 border-none outline-none text-black min-w-[200px] text-lg"
+                  autoFocus
+                />
+                <button
+                  onClick={addTextElement}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors whitespace-nowrap"
+                >
+                  확인
+                </button>
+              </div>
             </div>
           )}
 
-          {/* 텍스트 편집 모달 (더블 클릭으로 진입) */}
+          {/* 텍스트 편집 모달 - 화면 중앙 고정 */}
           {editingTextId && (
-            <div
-              className="absolute bg-white border-2 border-green-500 rounded shadow-lg p-2"
-              style={{ left: textPosition.x, top: textPosition.y, zIndex: 200 }}
-            >
-              <input
-                ref={textInputRef}
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') updateTextElement()
-                  if (e.key === 'Escape') {
-                    setEditingTextId(null)
-                    setTextInput('')
-                  }
-                }}
-                placeholder="텍스트 수정..."
-                className="border-none outline-none text-black"
-                autoFocus
-              />
-              <button
-                onClick={updateTextElement}
-                className="ml-2 px-2 py-1 bg-green-100 text-green-700 rounded text-sm"
+            <div className="fixed inset-0 flex items-center justify-center z-[300] pointer-events-none">
+              <div
+                className="bg-white border-2 border-green-500 rounded-xl shadow-2xl p-4 flex items-center gap-3 pointer-events-auto"
+                style={{ minWidth: '320px' }}
               >
-                완료
-              </button>
+                <input
+                  ref={textInputRef}
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') updateTextElement()
+                    if (e.key === 'Escape') {
+                      setEditingTextId(null)
+                      setTextInput('')
+                    }
+                  }}
+                  placeholder="텍스트 수정..."
+                  className="flex-1 border-none outline-none text-black min-w-[200px] text-lg"
+                  autoFocus
+                />
+                <button
+                  onClick={updateTextElement}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors whitespace-nowrap"
+                >
+                  완료
+                </button>
+              </div>
             </div>
           )}
 
           {/* 텍스트 요소 선택은 캔버스에서 직접 처리 (handlePointerDown) */}
           {/* 선택된 텍스트는 캔버스에서 파란 테두리로 표시됨 */}
+
+          {/* 모바일/태블릿: 선택된 텍스트 삭제 버튼 */}
+          {isMobile && (selectedTextId || lassoSelection.selectedTextIds.length > 0) && !isAddingText && !editingTextId && (
+            <button
+              onClick={deleteSelectedTexts}
+              className="absolute top-4 right-4 z-50 w-12 h-12 bg-red-500 text-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <span className="material-symbols-outlined text-2xl">close</span>
+            </button>
+          )}
 
           {/* 송폼 텍스트 오버레이 - songFormEnabled이고 송폼이 있을 때만 */}
           {effectiveSongForms.length > 0 && songFormEnabled && canvasReady && canvasSize.height > 0 && (
@@ -3975,7 +3861,133 @@ export default function SheetMusicEditor({
           })}
           </div> {/* exportAreaRef div 닫기 */}
         </div>
-      </div>
+        </section>
+
+        {/* ===== 하단 우측 플로팅 버튼들 (새 디자인) - View 모드에서 숨김 ===== */}
+        {!isViewMode && (
+        <div className="absolute bottom-4 md:bottom-8 right-4 md:right-8 flex flex-col gap-3 md:gap-4 items-end z-40 transition-all duration-300">
+          {/* Piano / Drums / Parts / Song Form 버튼 그룹 */}
+          <div className={`flex gap-1.5 md:gap-2 p-1.5 backdrop-blur-md border rounded-2xl shadow-xl ${
+            isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200'
+          }`}>
+            {/* Piano 버튼 */}
+            <button
+              onClick={() => {
+                setEditingPianoScoreId(null)
+                setShowPianoModal(true)
+              }}
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all editor-btn-hover ${
+                pianoScores.length > 0
+                  ? `${isDarkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`
+                  : `${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">piano</span>
+              <span className="hidden md:inline">Piano</span>
+            </button>
+
+            {/* Drums 버튼 */}
+            <button
+              onClick={() => {
+                setEditingDrumScoreId(null)
+                setShowDrumModal(true)
+              }}
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all editor-btn-hover ${
+                drumScores.length > 0
+                  ? `${isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-600'}`
+                  : `${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">set_meal</span>
+              <span className="hidden md:inline">Drums</span>
+            </button>
+
+            {/* Parts 버튼 */}
+            <button
+              onClick={() => {
+                if (!songFormEnabled) setSongFormEnabled(true)
+                setShowSongFormPanel(false)
+                setShowPartTagPanel(!showPartTagPanel)
+              }}
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all editor-btn-hover ${
+                showPartTagPanel
+                  ? `${isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`
+                  : `${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">sell</span>
+              <span className="hidden md:inline">Parts</span>
+            </button>
+
+            {/* Song Form 버튼 */}
+            <button
+              onClick={() => {
+                if (!songFormEnabled) setSongFormEnabled(true)
+                setShowPartTagPanel(false)
+                setShowSongFormPanel(!showSongFormPanel)
+              }}
+              className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all editor-btn-hover ${
+                showSongFormPanel
+                  ? `${isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-600'}`
+                  : `${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`
+              }`}
+            >
+              <span className="material-symbols-outlined text-lg">music_note</span>
+              <span className="hidden md:inline">Song Form</span>
+            </button>
+          </div>
+
+          {/* 줌 컨트롤 */}
+          <div className={`flex items-center gap-1 p-1 border rounded-xl shadow-xl ${
+            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
+            <button
+              onClick={() => handleZoom(-0.1)}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl leading-none">remove</span>
+            </button>
+            <button
+              onClick={handleFitToScreen}
+              className={`px-3 text-xs font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}
+            >
+              {Math.round((scale / minScale) * 100)}%
+            </button>
+            <button
+              onClick={() => handleZoom(0.1)}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl leading-none">add</span>
+            </button>
+            <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+            <button
+              onClick={handleFitToScreen}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+              }`}
+              title="화면에 맞추기"
+            >
+              <span className="material-symbols-outlined text-xl leading-none">fullscreen</span>
+            </button>
+          </div>
+        </div>
+        )}
+
+        {/* 다크모드 토글 버튼 */}
+        <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className={`fixed bottom-4 md:bottom-6 left-4 md:left-6 w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-50 transition-transform active:scale-95 border ${
+            isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
+          }`}
+        >
+          <span className={`material-symbols-outlined ${isDarkMode ? 'hidden' : ''}`}>dark_mode</span>
+          <span className={`material-symbols-outlined ${isDarkMode ? '' : 'hidden'}`}>light_mode</span>
+        </button>
+      </main>
 
       {/* 지우개 커서 (동그란 원) */}
       {tool === 'eraser' && eraserPosition && (
@@ -3990,36 +4002,39 @@ export default function SheetMusicEditor({
         />
       )}
 
-      {/* 송폼 설정 사이드 패널 - 편집 모드에서만 */}
+      {/* ===== 송폼 설정 사이드 패널 (새 디자인) ===== */}
       {showSongFormPanel && !isViewMode && (
-        <div className={`bg-white shadow-xl border border-gray-200 overflow-y-auto z-30 ${
+        <div className={`overflow-y-auto z-30 shadow-2xl border editor-slide-up ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        } ${
           isMobile
             ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
-            : 'absolute top-24 right-4 w-64 rounded-lg max-h-[70vh]'
+            : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh]'
         }`}>
           {/* 모바일 드래그 핸들 */}
           {isMobile && (
             <div className="flex justify-center pt-2 pb-1">
-              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+              <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-300'}`} />
             </div>
           )}
-          <div className={`border-b bg-purple-50 ${isMobile ? 'p-4' : 'p-3'}`}>
+          <div className={`border-b p-4 ${isDarkMode ? 'bg-purple-900/20 border-slate-800' : 'bg-purple-50 border-slate-200'}`}>
             <div className="flex items-center justify-between">
-              <h3 className={`font-bold text-purple-700 ${isMobile ? 'text-lg' : ''}`}>
-                🎵 송폼 설정
+              <h3 className={`font-bold flex items-center gap-2 ${isDarkMode ? 'text-purple-400' : 'text-purple-700'}`}>
+                <span className="material-symbols-outlined">music_note</span>
+                Song Form
               </h3>
               <button
                 onClick={() => setShowSongFormPanel(false)}
-                className={`text-gray-500 hover:text-gray-700 ${isMobile ? 'p-2 -m-2' : ''}`}
+                className={`p-1 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
               >
-                ✕
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
           </div>
 
           {/* 송폼 추가 입력 */}
-          <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
-            <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>송폼 추가</h4>
+          <div className={`border-b p-4 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <h4 className={`font-semibold mb-2 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>송폼 추가</h4>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -4033,7 +4048,9 @@ export default function SheetMusicEditor({
                   }
                 }}
                 placeholder="예: Intro, Verse, Chorus"
-                className={`flex-1 border border-gray-300 rounded px-2 ${isMobile ? 'py-2 text-base' : 'py-1 text-sm'}`}
+                className={`flex-1 border rounded-lg px-3 py-2 text-sm ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
               />
               <button
                 onClick={() => {
@@ -4043,33 +4060,35 @@ export default function SheetMusicEditor({
                     if (!songFormEnabled) setSongFormEnabled(true)
                   }
                 }}
-                className={`bg-purple-100 text-purple-700 rounded font-medium hover:bg-purple-200 ${isMobile ? 'px-4 py-2' : 'px-3 py-1 text-sm'}`}
+                className="bg-[#ff6b00] text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity"
               >
                 추가
               </button>
             </div>
-            <p className={`text-gray-500 mt-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+            <p className={`mt-2 text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
               Enter로 빠르게 추가
             </p>
           </div>
 
           {/* 현재 송폼 목록 */}
           {effectiveSongForms.length > 0 && (
-            <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
-              <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>
+            <div className={`border-b p-4 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+              <h4 className={`font-semibold mb-2 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 현재 송폼 ({effectiveSongForms.length}개)
               </h4>
-              <div className="flex flex-wrap gap-1 mb-2">
+              <div className="flex flex-wrap gap-1.5 mb-3">
                 {effectiveSongForms.map((form, idx) => (
                   <span
                     key={idx}
-                    className={`inline-flex items-center gap-1 bg-purple-100 text-purple-700 rounded px-2 ${isMobile ? 'py-1 text-sm' : 'py-0.5 text-xs'}`}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
+                      isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
+                    }`}
                   >
                     {form}
                     {customSongForms.includes(form) && (
                       <button
                         onClick={() => setCustomSongForms(prev => prev.filter((_, i) => i !== prev.indexOf(form)))}
-                        className="text-purple-500 hover:text-purple-700"
+                        className={`ml-1 ${isDarkMode ? 'text-purple-500 hover:text-purple-300' : 'text-purple-400 hover:text-purple-600'}`}
                       >
                         ×
                       </button>
@@ -4077,33 +4096,31 @@ export default function SheetMusicEditor({
                   </span>
                 ))}
               </div>
-              <p className={`text-purple-600 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+              <p className={`text-xs font-medium ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
                 {effectiveSongForms.join(' - ')}
               </p>
               {/* 송폼 켜기/끄기 토글 */}
               <button
                 onClick={() => setSongFormEnabled(!songFormEnabled)}
-                className={`mt-2 w-full rounded font-medium transition-colors ${
-                  isMobile ? 'py-3 text-base' : 'py-1.5 text-sm'
-                } ${
+                className={`mt-3 w-full rounded-lg font-medium transition-colors py-2.5 text-sm ${
                   songFormEnabled
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    ? `${isDarkMode ? 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'}`
+                    : `${isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`
                 }`}
               >
-                {songFormEnabled ? '송폼 표시 중 (클릭하여 숨김)' : '송폼 숨김 (클릭하여 표시)'}
+                {songFormEnabled ? '표시 중 (클릭하여 숨김)' : '숨김 (클릭하여 표시)'}
               </button>
             </div>
           )}
 
           {/* 송폼 스타일 설정 - 송폼이 있을 때만 표시 */}
           {effectiveSongForms.length > 0 && (
-            <div className={isMobile ? 'p-4' : 'p-3'}>
-              <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>송폼 스타일</h4>
+            <div className="p-4">
+              <h4 className={`font-semibold mb-3 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>스타일</h4>
 
               {/* 크기 */}
-              <div className={isMobile ? 'mb-4' : 'mb-3'}>
-                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+              <div className="mb-4">
+                <label className={`block mb-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   크기: <span className="font-bold">{songFormStyle.fontSize}pt</span>
                 </label>
                 <input
@@ -4112,23 +4129,21 @@ export default function SheetMusicEditor({
                   max="96"
                   value={songFormStyle.fontSize}
                   onChange={(e) => setSongFormStyle(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
-                  className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
+                  className={`w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00] ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}
                 />
               </div>
 
               {/* 색상 */}
-              <div className={isMobile ? 'mb-4' : 'mb-3'}>
-                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>색상</label>
-                <div className={`flex flex-wrap ${isMobile ? 'gap-2' : 'gap-1'}`}>
+              <div className="mb-4">
+                <label className={`block mb-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>색상</label>
+                <div className="flex flex-wrap gap-2">
                   {FORM_COLOR_PRESETS.map(c => (
                     <button
                       key={c.value}
                       onClick={() => setSongFormStyle(prev => ({ ...prev, color: c.value }))}
-                      className={`rounded-full border-2 aspect-square flex-shrink-0 ${
-                        isMobile ? 'w-9 h-9 min-w-[36px]' : 'w-6 h-6 min-w-[24px]'
-                      } ${
-                        songFormStyle.color === c.value ? 'border-gray-800 scale-110' : 'border-gray-300'
-                      }`}
+                      className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${
+                        songFormStyle.color === c.value ? 'ring-2 ring-offset-2 ring-[#ff6b00]' : ''
+                      } ${isDarkMode ? 'ring-offset-slate-900' : 'ring-offset-white'}`}
                       style={{ backgroundColor: c.value }}
                       title={c.name}
                     />
@@ -4138,7 +4153,7 @@ export default function SheetMusicEditor({
 
               {/* 투명도 */}
               <div>
-                <label className={`text-gray-600 block mb-1 ${isMobile ? 'text-sm' : 'text-xs'}`}>
+                <label className={`block mb-2 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   투명도: <span className="font-bold">{Math.round(songFormStyle.opacity * 100)}%</span>
                 </label>
                 <input
@@ -4148,7 +4163,7 @@ export default function SheetMusicEditor({
                   step="0.1"
                   value={songFormStyle.opacity}
                   onChange={(e) => setSongFormStyle(prev => ({ ...prev, opacity: Number(e.target.value) }))}
-                  className={`w-full bg-gray-200 rounded-lg appearance-none cursor-pointer ${isMobile ? 'h-3' : 'h-2'}`}
+                  className={`w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00] ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}
                 />
               </div>
             </div>
@@ -4156,40 +4171,43 @@ export default function SheetMusicEditor({
         </div>
       )}
 
-      {/* 파트태그 설정 사이드 패널 - 편집 모드에서만 */}
+      {/* ===== 파트태그 설정 사이드 패널 (새 디자인) ===== */}
       {showPartTagPanel && !isViewMode && (
-        <div className={`bg-white shadow-xl border border-gray-200 overflow-y-auto z-30 ${
+        <div className={`overflow-y-auto z-30 shadow-2xl border editor-slide-up ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        } ${
           isMobile
             ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
-            : 'absolute top-24 right-4 w-64 rounded-lg max-h-[70vh]'
+            : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh]'
         }`}>
           {/* 모바일 드래그 핸들 */}
           {isMobile && (
             <div className="flex justify-center pt-2 pb-1">
-              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+              <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-slate-300'}`} />
             </div>
           )}
-          <div className={`border-b bg-orange-50 ${isMobile ? 'p-4' : 'p-3'}`}>
+          <div className={`border-b p-4 ${isDarkMode ? 'bg-emerald-900/20 border-slate-800' : 'bg-emerald-50 border-slate-200'}`}>
             <div className="flex items-center justify-between">
-              <h3 className={`font-bold text-orange-700 ${isMobile ? 'text-lg' : ''}`}>
-                🏷️ 파트태그
+              <h3 className={`font-bold flex items-center gap-2 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                <span className="material-symbols-outlined">sell</span>
+                Parts
               </h3>
               <button
                 onClick={() => setShowPartTagPanel(false)}
-                className={`text-gray-500 hover:text-gray-700 ${isMobile ? 'p-2 -m-2' : ''}`}
+                className={`p-1 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
               >
-                ✕
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
           </div>
 
           {/* 파트 태그 팔레트 */}
-          <div className={`border-b ${isMobile ? 'p-4' : 'p-3'}`}>
-            <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>파트 태그 추가</h4>
-            <p className={`text-gray-500 mb-2 ${isMobile ? 'text-sm' : 'text-xs'}`}>
-              {isMobile ? '📱 탭하면 중앙에 추가됩니다' : '드래그해서 악보 위에 배치'}
+          <div className={`border-b p-4 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <h4 className={`font-semibold mb-2 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>파트 태그 추가</h4>
+            <p className={`mb-3 text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+              {isMobile ? '탭하면 중앙에 추가됩니다' : '드래그해서 악보 위에 배치'}
             </p>
-            <div className={`grid grid-cols-4 ${isMobile ? 'gap-2' : 'gap-1'}`}>
+            <div className="grid grid-cols-4 gap-2">
               {AVAILABLE_PARTS.map(part => (
                 <button
                   key={part.key}
@@ -4198,7 +4216,6 @@ export default function SheetMusicEditor({
                   onDragStart={() => setDraggingNewPartTag(part.key)}
                   onDragEnd={() => setDraggingNewPartTag(null)}
                   onClick={() => {
-                    // 탭하면 캔버스 중앙에 추가
                     const newTag: PartTagStyle = {
                       id: `${part.key}-${Date.now()}`,
                       label: part.key,
@@ -4211,9 +4228,7 @@ export default function SheetMusicEditor({
                     }
                     setPartTags(prev => [...prev, newTag])
                   }}
-                  className={`flex items-center justify-center text-white rounded cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity font-bold ${
-                    isMobile ? 'p-2.5 text-sm min-h-[44px]' : 'p-1.5 text-xs'
-                  }`}
+                  className="flex items-center justify-center text-white rounded-lg cursor-pointer hover:scale-105 active:scale-95 transition-transform font-bold p-2 text-xs min-h-[36px]"
                   style={{
                     backgroundColor: PART_COLORS[part.key],
                     touchAction: 'manipulation',
@@ -4231,31 +4246,31 @@ export default function SheetMusicEditor({
 
           {/* 배치된 파트 태그 목록 */}
           {partTags.filter(tag => (tag.pageIndex || 0) === currentPage - 1).length > 0 && (
-            <div className={isMobile ? 'p-4' : 'p-3'}>
-              <h4 className={`font-semibold text-gray-700 mb-2 ${isMobile ? 'text-base' : 'text-sm'}`}>
+            <div className="p-4">
+              <h4 className={`font-semibold mb-3 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 배치된 태그 (페이지 {currentPage})
               </h4>
               <div className="space-y-2">
                 {partTags
                   .filter(tag => (tag.pageIndex || 0) === currentPage - 1)
                   .map(tag => (
-                    <div key={tag.id} className="bg-gray-50 p-2 rounded border">
-                      <div className="flex items-center justify-between mb-1">
+                    <div key={tag.id} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between mb-2">
                         <span
-                          className="px-2 py-0.5 rounded text-white text-xs font-bold"
+                          className="px-2.5 py-1 rounded-lg text-white text-xs font-bold"
                           style={{ backgroundColor: tag.color }}
                         >
                           {tag.label}
                         </span>
                         <button
                           onClick={() => setPartTags(prev => prev.filter(t => t.id !== tag.id))}
-                          className="text-red-500 hover:text-red-700 text-xs"
+                          className={`p-1 rounded-lg transition-colors ${isDarkMode ? 'text-red-400 hover:bg-red-900/20' : 'text-red-500 hover:bg-red-50'}`}
                         >
-                          🗑️
+                          <span className="material-symbols-outlined text-lg">delete</span>
                         </button>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-gray-500">{tag.fontSize}pt</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{tag.fontSize}pt</span>
                         <input
                           type="range"
                           min="12"
@@ -4264,7 +4279,7 @@ export default function SheetMusicEditor({
                           onChange={(e) => setPartTags(prev =>
                             prev.map(t => t.id === tag.id ? { ...t, fontSize: Number(e.target.value) } : t)
                           )}
-                          className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          className={`flex-1 h-1 rounded-lg appearance-none cursor-pointer accent-[#ff6b00] ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}
                         />
                       </div>
                     </div>
@@ -4275,106 +4290,122 @@ export default function SheetMusicEditor({
         </div>
       )}
 
-      {/* 다운로드 설정 모달 */}
+      {/* ===== 다운로드 설정 모달 (새 디자인) ===== */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 editor-modal-overlay z-50 flex items-center justify-center p-4">
+          <div className={`rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto editor-slide-up border ${
+            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
             <div className="p-6">
               {/* 제목 */}
-              <h2 className="text-xl font-bold text-gray-900 mb-6">다운로드 설정</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className={`text-xl font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>내보내기</h2>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className={`p-1 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
 
               {/* 파일명 */}
               <div className="mb-5">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  📁 파일명
+                <label className={`flex items-center gap-2 text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <span className="material-symbols-outlined text-lg">folder</span>
+                  파일명
                 </label>
                 <input
                   type="text"
                   value={exportFileName}
                   onChange={(e) => setExportFileName(e.target.value)}
                   placeholder={effectiveSongName || '악보'}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-[#ff6b00] focus:border-[#ff6b00] ${
+                    isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">확장자(.pdf, .jpg 등)는 자동으로 추가됩니다</p>
+                <p className={`text-xs mt-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>확장자는 자동으로 추가됩니다</p>
               </div>
 
               {/* 다운로드 옵션 */}
-              <div className="bg-gray-50 rounded-xl p-4 mb-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4">다운로드 옵션</h3>
+              <div className={`rounded-xl p-4 mb-5 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
+                <h3 className={`text-sm font-semibold mb-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>옵션</h3>
 
                 <label className="flex items-start gap-3 cursor-pointer mb-4">
                   <div
                     onClick={() => setExportOptions(prev => ({ ...prev, includeCover: !prev.includeCover }))}
-                    className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
+                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${
                       exportOptions.includeCover
-                        ? 'bg-blue-100 border-blue-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-[#ff6b00] border-[#ff6b00]'
+                        : `${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-300'}`
                     }`}
                   >
                     {exportOptions.includeCover && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <span className="material-symbols-outlined text-white text-sm">check</span>
                     )}
                   </div>
                   <div>
-                    <span className="text-base text-gray-800">📄 표지 포함</span>
-                    <p className="text-sm text-gray-500">곡 제목이 포함된 표지</p>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>표지 포함</span>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>곡 제목이 포함된 표지</p>
                   </div>
                 </label>
 
                 <label className="flex items-start gap-3 cursor-pointer">
                   <div
                     onClick={() => setExportOptions(prev => ({ ...prev, includeSongForms: !prev.includeSongForms }))}
-                    className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${
+                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${
                       exportOptions.includeSongForms
-                        ? 'bg-blue-100 border-blue-500'
-                        : 'bg-white border-gray-300'
+                        ? 'bg-[#ff6b00] border-[#ff6b00]'
+                        : `${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-slate-300'}`
                     }`}
                   >
                     {exportOptions.includeSongForms && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <span className="material-symbols-outlined text-white text-sm">check</span>
                     )}
                   </div>
                   <div>
-                    <span className="text-base text-gray-800">🎵 송폼 표시</span>
-                    <p className="text-sm text-gray-500">악보에 송폼(V1-C-B 등) 오버레이</p>
+                    <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>송폼 표시</span>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>악보에 송폼 오버레이</p>
                   </div>
                 </label>
               </div>
 
               {/* 다운로드 형식 */}
               <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">다운로드 형식</h3>
+                <h3 className={`text-sm font-semibold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>형식 선택</h3>
 
                 <button
                   onClick={() => handleExport('pdf')}
-                  className="w-full border-2 border-blue-400 rounded-xl p-4 mb-3 text-left hover:bg-blue-50 transition-colors"
+                  className={`w-full border-2 rounded-xl p-4 mb-3 text-left transition-all hover:scale-[1.02] ${
+                    isDarkMode ? 'border-blue-500/50 hover:bg-blue-900/20' : 'border-blue-400 hover:bg-blue-50'
+                  }`}
                 >
-                  <div className="flex items-center gap-2 font-semibold text-gray-800">
-                    📄 PDF 파일
+                  <div className={`flex items-center gap-2 font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <span className="material-symbols-outlined text-blue-500">picture_as_pdf</span>
+                    PDF 파일
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">모든 곡을 하나의 PDF 문서로 통합</p>
+                  <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>모든 곡을 하나의 PDF 문서로 통합</p>
                 </button>
 
                 <button
                   onClick={() => handleExport('image')}
-                  className="w-full border-2 border-green-500 rounded-xl p-4 text-left hover:bg-green-50 transition-colors"
+                  className={`w-full border-2 rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
+                    isDarkMode ? 'border-green-500/50 hover:bg-green-900/20' : 'border-green-500 hover:bg-green-50'
+                  }`}
                 >
-                  <div className="flex items-center gap-2 font-semibold text-gray-800">
-                    🖼️ 사진파일 (JPG/PNG)
+                  <div className={`flex items-center gap-2 font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                    <span className="material-symbols-outlined text-green-500">image</span>
+                    이미지 파일 (JPG/PNG)
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">각 곡을 개별 이미지 파일로 다운로드</p>
-                  <p className="text-xs text-gray-400 mt-1">※ PDF 악보는 JPG로 변환됩니다</p>
+                  <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>각 곡을 개별 이미지로 다운로드</p>
                 </button>
               </div>
 
               {/* 취소 버튼 */}
               <button
                 onClick={() => setShowExportModal(false)}
-                className="w-full bg-gray-200 text-gray-700 rounded-xl py-3 font-medium hover:bg-gray-300 transition-colors"
+                className={`w-full rounded-xl py-3 font-medium transition-colors ${
+                  isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
               >
                 취소
               </button>
@@ -4429,25 +4460,27 @@ export default function SheetMusicEditor({
         }}
       />
 
-      {/* 저장 확인 모달 */}
+      {/* ===== 저장 확인 모달 (새 디자인) ===== */}
       {showCloseConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-          <div className={`bg-white rounded-2xl shadow-2xl mx-4 ${isMobile ? 'w-full max-w-sm' : 'max-w-md w-full'}`}>
+        <div className="fixed inset-0 editor-modal-overlay flex items-center justify-center z-[60]">
+          <div className={`rounded-2xl shadow-2xl mx-4 editor-slide-up border ${isMobile ? 'w-full max-w-sm' : 'max-w-md w-full'} ${
+            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <span className="text-amber-600 text-xl">!</span>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-amber-900/30' : 'bg-amber-100'}`}>
+                  <span className="material-symbols-outlined text-amber-500">warning</span>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900">저장하지 않고 나가시겠어요?</h3>
+                <h3 className={`text-lg font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>저장하지 않고 나가시겠어요?</h3>
               </div>
-              <p className="text-gray-600 mb-6">
+              <p className={`mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 저장하지 않은 필기가 있습니다. 저장하지 않으면 변경 내용이 사라집니다.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowCloseConfirm(false)}
-                  className={`flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors ${
-                    isMobile ? 'text-base' : ''
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                    isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                   style={{ touchAction: 'manipulation' }}
                 >
@@ -4459,9 +4492,7 @@ export default function SheetMusicEditor({
                     setShowCloseConfirm(false)
                     onClose()
                   }}
-                  className={`flex-1 py-3 px-4 bg-blue-100 text-blue-700 rounded-xl font-medium hover:bg-blue-200 transition-colors ${
-                    isMobile ? 'text-base' : ''
-                  }`}
+                  className="flex-1 py-3 px-4 bg-[#ff6b00] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                   style={{ touchAction: 'manipulation' }}
                 >
                   저장하고 나가기
@@ -4472,8 +4503,8 @@ export default function SheetMusicEditor({
                   setShowCloseConfirm(false)
                   onClose()
                 }}
-                className={`w-full mt-3 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors ${
-                  isMobile ? 'py-3' : ''
+                className={`w-full mt-3 py-3 text-sm transition-colors ${
+                  isDarkMode ? 'text-slate-500 hover:text-slate-400' : 'text-slate-500 hover:text-slate-700'
                 }`}
                 style={{ touchAction: 'manipulation' }}
               >

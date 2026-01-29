@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { logActivity } from '@/lib/activityLogger'
 import { ArrowLeft, UserPlus } from 'lucide-react'
 import { trackTeamJoin } from '@/lib/analytics'
+import Link from 'next/link'
 
 export default function JoinTeamPage() {
   const router = useRouter()
@@ -132,17 +133,23 @@ export default function JoinTeamPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center">
+          <div className="flex items-center gap-3">
+            {/* 뒤로가기 */}
             <button
-              onClick={() => router.push('/')}
-              className="mr-4 p-2 hover:bg-gray-100 rounded-lg touch-manipulation flex items-center text-gray-600 hover:text-gray-900"
+              onClick={() => router.push('/my-team')}
+              className="p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+              title="뒤로가기 (팀 목록)"
             >
-              <ArrowLeft size={20} className="mr-1" />
-              <span className="text-sm">메인으로</span>
+              <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">팀 참여하기</h1>
+            {/* 로고 */}
+            <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+              WORSHEEP
+            </Link>
+            <span className="text-slate-300">|</span>
+            <h1 className="text-lg font-bold text-gray-900">팀 참여하기</h1>
           </div>
         </div>
       </div>

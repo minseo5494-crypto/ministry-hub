@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function UploadPage() {
+  const router = useRouter()
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -400,9 +403,29 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* 헤더 */}
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <header className="bg-white shadow-sm sticky top-0 z-10 mb-4">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-3">
+            {/* 뒤로가기 */}
+            <button
+              onClick={() => router.push('/main')}
+              className="p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+              title="뒤로가기 (메인)"
+            >
+              <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
+            </button>
+            {/* 로고 */}
+            <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+              WORSHEEP
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4">
+        {/* 콘텐츠 헤더 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             <Upload className="inline-block mr-2 mb-1" />

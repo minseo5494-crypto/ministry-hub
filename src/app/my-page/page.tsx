@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase, User, parseThemes, ThemeCount, fetchThemeCounts } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import {
@@ -195,6 +196,13 @@ const [sharing, setSharing] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private' | 'teams'>('all')
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'usage'>('recent')
+
+  // 페이지네이션
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalSongCount, setTotalSongCount] = useState(0)
+  const [publicSongCount, setPublicSongCount] = useState(0)
+  const [teamSongCount, setTeamSongCount] = useState(0)
+  const itemsPerPage = 20
 
   // 곡 추가 모달 (메인페이지와 동일하게)
   const [showAddSongModal, setShowAddSongModal] = useState(false)
@@ -594,18 +602,44 @@ const handleTeamNameChange = (value: string) => {
 
   const fetchUploadedSongs = async () => {
     try {
-      // 1. 곡 데이터 가져오기
+      // 1. 전체 개수 먼저 가져오기 (통계용)
+      const { count: totalCount, error: countError } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact', head: true })
+        .eq('uploaded_by', user.id)
+
+      if (countError) throw countError
+      setTotalSongCount(totalCount || 0)
+
+      // 공개 곡 개수
+      const { count: publicCount } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact', head: true })
+        .eq('uploaded_by', user.id)
+        .eq('visibility', 'public')
+      setPublicSongCount(publicCount || 0)
+
+      // 팀 공유 곡 개수
+      const { count: teamCount } = await supabase
+        .from('songs')
+        .select('*', { count: 'exact', head: true })
+        .eq('uploaded_by', user.id)
+        .eq('visibility', 'teams')
+      setTeamSongCount(teamCount || 0)
+
+      // 2. 곡 데이터 가져오기 (전체 - 클라이언트에서 페이지네이션)
       const { data: songsData, error: songsError } = await supabase
         .from('songs')
         .select('*')
         .eq('uploaded_by', user.id)
         .order('created_at', { ascending: false })
+        .range(0, 9999)
 
       if (songsError) throw songsError
 
-      // 2. 사용 통계 가져오기
+      // 3. 사용 통계 가져오기
       const songIds = (songsData || []).map(s => s.id)
-      
+
       if (songIds.length === 0) {
         setSongs([])
         return
@@ -618,12 +652,11 @@ const handleTeamNameChange = (value: string) => {
 
       if (statsError) {
         console.warn('통계 조회 실패:', statsError)
-        // 통계 없이 곡만 표시
         setSongs(songsData || [])
         return
       }
 
-      // 3. 데이터 병합
+      // 4. 데이터 병합
       const songsWithStats = (songsData || []).map(song => {
         const stats = statsData?.find(s => s.song_id === song.id)
         return {
@@ -917,15 +950,15 @@ setNewSong({ ...newSong, tempo: tempoValue })
   const filteredSongs = songs
     .filter(song => {
       // 검색어 필터
-      const matchesSearch = 
+      const matchesSearch =
         song.song_name.toLowerCase().includes(searchText.toLowerCase()) ||
         song.team_name?.toLowerCase().includes(searchText.toLowerCase())
-      
+
       // 공유 상태 필터
-      const matchesVisibility = 
-        visibilityFilter === 'all' || 
+      const matchesVisibility =
+        visibilityFilter === 'all' ||
         song.visibility === visibilityFilter
-      
+
       return matchesSearch && matchesVisibility
     })
     .sort((a, b) => {
@@ -941,27 +974,39 @@ setNewSong({ ...newSong, tempo: tempoValue })
       }
     })
 
+  // 페이지네이션 적용
+  const totalPages = Math.ceil(filteredSongs.length / itemsPerPage)
+  const paginatedSongs = filteredSongs.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
+  // 검색/필터 변경 시 페이지 초기화
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchText, visibilityFilter, sortBy])
+
   // 공유 범위 배지 렌더링
   const renderVisibilityBadge = (song: UploadedSong) => {
     if (song.visibility === 'private') {
       return (
-        <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-          <Lock className="w-3 h-3 mr-1" />
-          나만 보기
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold uppercase">
+          <Lock className="w-3 h-3" />
+          Private
         </span>
       )
     } else if (song.visibility === 'public') {
       return (
-        <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
-          <Globe className="w-3 h-3 mr-1" />
-          전체 공유
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase">
+          <Globe className="w-3 h-3" />
+          Public
         </span>
       )
     } else if (song.visibility === 'teams') {
       return (
-        <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-          <Users className="w-3 h-3 mr-1" />
-          팀 공유 ({song.shared_with_teams?.length || 0}개)
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold uppercase">
+          <Users className="w-3 h-3" />
+          Team
         </span>
       )
     }
@@ -970,597 +1015,892 @@ setNewSong({ ...newSong, tempo: tempoValue })
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Music className="w-8 h-8 text-blue-600 flex-shrink-0" />
-              <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">My Page</h1>
-              <span className="text-xs sm:text-sm text-gray-600 truncate max-w-[120px] sm:max-w-none">{user?.email}</span>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={() => router.push('/my-page/settings')}
-                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition whitespace-nowrap text-sm"
-              >
-                <Settings size={16} className="flex-shrink-0" />
-                <span className="hidden sm:inline">계정 설정</span>
-                <span className="sm:hidden">설정</span>
-              </button>
-
-              <button
-                onClick={() => router.push('/')}
-                className="px-3 sm:px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] touch-manipulation whitespace-nowrap text-sm"
-              >
-                메인으로
-              </button>
-            </div>
-          </div>
+    <div className="my-page-container flex min-h-screen bg-[#F8FAFC]">
+      {/* 사이드바 (데스크톱) */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex-col h-screen sticky top-0 hidden lg:flex">
+        {/* 로고 */}
+        <div className="p-6 pb-4">
+          <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+            WORSHEEP
+          </Link>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* 통계 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">업로드한 곡</p>
-                <p className="text-3xl font-bold text-blue-600">{songs.length}</p>
-              </div>
-              <Music className="w-12 h-12 text-blue-600 opacity-20" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">전체 공개</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {songs.filter(s => s.visibility === 'public').length}
-                </p>
-              </div>
-              <Globe className="w-12 h-12 text-green-600 opacity-20" />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">팀 공유</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {songs.filter(s => s.visibility === 'teams').length}
-                </p>
-              </div>
-              <Users className="w-12 h-12 text-purple-600 opacity-20" />
-            </div>
-          </div>
+        <div className="px-4 pb-3">
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">마이 페이지</h2>
         </div>
-
-        {/* 검색 및 필터 */}
-        <div className="bg-white rounded-lg shadow p-3 md:p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="곡명 또는 아티스트 검색..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm md:text-base"
-                />
-              </div>
+        <nav className="flex-1 px-4 space-y-1">
+          <button
+            onClick={() => setActiveTab('uploaded')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 rounded-lg ${
+              activeTab === 'uploaded'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+          >
+            <Music className="w-5 h-5" />
+            <span>내가 추가한 곡</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('liked')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 rounded-lg ${
+              activeTab === 'liked'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+          >
+            <Heart className="w-5 h-5" />
+            <span>좋아요</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 rounded-lg ${
+              activeTab === 'notes'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span>필기 노트</span>
+          </button>
+        </nav>
+        <div className="p-4 border-t border-slate-100 space-y-2">
+          {/* 뒤로가기 버튼 */}
+          <button
+            onClick={() => router.push('/main')}
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all rounded-lg"
+          >
+            <span className="material-symbols-outlined text-lg">arrow_back</span>
+            뒤로가기 (메인)
+          </button>
+          <button
+            onClick={() => router.push('/my-page/settings')}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all duration-200 rounded-lg"
+          >
+            <Settings className="w-5 h-5" />
+            <span>설정</span>
+          </button>
+          <button
+            onClick={() => router.push('/my-page/settings')}
+            className="flex items-center gap-3 px-4 py-4 mt-2 w-full text-left hover:bg-slate-50 rounded-lg transition-all"
+            title="내 계정 관리"
+          >
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+              {user?.email?.substring(0, 2).toUpperCase()}
             </div>
-
-            <div className="flex gap-2">
-              <select
-                value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value as any)}
-                className="flex-1 md:flex-none px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base"
-              >
-                <option value="all">모든 공유 상태</option>
-                <option value="public">전체 공유</option>
-                <option value="teams">팀 공유</option>
-                <option value="private">나만 보기</option>
-              </select>
-
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="flex-1 md:flex-none px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base"
-              >
-                <option value="recent">최근순</option>
-                <option value="name">이름순</option>
-                <option value="usage">사용빈도순</option>
-              </select>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-semibold text-slate-900 truncate">{user?.email?.split('@')[0]}</span>
+              <span className="text-[10px] text-slate-400 truncate">{user?.email}</span>
             </div>
+          </button>
+        </div>
+      </aside>
 
+      {/* 메인 콘텐츠 */}
+      <main className="flex-1 p-4 lg:p-12 overflow-y-auto">
+        <div className="max-w-5xl mx-auto">
+        {/* 상단 헤더 */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">
+              환영합니다, {user?.email?.split('@')[0]}
+            </h1>
+            <p className="text-slate-500 mt-1">나의 악보와 필기 노트를 관리하세요.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* 모바일: 로고 + 뒤로가기 */}
+            <div className="lg:hidden flex items-center gap-2">
+              <button
+                onClick={() => router.push('/main')}
+                className="p-2 -ml-2 hover:bg-slate-100 rounded-lg transition"
+                title="뒤로가기 (메인)"
+              >
+                <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
+              </button>
+              <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700">
+                WORSHEEP
+              </Link>
+            </div>
             <button
               onClick={() => setShowAddSongModal(true)}
-              className="px-4 md:px-6 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center justify-center whitespace-nowrap text-sm md:text-base"
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-all shadow-sm"
             >
-              <Plus className="mr-1 md:mr-2" size={16} />
-              곡 추가
+              <Plus className="w-4 h-4" />
+              새 곡 추가
             </button>
           </div>
         </div>
 
-        {/* 곡 목록 */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b">
-            {/* 🎵 탭 전환 */}
-            <div className="flex gap-2 md:gap-4 overflow-x-auto pb-1 -mb-1">
-              <button
-                onClick={() => setActiveTab('uploaded')}
-                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'uploaded'
-                    ? 'text-gray-900 border-blue-500'
-                    : 'text-gray-400 border-transparent hover:text-gray-600'
-                }`}
-              >
-                내가 추가한 곡 <span className="text-xs md:text-base">({filteredSongs.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('liked')}
-                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'liked'
-                    ? 'text-gray-900 border-red-500'
-                    : 'text-gray-400 border-transparent hover:text-gray-600'
-                }`}
-              >
-                <span className="hidden sm:inline">❤️ </span>좋아요 <span className="text-xs md:text-base">({likedSongs.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('notes')}
-                className={`text-sm md:text-lg font-bold pb-2 border-b-2 transition whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'notes'
-                    ? 'text-gray-900 border-green-500'
-                    : 'text-gray-400 border-transparent hover:text-gray-600'
-                }`}
-              >
-                <span className="hidden sm:inline">📝 </span>필기 <span className="text-xs md:text-base">({sheetMusicNotes.length})</span>
-              </button>
+        <div className="space-y-6">
+        {/* 통계 카드 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 flex flex-col gap-1 border border-slate-100 shadow-sm rounded-2xl">
+              <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">업로드한 곡</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-slate-900">{totalSongCount.toLocaleString()}</span>
+                <span className="text-xs text-slate-400 font-medium">전체</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 flex flex-col gap-1 border border-slate-100 shadow-sm rounded-2xl">
+              <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">전체 공개</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-slate-900">{publicSongCount.toLocaleString()}</span>
+                <span className="text-xs text-emerald-500 font-medium">공개 중</span>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 flex flex-col gap-1 border border-slate-100 shadow-sm rounded-2xl">
+              <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">팀 공유</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-slate-900">{teamSongCount.toLocaleString()}</span>
+                <span className="text-xs text-slate-400 font-medium">{userTeams.length}개 팀</span>
+              </div>
             </div>
           </div>
 
-          {/* 🎵 내가 추가한 곡 탭 */}
-          {activeTab === 'uploaded' && (
-            <>
-              {filteredSongs.length === 0 ? (
-                <div className="text-center py-12">
-                  <Music className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">
-                    {searchText || visibilityFilter !== 'all'
-                      ? '검색 결과가 없습니다' 
-                      : '아직 추가한 곡이 없습니다'}
-                  </p>
-                  {!searchText && visibilityFilter === 'all' && (
-                    <button
-                      onClick={() => setShowAddSongModal(true)}
-                      className="mt-4 px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] inline-flex items-center"
-                    >
-                      <Plus className="mr-2" size={18} />
-                      첫 곡 업로드하기
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {filteredSongs.map((song) => (
-                    <div key={song.id} className="p-3 md:p-4 hover:bg-gray-50">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-base md:text-lg text-gray-900 truncate">{song.song_name}</h3>
-                          <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-xs md:text-sm text-gray-600">
-                            {song.team_name && <span className="truncate max-w-[100px] md:max-w-none">{song.team_name}</span>}
-                            {song.key && <span>Key: {song.key}</span>}
-                            {song.time_signature && <span>{song.time_signature}</span>}
-                            {song.tempo && <span className="hidden md:inline">{song.tempo}</span>}
-                            {song.bpm && <span>{song.bpm}BPM</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {renderVisibilityBadge(song)}
-                            {parseThemes(song.themes).map(theme => (
-                              <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-                                {theme}
-                              </span>
-                            ))}
-                            {song.season && (
-                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">
-                                {song.season}
-                              </span>
-                            )}
-                          </div>
-                          {song.usage_count !== undefined && song.usage_count > 0 && (
-                            <div className="mt-2 text-xs text-gray-500">
-                              사용 횟수: {song.usage_count}회
-                              {song.usage_count_last_30_days !== undefined && song.usage_count_last_30_days > 0 && (
-                                <span className="ml-2">(최근 30일: {song.usage_count_last_30_days}회)</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+          {/* 검색 및 필터 + 콘텐츠 영역 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 space-y-6">
+              {/* 모바일 탭 (데스크톱에서는 사이드바로 전환) */}
+              <div className="flex items-center gap-8 border-b border-slate-100 lg:hidden">
+                <button
+                  onClick={() => setActiveTab('uploaded')}
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                    activeTab === 'uploaded'
+                      ? 'text-slate-900 border-b-2 border-indigo-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  내가 추가한 곡
+                </button>
+                <button
+                  onClick={() => setActiveTab('liked')}
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                    activeTab === 'liked'
+                      ? 'text-slate-900 border-b-2 border-indigo-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  좋아요
+                </button>
+                <button
+                  onClick={() => setActiveTab('notes')}
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                    activeTab === 'notes'
+                      ? 'text-slate-900 border-b-2 border-indigo-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  필기
+                </button>
+              </div>
 
-                        <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
-                          {/* 미리보기 토글 버튼 */}
-                          {song.file_url && (
-                            <button
-                              onClick={() => togglePreview(song.id)}
-                              className={`p-1.5 md:p-2 rounded-lg ${
-                                previewStates[song.id]
-                                  ? 'text-blue-600 bg-blue-100'
-                                  : 'text-blue-600 hover:bg-blue-100'
-                              }`}
-                              title={previewStates[song.id] ? '접기' : '미리보기'}
-                            >
-                              {previewStates[song.id] ? <EyeOff size={18} className="md:w-5 md:h-5" /> : <Eye size={18} className="md:w-5 md:h-5" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openEditModal(song)}
-                            className="p-1.5 md:p-2 text-green-600 hover:bg-green-100 rounded-lg"
-                            title="수정"
-                          >
-                            <Edit size={18} className="md:w-5 md:h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSong(song)}
-                            disabled={deleting === song.id}
-                            className="p-1.5 md:p-2 text-red-600 hover:bg-red-100 rounded-lg disabled:opacity-50"
-                            title="삭제"
-                          >
-                            {deleting === song.id ? (
-                              <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Trash2 size={18} className="md:w-5 md:h-5" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 인라인 미리보기 */}
-                      {previewStates[song.id] && song.file_url && (
-                        <div className="mt-4 border-t pt-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-gray-700 text-sm">악보</h4>
-                            <span className="text-xs text-gray-400">더블클릭하여 확대</span>
-                          </div>
-                          {song.file_type === 'pdf' ? (
-                            <iframe
-                              src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                              className="w-full h-[500px] border rounded cursor-pointer"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation()
-                                openViewer(song)
-                              }}
-                            />
-                          ) : (
-                            <img
-                              src={song.file_url}
-                              alt={`${song.song_name} 악보`}
-                              className="max-w-full h-auto rounded shadow-sm cursor-pointer"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation()
-                                openViewer(song)
-                              }}
-                              onTouchEnd={(e) => {
-                                e.stopPropagation()
-                                handleDoubleTap(song)
-                              }}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+              {/* 검색 및 필터 */}
+              <div className="flex flex-col lg:flex-row items-center gap-4">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="곡명 또는 아티스트 검색..."
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
                 </div>
-              )}
-            </>
-          )}
-
-          {/* 🎵 좋아요한 곡 탭 */}
-          {activeTab === 'liked' && (
-            <>
-              {loadingLiked ? (
-                <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  <p className="mt-4 text-gray-600">불러오는 중...</p>
-                </div>
-              ) : likedSongs.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Heart size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg">좋아요한 곡이 없습니다</p>
-                  <p className="text-sm mt-2">메인 페이지에서 마음에 드는 곡에 ❤️를 눌러보세요!</p>
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {likedSongs.map((song) => (
-                    <div key={song.id} className="p-4 hover:bg-gray-50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg text-gray-900">{song.song_name}</h3>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                            {song.team_name && <span>{song.team_name}</span>}
-                            {song.key && <span>Key: {song.key}</span>}
-                            {song.time_signature && <span>{song.time_signature}</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {parseThemes(song.themes).map(theme => (
-                              <span key={theme} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
-                                {theme}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {song.file_url && (
-                            <button
-                              onClick={() => togglePreview(song.id)}
-                              className={`p-2 rounded-lg ${
-                                previewStates[song.id]
-                                  ? 'text-blue-600 bg-blue-100'
-                                  : 'text-blue-600 hover:bg-blue-100'
-                              }`}
-                              title={previewStates[song.id] ? '접기' : '미리보기'}
-                            >
-                              {previewStates[song.id] ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                          )}
-                          <span className="text-xs px-2 py-1 bg-red-100 text-red-500 rounded flex items-center gap-1">
-                            <Heart size={12} fill="currentColor" />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 인라인 미리보기 */}
-                      {previewStates[song.id] && song.file_url && (
-                        <div className="mt-4 border-t pt-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-gray-700 text-sm">악보</h4>
-                            <span className="text-xs text-gray-400">더블클릭하여 확대</span>
-                          </div>
-                          {song.file_type === 'pdf' ? (
-                            <iframe
-                              src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                              className="w-full h-[500px] border rounded cursor-pointer"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation()
-                                openViewer(song)
-                              }}
-                            />
-                          ) : (
-                            <img
-                              src={song.file_url}
-                              alt={`${song.song_name} 악보`}
-                              className="max-w-full h-auto rounded shadow-sm cursor-pointer"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation()
-                                openViewer(song)
-                              }}
-                              onTouchEnd={(e) => {
-                                e.stopPropagation()
-                                handleDoubleTap(song)
-                              }}
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 📝 내 필기 노트 탭 */}
-          {activeTab === 'notes' && (
-            <>
-              {notesLoading ? (
-                <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-                  <p className="mt-4 text-gray-600">불러오는 중...</p>
-                </div>
-              ) : sheetMusicNotes.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg">필기 노트가 없습니다</p>
-                  <p className="text-sm mt-2">메인 페이지에서 악보의 ✏️ 버튼을 눌러 필기해보세요!</p>
-                  <button
-                    onClick={() => router.push('/')}
-                    className="mt-4 px-6 py-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                <div className="flex items-center gap-3 w-full lg:w-auto">
+                  <select
+                    value={visibilityFilter}
+                    onChange={(e) => setVisibilityFilter(e.target.value as any)}
+                    className="flex-1 lg:w-40 py-2 px-3 text-sm border border-slate-200 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                   >
-                    악보 보러가기
-                  </button>
+                    <option value="all">모든 공유 상태</option>
+                    <option value="public">전체 공유</option>
+                    <option value="teams">팀 공유</option>
+                    <option value="private">나만 보기</option>
+                  </select>
+
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="flex-1 lg:w-40 py-2 px-3 text-sm border border-slate-200 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  >
+                    <option value="recent">최근순</option>
+                    <option value="name">이름순</option>
+                    <option value="usage">사용빈도순</option>
+                  </select>
                 </div>
-              ) : (
-                <>
-                  {/* 🆕 상단 툴바 */}
-                  <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-                    <div className="flex items-center gap-2">
-                      {/* 뷰 전환 버튼 */}
-                      <div className="flex border rounded-lg overflow-hidden">
-                        <button
-                          onClick={() => setNotesViewMode('grid')}
-                          className={`p-2 ${notesViewMode === 'grid' ? 'bg-green-100 text-green-700' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-                          title="그리드 뷰"
-                        >
-                          <Grid size={18} />
-                        </button>
-                        <button
-                          onClick={() => setNotesViewMode('list')}
-                          className={`p-2 ${notesViewMode === 'list' ? 'bg-green-100 text-green-700' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-                          title="리스트 뷰"
-                        >
-                          <List size={18} />
-                        </button>
-                      </div>
+              </div>
+            </div>
 
-                      {/* 선택 모드 토글 */}
+            {/* 데스크톱에서만 보이는 현재 탭 제목 */}
+            <div className="hidden lg:flex items-center justify-between py-2 px-6">
+              <h2 className="text-lg font-bold text-slate-900">
+                {activeTab === 'uploaded' && `내가 추가한 곡 (${filteredSongs.length})`}
+                {activeTab === 'liked' && `좋아요 (${likedSongs.length})`}
+                {activeTab === 'notes' && `필기 노트 (${sheetMusicNotes.length})`}
+              </h2>
+            </div>
+
+            {/* 🎵 내가 추가한 곡 탭 */}
+            {activeTab === 'uploaded' && (
+              <>
+                {paginatedSongs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Music className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500">
+                      {searchText || visibilityFilter !== 'all'
+                        ? '검색 결과가 없습니다'
+                        : '아직 추가한 곡이 없습니다'}
+                    </p>
+                    {!searchText && visibilityFilter === 'all' && (
                       <button
-                        onClick={() => {
-                          setNotesSelectMode(!notesSelectMode)
-                          if (notesSelectMode) {
-                            setSelectedNoteIds(new Set())
-                          }
-                        }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                          notesSelectMode
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-white border text-gray-600 hover:bg-gray-100'
-                        }`}
+                        onClick={() => setShowAddSongModal(true)}
+                        className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 inline-flex items-center transition-all"
                       >
-                        {notesSelectMode ? '선택 취소' : '선택'}
+                        <Plus className="mr-2 w-5 h-5" />
+                        첫 곡 업로드하기
                       </button>
-                    </div>
-
-                    {/* 선택 모드일 때 표시 */}
-                    {notesSelectMode && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          {selectedNoteIds.size}개 선택됨
-                        </span>
-                        <button
-                          onClick={() => {
-                            if (selectedNoteIds.size === sheetMusicNotes.length) {
-                              setSelectedNoteIds(new Set())
-                            } else {
-                              setSelectedNoteIds(new Set(sheetMusicNotes.map(n => n.id)))
-                            }
-                          }}
-                          className="px-3 py-1 text-sm border rounded hover:bg-gray-100"
-                        >
-                          {selectedNoteIds.size === sheetMusicNotes.length ? '전체 해제' : '전체 선택'}
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (selectedNoteIds.size === 0) {
-                              alert('삭제할 노트를 선택해주세요.')
-                              return
-                            }
-                            if (!confirm(`선택한 ${selectedNoteIds.size}개의 노트를 삭제하시겠습니까?`)) return
-
-                            setDeletingNotes(true)
-                            let successCount = 0
-                            for (const noteId of selectedNoteIds) {
-                              const success = await deleteSheetMusicNote(noteId)
-                              if (success) successCount++
-                            }
-                            setDeletingNotes(false)
-                            setSelectedNoteIds(new Set())
-                            setNotesSelectMode(false)
-                            alert(`${successCount}개의 노트가 삭제되었습니다.`)
-                          }}
-                          disabled={selectedNoteIds.size === 0 || deletingNotes}
-                          className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
-                        >
-                          {deletingNotes ? '삭제 중...' : `삭제 (${selectedNoteIds.size})`}
-                        </button>
-                      </div>
                     )}
                   </div>
-
-                  {/* 🆕 그리드 뷰 - 컴팩트한 파일 브라우저 스타일 */}
-                  {notesViewMode === 'grid' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                      {sheetMusicNotes.map((note) => (
-                        <div
-                          key={note.id}
-                          className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition overflow-hidden relative ${
-                            selectedNoteIds.has(note.id) ? 'ring-2 ring-green-500' : ''
-                          }`}
-                        >
-                          {/* 선택 체크박스 */}
-                          {notesSelectMode && (
-                            <button
-                              onClick={() => {
-                                const newSet = new Set(selectedNoteIds)
-                                if (newSet.has(note.id)) {
-                                  newSet.delete(note.id)
-                                } else {
-                                  newSet.add(note.id)
-                                }
-                                setSelectedNoteIds(newSet)
-                              }}
-                              className="absolute top-1 left-1 z-10 p-0.5 bg-white rounded shadow"
-                            >
-                              {selectedNoteIds.has(note.id) ? (
-                                <CheckSquare size={16} className="text-green-600" />
-                              ) : (
-                                <Square size={16} className="text-gray-400" />
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {paginatedSongs.map((song) => (
+                      <div key={song.id} className="px-6 py-3 md:py-4 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm md:text-base text-slate-900 truncate">{song.song_name}</h3>
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1 text-[11px] md:text-xs text-slate-500">
+                              {song.team_name && <span className="truncate max-w-[100px] md:max-w-none">{song.team_name}</span>}
+                              {song.key && (
+                                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded">
+                                  {song.key}
+                                </span>
                               )}
-                            </button>
-                          )}
-
-                          {/* 썸네일 영역 - 더 작게 */}
-                          <div
-                            className="h-24 bg-gray-100 flex items-center justify-center cursor-pointer relative"
-                            onClick={() => {
-                              if (notesSelectMode) {
-                                const newSet = new Set(selectedNoteIds)
-                                if (newSet.has(note.id)) {
-                                  newSet.delete(note.id)
-                                } else {
-                                  newSet.add(note.id)
-                                }
-                                setSelectedNoteIds(newSet)
-                              } else {
-                                setEditingNote(note)
-                                setShowNoteEditor(true)
-                              }
-                            }}
-                          >
-                            {note.thumbnail_url ? (
-                              <img
-                                src={note.thumbnail_url}
-                                alt={note.title}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="text-gray-400 text-center">
-                                <FileText size={28} className="mx-auto" />
+                              {song.time_signature && <span>{song.time_signature}</span>}
+                              {song.bpm && <span className="text-slate-500">{song.bpm} BPM</span>}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {renderVisibilityBadge(song)}
+                              {parseThemes(song.themes).map(theme => (
+                                <span key={theme} className="px-1.5 py-0.5 bg-violet-50 text-violet-700 text-[10px] rounded font-medium">
+                                  {theme}
+                                </span>
+                              ))}
+                              {song.season && (
+                                <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded font-medium">
+                                  {song.season}
+                                </span>
+                              )}
+                            </div>
+                            {song.usage_count !== undefined && song.usage_count > 0 && (
+                              <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Eye className="w-3 h-3" />
+                                  사용 {song.usage_count}회
+                                </span>
+                                {song.usage_count_last_30_days !== undefined && song.usage_count_last_30_days > 0 && (
+                                  <span>(최근 30일: {song.usage_count_last_30_days}회)</span>
+                                )}
                               </div>
                             )}
-                            {/* 파일 타입 배지 - 더 작게 */}
-                            <span className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              note.file_type === 'pdf'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
-                            </span>
                           </div>
 
-                          {/* 정보 영역 - 더 컴팩트하게 */}
-                          <div className="px-2 pt-2">
-                            <h3 className="font-medium text-xs text-gray-900 truncate" title={note.title}>{note.title}</h3>
-                            <p className="text-[10px] text-gray-500 truncate" title={note.song_name}>{note.song_name}</p>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                            </p>
+                          <div className="flex gap-1 md:gap-2 ml-2 md:ml-4 flex-shrink-0">
+                            {/* 미리보기 토글 버튼 */}
+                            {song.file_url && (
+                              <button
+                                onClick={() => togglePreview(song.id)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  previewStates[song.id]
+                                    ? 'text-indigo-600 bg-indigo-100'
+                                    : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'
+                                }`}
+                                title={previewStates[song.id] ? '접기' : '미리보기'}
+                              >
+                                {previewStates[song.id] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openEditModal(song)}
+                              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="수정"
+                            >
+                              <Edit className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSong(song)}
+                              disabled={deleting === song.id}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="삭제"
+                            >
+                              {deleting === song.id ? (
+                                <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-5 h-5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
 
-                            {/* 버튼 영역 - 4등분 균등 배치 */}
+                        {/* 인라인 미리보기 */}
+                        {previewStates[song.id] && song.file_url && (
+                          <div className="mt-4 pt-4 border-t border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-slate-700 text-sm">악보</h4>
+                              <span className="text-xs text-slate-400">더블클릭하여 확대</span>
+                            </div>
+                            {song.file_type === 'pdf' ? (
+                              <iframe
+                                src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                                className="w-full h-[500px] border border-slate-200 rounded-lg cursor-pointer"
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation()
+                                  openViewer(song)
+                                }}
+                              />
+                            ) : (
+                              <img
+                                src={song.file_url}
+                                alt={`${song.song_name} 악보`}
+                                className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer"
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation()
+                                  openViewer(song)
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.stopPropagation()
+                                  handleDoubleTap(song)
+                                }}
+                              />
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  ))}
+                </div>
+                )}
+
+                {/* 페이지네이션 */}
+                {filteredSongs.length > itemsPerPage && (
+                  <div className="flex items-center justify-center gap-2 p-6 border-t border-slate-100">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      이전
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-10 h-10 text-sm font-medium rounded-lg transition-colors ${
+                              currentPage === pageNum
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                      {totalPages > 5 && currentPage < totalPages - 2 && (
+                        <>
+                          <span className="px-2 text-slate-400">...</span>
+                          <button
+                            onClick={() => setCurrentPage(totalPages)}
+                            className="w-10 h-10 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      다음
+                    </button>
+
+                    <span className="ml-4 text-sm text-slate-500">
+                      {filteredSongs.length.toLocaleString()}곡 중 {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredSongs.length)}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 🎵 좋아요한 곡 탭 */}
+            {activeTab === 'liked' && (
+              <>
+                {loadingLiked ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <p className="mt-4 text-slate-500">불러오는 중...</p>
+                  </div>
+                ) : likedSongs.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <Heart className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                    <p className="text-lg font-medium">좋아요한 곡이 없습니다</p>
+                    <p className="text-sm mt-2">메인 페이지에서 마음에 드는 곡에 ❤️를 눌러보세요!</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {likedSongs.map((song) => (
+                      <div key={song.id} className="p-4 md:p-5 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-lg text-slate-900">{song.song_name}</h3>
+                            <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-1 text-sm text-slate-500">
+                              {song.team_name && <span>{song.team_name}</span>}
+                              {song.key && (
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded">
+                                  {song.key}
+                                </span>
+                              )}
+                              {song.time_signature && <span>{song.time_signature}</span>}
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {parseThemes(song.themes).map(theme => (
+                                <span key={theme} className="px-2 py-1 bg-violet-50 text-violet-700 text-xs rounded-md font-medium">
+                                  {theme}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {song.file_url && (
+                              <button
+                                onClick={() => togglePreview(song.id)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  previewStates[song.id]
+                                    ? 'text-indigo-600 bg-indigo-100'
+                                    : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'
+                                }`}
+                                title={previewStates[song.id] ? '접기' : '미리보기'}
+                              >
+                                {previewStates[song.id] ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                              </button>
+                            )}
+                            <span className="p-2 bg-red-50 text-red-500 rounded-lg">
+                              <Heart className="w-4 h-4" fill="currentColor" />
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 인라인 미리보기 */}
+                        {previewStates[song.id] && song.file_url && (
+                          <div className="mt-4 pt-4 border-t border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-slate-700 text-sm">악보</h4>
+                              <span className="text-xs text-slate-400">더블클릭하여 확대</span>
+                            </div>
+                            {song.file_type === 'pdf' ? (
+                              <iframe
+                                src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                                className="w-full h-[500px] border border-slate-200 rounded-lg cursor-pointer"
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation()
+                                  openViewer(song)
+                                }}
+                              />
+                            ) : (
+                              <img
+                                src={song.file_url}
+                                alt={`${song.song_name} 악보`}
+                                className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer"
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation()
+                                  openViewer(song)
+                                }}
+                                onTouchEnd={(e) => {
+                                  e.stopPropagation()
+                                  handleDoubleTap(song)
+                                }}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 📝 내 필기 노트 탭 */}
+            {activeTab === 'notes' && (
+              <>
+                {notesLoading ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <p className="mt-4 text-slate-500">불러오는 중...</p>
+                  </div>
+                ) : sheetMusicNotes.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                    <p className="text-lg font-medium">필기 노트가 없습니다</p>
+                    <p className="text-sm mt-2">메인 페이지에서 악보의 ✏️ 버튼을 눌러 필기해보세요!</p>
+                    <button
+                      onClick={() => router.push('/')}
+                      className="mt-4 px-6 py-3 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+                    >
+                      악보 보러가기
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* 🆕 상단 툴바 */}
+                    <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2">
+                        {/* 뷰 전환 버튼 */}
+                        <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setNotesViewMode('grid')}
+                            className={`p-2 transition-colors ${notesViewMode === 'grid' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                            title="그리드 뷰"
+                          >
+                            <Grid className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setNotesViewMode('list')}
+                            className={`p-2 transition-colors ${notesViewMode === 'list' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                            title="리스트 뷰"
+                          >
+                            <List className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* 선택 모드 토글 */}
+                        <button
+                          onClick={() => {
+                            setNotesSelectMode(!notesSelectMode)
+                            if (notesSelectMode) {
+                              setSelectedNoteIds(new Set())
+                            }
+                          }}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            notesSelectMode
+                              ? 'bg-indigo-100 text-indigo-700'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          {notesSelectMode ? '선택 취소' : '선택'}
+                        </button>
+                      </div>
+
+                      {/* 선택 모드일 때 표시 */}
+                      {notesSelectMode && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-500">
+                            {selectedNoteIds.size}개 선택됨
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (selectedNoteIds.size === sheetMusicNotes.length) {
+                                setSelectedNoteIds(new Set())
+                              } else {
+                                setSelectedNoteIds(new Set(sheetMusicNotes.map(n => n.id)))
+                              }
+                            }}
+                            className="px-3 py-1 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                          >
+                            {selectedNoteIds.size === sheetMusicNotes.length ? '전체 해제' : '전체 선택'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (selectedNoteIds.size === 0) {
+                                alert('삭제할 노트를 선택해주세요.')
+                                return
+                              }
+                              if (!confirm(`선택한 ${selectedNoteIds.size}개의 노트를 삭제하시겠습니까?`)) return
+
+                              setDeletingNotes(true)
+                              let successCount = 0
+                              for (const noteId of selectedNoteIds) {
+                                const success = await deleteSheetMusicNote(noteId)
+                                if (success) successCount++
+                              }
+                              setDeletingNotes(false)
+                              setSelectedNoteIds(new Set())
+                              setNotesSelectMode(false)
+                              alert(`${successCount}개의 노트가 삭제되었습니다.`)
+                            }}
+                            disabled={selectedNoteIds.size === 0 || deletingNotes}
+                            className="px-3 py-1 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          >
+                            {deletingNotes ? '삭제 중...' : `삭제 (${selectedNoteIds.size})`}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 🆕 그리드 뷰 - 컴팩트한 파일 브라우저 스타일 */}
+                    {notesViewMode === 'grid' && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
+                        {sheetMusicNotes.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition overflow-hidden relative ${
+                              selectedNoteIds.has(note.id) ? 'ring-2 ring-indigo-500' : ''
+                            }`}
+                          >
+                            {/* 선택 체크박스 */}
+                            {notesSelectMode && (
+                              <button
+                                onClick={() => {
+                                  const newSet = new Set(selectedNoteIds)
+                                  if (newSet.has(note.id)) {
+                                    newSet.delete(note.id)
+                                  } else {
+                                    newSet.add(note.id)
+                                  }
+                                  setSelectedNoteIds(newSet)
+                                }}
+                                className="absolute top-1 left-1 z-10 p-0.5 bg-white rounded shadow"
+                              >
+                                {selectedNoteIds.has(note.id) ? (
+                                  <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-400" />
+                                )}
+                              </button>
+                            )}
+
+                            {/* 썸네일 영역 */}
+                            <div
+                              className="h-24 bg-slate-100 flex items-center justify-center cursor-pointer relative"
+                              onClick={() => {
+                                if (notesSelectMode) {
+                                  const newSet = new Set(selectedNoteIds)
+                                  if (newSet.has(note.id)) {
+                                    newSet.delete(note.id)
+                                  } else {
+                                    newSet.add(note.id)
+                                  }
+                                  setSelectedNoteIds(newSet)
+                                } else {
+                                  setEditingNote(note)
+                                  setShowNoteEditor(true)
+                                }
+                              }}
+                            >
+                              {note.thumbnail_url ? (
+                                <img
+                                  src={note.thumbnail_url}
+                                  alt={note.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-slate-400 text-center">
+                                  <FileText className="w-7 h-7 mx-auto" />
+                                </div>
+                              )}
+                              {/* 파일 타입 배지 */}
+                              <span className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                note.file_type === 'pdf'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-blue-100 text-indigo-700'
+                              }`}>
+                                {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
+                              </span>
+                            </div>
+
+                            {/* 정보 영역 */}
+                            <div className="px-2 pt-2">
+                              <h3 className="font-medium text-xs text-slate-900 truncate" title={note.title}>{note.title}</h3>
+                              <p className="text-[10px] text-slate-500 truncate" title={note.song_name}>{note.song_name}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                              </p>
+
+                              {/* 버튼 영역 */}
+                              {!notesSelectMode && (
+                                <div className="flex mt-1 border-t border-slate-100 pt-1 pb-0.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditingNote(note)
+                                      setShowNoteEditor(true)
+                                    }}
+                                    className="flex-1 flex justify-center text-indigo-600 hover:text-indigo-700 transition-colors"
+                                    title="편집"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRenameNote(note)
+                                      setNewTitle(note.title)
+                                      setShowRenameModal(true)
+                                    }}
+                                    className="flex-1 flex justify-center text-slate-400 hover:text-indigo-600 transition-colors"
+                                    title="파일명 변경"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShareNote(note)
+                                      setShareFileName(note.title)
+                                      setShowShareModal2(true)
+                                    }}
+                                    className="flex-1 flex justify-center text-slate-400 hover:text-indigo-600 transition-colors"
+                                    title="내보내기"
+                                  >
+                                    <Upload className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
+                                      const success = await deleteSheetMusicNote(note.id)
+                                      if (success) {
+                                        alert('삭제되었습니다.')
+                                      }
+                                    }}
+                                    className="flex-1 flex justify-center text-slate-400 hover:text-red-600 transition-colors"
+                                    title="삭제"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 🆕 리스트 뷰 */}
+                    {notesViewMode === 'list' && (
+                      <div className="divide-y divide-slate-100">
+                        {sheetMusicNotes.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors ${
+                              selectedNoteIds.has(note.id) ? 'bg-indigo-50' : ''
+                            }`}
+                          >
+                            {/* 선택 체크박스 */}
+                            {notesSelectMode && (
+                              <button
+                                onClick={() => {
+                                  const newSet = new Set(selectedNoteIds)
+                                  if (newSet.has(note.id)) {
+                                    newSet.delete(note.id)
+                                  } else {
+                                    newSet.add(note.id)
+                                  }
+                                  setSelectedNoteIds(newSet)
+                                }}
+                                className="flex-shrink-0"
+                              >
+                                {selectedNoteIds.has(note.id) ? (
+                                  <CheckSquare className="w-6 h-6 text-indigo-600" />
+                                ) : (
+                                  <Square className="w-6 h-6 text-slate-400" />
+                                )}
+                              </button>
+                            )}
+
+                            {/* 썸네일 */}
+                            <div
+                              className="w-16 h-16 bg-slate-100 rounded-lg flex-shrink-0 flex items-center justify-center cursor-pointer overflow-hidden"
+                              onClick={() => {
+                                if (notesSelectMode) {
+                                  const newSet = new Set(selectedNoteIds)
+                                  if (newSet.has(note.id)) {
+                                    newSet.delete(note.id)
+                                  } else {
+                                    newSet.add(note.id)
+                                  }
+                                  setSelectedNoteIds(newSet)
+                                } else {
+                                  setEditingNote(note)
+                                  setShowNoteEditor(true)
+                                }
+                              }}
+                            >
+                              {note.thumbnail_url ? (
+                                <img
+                                  src={note.thumbnail_url}
+                                  alt={note.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <FileText className="w-6 h-6 text-slate-400" />
+                              )}
+                            </div>
+
+                            {/* 정보 */}
+                            <div
+                              className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => {
+                                if (notesSelectMode) {
+                                  const newSet = new Set(selectedNoteIds)
+                                  if (newSet.has(note.id)) {
+                                    newSet.delete(note.id)
+                                  } else {
+                                    newSet.add(note.id)
+                                  }
+                                  setSelectedNoteIds(newSet)
+                                } else {
+                                  setEditingNote(note)
+                                  setShowNoteEditor(true)
+                                }
+                              }}
+                            >
+                              <h3 className="font-semibold text-slate-900 truncate">{note.title}</h3>
+                              <p className="text-sm text-slate-500 truncate">
+                                {note.song_name} {note.team_name && `· ${note.team_name}`}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                              </p>
+                            </div>
+
+                            {/* 타입 배지 */}
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold flex-shrink-0 ${
+                              note.file_type === 'pdf'
+                                ? 'bg-red-100 text-red-700'
+                              : 'bg-blue-100 text-indigo-700'
+                          }`}>
+                            {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
+                          </span>
+
+                            {/* 버튼 - 선택 모드가 아닐 때만 표시 */}
                             {!notesSelectMode && (
-                              <div className="flex mt-1 border-t pt-1 pb-0.5">
+                              <div className="flex gap-1 flex-shrink-0">
                                 <button
                                   onClick={() => {
                                     setEditingNote(note)
                                     setShowNoteEditor(true)
                                   }}
-                                  className="flex-1 flex justify-center text-green-600 hover:text-green-700"
+                                  className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
                                   title="편집"
                                 >
-                                  <Edit size={15} />
+                                  <Edit className="w-5 h-5" />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1568,21 +1908,10 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                     setNewTitle(note.title)
                                     setShowRenameModal(true)
                                   }}
-                                  className="flex-1 flex justify-center text-gray-400 hover:text-blue-600"
-                                  title="파일명 변경"
+                                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                                  title="이름 변경"
                                 >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setShareNote(note)
-                                    setShareFileName(note.title)
-                                    setShowShareModal2(true)
-                                  }}
-                                  className="flex-1 flex justify-center text-gray-400 hover:text-blue-600"
-                                  title="내보내기"
-                                >
-                                  <Upload size={15} />
+                                  <Pencil className="w-5 h-5" />
                                 </button>
                                 <button
                                   onClick={async () => {
@@ -1592,165 +1921,44 @@ setNewSong({ ...newSong, tempo: tempoValue })
                                       alert('삭제되었습니다.')
                                     }
                                   }}
-                                  className="flex-1 flex justify-center text-gray-400 hover:text-red-600"
+                                  className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
                                   title="삭제"
                                 >
-                                  <Trash2 size={15} />
+                                  <Trash2 className="w-5 h-5" />
                                 </button>
                               </div>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
 
-                  {/* 🆕 리스트 뷰 */}
-                  {notesViewMode === 'list' && (
-                    <div className="divide-y">
-                      {sheetMusicNotes.map((note) => (
-                        <div
-                          key={note.id}
-                          className={`flex items-center gap-4 p-4 hover:bg-gray-50 ${
-                            selectedNoteIds.has(note.id) ? 'bg-green-50' : ''
-                          }`}
-                        >
-                          {/* 선택 체크박스 */}
-                          {notesSelectMode && (
-                            <button
-                              onClick={() => {
-                                const newSet = new Set(selectedNoteIds)
-                                if (newSet.has(note.id)) {
-                                  newSet.delete(note.id)
-                                } else {
-                                  newSet.add(note.id)
-                                }
-                                setSelectedNoteIds(newSet)
-                              }}
-                              className="flex-shrink-0"
-                            >
-                              {selectedNoteIds.has(note.id) ? (
-                                <CheckSquare size={24} className="text-green-600" />
-                              ) : (
-                                <Square size={24} className="text-gray-400" />
-                              )}
-                            </button>
-                          )}
-
-                          {/* 썸네일 */}
-                          <div
-                            className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center cursor-pointer overflow-hidden"
-                            onClick={() => {
-                              if (notesSelectMode) {
-                                const newSet = new Set(selectedNoteIds)
-                                if (newSet.has(note.id)) {
-                                  newSet.delete(note.id)
-                                } else {
-                                  newSet.add(note.id)
-                                }
-                                setSelectedNoteIds(newSet)
-                              } else {
-                                setEditingNote(note)
-                                setShowNoteEditor(true)
-                              }
-                            }}
-                          >
-                            {note.thumbnail_url ? (
-                              <img
-                                src={note.thumbnail_url}
-                                alt={note.title}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <FileText size={24} className="text-gray-400" />
-                            )}
-                          </div>
-
-                          {/* 정보 */}
-                          <div
-                            className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => {
-                              if (notesSelectMode) {
-                                const newSet = new Set(selectedNoteIds)
-                                if (newSet.has(note.id)) {
-                                  newSet.delete(note.id)
-                                } else {
-                                  newSet.add(note.id)
-                                }
-                                setSelectedNoteIds(newSet)
-                              } else {
-                                setEditingNote(note)
-                                setShowNoteEditor(true)
-                              }
-                            }}
-                          >
-                            <h3 className="font-bold text-gray-900 truncate">{note.title}</h3>
-                            <p className="text-sm text-gray-600 truncate">
-                              {note.song_name} {note.team_name && `· ${note.team_name}`}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                            </p>
-                          </div>
-
-                          {/* 타입 배지 */}
-                          <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
-                            note.file_type === 'pdf'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
-                          </span>
-
-                          {/* 버튼 - 선택 모드가 아닐 때만 표시 */}
-                          {!notesSelectMode && (
-                            <div className="flex gap-1 flex-shrink-0">
-                              <button
-                                onClick={() => {
-                                  setEditingNote(note)
-                                  setShowNoteEditor(true)
-                                }}
-                                className="p-2 text-green-600 hover:bg-green-100 rounded"
-                                title="편집"
-                              >
-                                <Edit size={18} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setRenameNote(note)
-                                  setNewTitle(note.title)
-                                  setShowRenameModal(true)
-                                }}
-                                className="p-2 text-gray-600 hover:bg-gray-100 rounded"
-                                title="이름 변경"
-                              >
-                                <Pencil size={18} />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
-                                  const success = await deleteSheetMusicNote(note.id)
-                                  if (success) {
-                                    alert('삭제되었습니다.')
-                                  }
-                                }}
-                                className="p-2 text-gray-600 hover:bg-red-100 hover:text-red-600 rounded"
-                                title="삭제"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+          {/* 푸터 */}
+          <footer className="mt-12 text-center text-slate-400 text-xs">
+            <div className="flex items-center justify-center gap-6 mb-4">
+              <a href="#" className="hover:text-indigo-600 transition-colors">이용약관</a>
+              <a href="#" className="hover:text-indigo-600 transition-colors">개인정보처리방침</a>
+              <a href="#" className="hover:text-indigo-600 transition-colors">저작권</a>
+              <a href="#" className="hover:text-indigo-600 transition-colors">문의하기</a>
+            </div>
+            <p>© 2024 WORSHEEP. All rights reserved.</p>
+          </footer>
         </div>
-      </div>
+        </div>
+      </main>
+
+      {/* 모바일 FAB 버튼 */}
+      <button
+        onClick={() => setShowAddSongModal(true)}
+        className="fixed bottom-8 right-8 lg:hidden w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-indigo-700 transition-colors z-40"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
       {/* 📝 필기 에디터 모달 */}
       {showNoteEditor && editingNote && (
@@ -1789,7 +1997,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-2xl p-6 my-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">새 곡 추가</h2>
+              <h2 className="text-2xl font-bold text-slate-900">새 곡 추가</h2>
               <button
                 onClick={() => {
                   setShowAddSongModal(false)
@@ -1810,7 +2018,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                   setUploadingFile(null)
                   setDuplicateSongs([])  // 🔍 중복 체크 상태 초기화
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-slate-500 hover:text-slate-700"
               >
                 <X size={24} />
               </button>
@@ -1820,7 +2028,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   곡 제목 <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -1828,13 +2036,13 @@ setNewSong({ ...newSong, tempo: tempoValue })
                   value={newSong.song_name}
                   onChange={(e) => handleSongNameChange(e.target.value)}
                   placeholder="예: 주의 이름 높이며"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                    duplicateSongs.length > 0 ? 'border-orange-400 bg-orange-50' : 'border-gray-300'
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                    duplicateSongs.length > 0 ? 'border-orange-400 bg-orange-50' : 'border-slate-200'
                   }`}
                 />
                 {/* 🔍 중복 경고 표시 */}
                 {checkingDuplicate && (
-                  <p className="mt-1 text-sm text-gray-500">중복 확인 중...</p>
+                  <p className="mt-1 text-sm text-slate-500">중복 확인 중...</p>
                 )}
                 {!checkingDuplicate && duplicateSongs.length > 0 && (
                   <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
@@ -1862,7 +2070,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
               </div>
 
               <div className="relative">
-<label className="block text-sm font-medium text-gray-700 mb-1">
+<label className="block text-sm font-medium text-slate-700 mb-1">
 팀명 / 아티스트
 </label>
 <input
@@ -1877,12 +2085,12 @@ onBlur={() => {
   setTimeout(() => setShowTeamSuggestions(false), 200)
 }}
 placeholder="예: 위러브(Welove)"
-className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+className="w-full px-3 py-2 border border-slate-200 rounded-lg"
 autoComplete="off"
 />
 {/* 자동완성 드롭다운 */}
 {showTeamSuggestions && teamNameSuggestions.length > 0 && (
-  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
     {teamNameSuggestions.map((team, index) => (
       <button
         key={index}
@@ -1891,7 +2099,7 @@ autoComplete="off"
           setNewSong({ ...newSong, team_name: team })
           setShowTeamSuggestions(false)
         }}
-        className="w-full px-4 py-2 text-left hover:bg-blue-50 text-gray-900 text-sm"
+        className="w-full px-4 py-2 text-left hover:bg-indigo-50 text-slate-900 text-sm"
       >
         {team}
       </button>
@@ -1903,14 +2111,14 @@ autoComplete="off"
 
               {/* 🆕 공유 범위 선택 */}
               <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-3">
                   공유 범위 <span className="text-red-500">*</span>
                 </label>
                 <div className="space-y-2">
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     newSong.visibility === 'public'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -1925,18 +2133,18 @@ autoComplete="off"
                       className="mr-3 accent-blue-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
-                      <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${newSong.visibility === 'public' ? 'text-indigo-700' : 'text-slate-900'}`}>전체 공개</div>
+                      <div className="text-sm text-slate-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
                     {newSong.visibility === 'public' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-indigo-500 text-xl">✓</span>
                     )}
                   </label>
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     newSong.visibility === 'teams'
                       ? 'border-violet-500 bg-violet-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -1947,8 +2155,8 @@ autoComplete="off"
                       className="mr-3 accent-violet-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-violet-700' : 'text-gray-900'}`}>팀 공개</div>
-                      <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${newSong.visibility === 'teams' ? 'text-violet-700' : 'text-slate-900'}`}>팀 공개</div>
+                      <div className="text-sm text-slate-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {newSong.visibility === 'teams' && (
                       <span className="text-violet-500 text-xl">✓</span>
@@ -1957,8 +2165,8 @@ autoComplete="off"
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     newSong.visibility === 'private'
-                      ? 'border-gray-500 bg-gray-100'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-gray-500 bg-slate-100'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -1969,11 +2177,11 @@ autoComplete="off"
                       className="mr-3 accent-gray-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-gray-700' : 'text-gray-900'}`}>비공개</div>
-                      <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${newSong.visibility === 'private' ? 'text-slate-700' : 'text-slate-900'}`}>비공개</div>
+                      <div className="text-sm text-slate-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {newSong.visibility === 'private' && (
-                      <span className="text-gray-500 text-xl">✓</span>
+                      <span className="text-slate-500 text-xl">✓</span>
                     )}
                   </label>
                 </div>
@@ -1981,7 +2189,7 @@ autoComplete="off"
                 {/* 🆕 팀 선택 (팀 공개 선택 시에만 표시) */}
                 {newSong.visibility === 'teams' && (
                   <div className="mt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       공유할 팀 선택 <span className="text-red-500">*</span>
                     </label>
                     {userTeams.length > 0 ? (
@@ -1994,7 +2202,7 @@ autoComplete="off"
                               className={`flex items-center p-2 rounded cursor-pointer transition ${
                                 isSelected
                                   ? 'bg-violet-100 border border-violet-300'
-                                  : 'hover:bg-gray-50 border border-transparent'
+                                  : 'hover:bg-slate-50 border border-transparent'
                               }`}
                             >
                               <input
@@ -2015,13 +2223,13 @@ autoComplete="off"
                                 }}
                                 className="mr-2 accent-violet-500"
                               />
-                              <span className={isSelected ? 'text-violet-700 font-medium' : 'text-gray-700'}>{team.name}</span>
+                              <span className={isSelected ? 'text-violet-700 font-medium' : 'text-slate-700'}>{team.name}</span>
                             </label>
                           )
                         })}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">소속된 팀이 없습니다. 먼저 팀에 참여하거나 생성하세요.</p>
+                      <p className="text-sm text-slate-500">소속된 팀이 없습니다. 먼저 팀에 참여하거나 생성하세요.</p>
                     )}
                   </div>
                 )}
@@ -2030,7 +2238,7 @@ autoComplete="off"
               <div className="grid grid-cols-2 gap-4">
                 {/* Key */}
 <div>
-<label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+<label className="block text-sm font-medium text-slate-700 mb-1">Key</label>
 
 {/* Major/Minor 토글 추가 */}
 <div className="flex gap-2 mb-2">
@@ -2039,8 +2247,8 @@ type="button"
 onClick={() => setNewSong({ ...newSong, key: newSong.key.replace('m', '') })}
 className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
 !newSong.key.includes('m')
-? 'bg-[#C5D7F2] text-white'
-: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+? 'bg-indigo-600 text-white'
+: 'bg-slate-100 text-slate-700 hover:bg-slate-200'
 }`}
 >
 Major
@@ -2054,8 +2262,8 @@ setNewSong({ ...newSong, key: newSong.key + 'm' })
 }}
 className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
 newSong.key.includes('m')
-? 'bg-[#C4BEE2] text-white'
-: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+? 'bg-violet-500 text-white'
+: 'bg-slate-100 text-slate-700 hover:bg-slate-200'
 }`}
 >
 Minor
@@ -2069,7 +2277,7 @@ const baseKey = e.target.value
 const isMinor = newSong.key.includes('m')
 setNewSong({ ...newSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
 }}
-className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+className="w-full px-3 py-2 border border-slate-200 rounded-lg"
 >
 <option value="">선택</option>
 {KEYS.map(key => (
@@ -2080,11 +2288,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* 박자 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">박자</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">박자</label>
                   <select
                     value={newSong.time_signature}
                     onChange={(e) => setNewSong({ ...newSong, time_signature: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   >
                     <option value="">선택</option>
                     {TIME_SIGNATURES.map(ts => (
@@ -2095,11 +2303,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* 템포 */}
 <div>
-<label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+<label className="block text-sm font-medium text-slate-700 mb-1">템포</label>
 <select
 value={newSong.tempo}
 onChange={(e) => handleTempoChange(e.target.value)}
-className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+className="w-full px-3 py-2 border border-slate-200 rounded-lg"
 >
 <option value="">선택</option>
 {TEMPOS.map(tempo => (
@@ -2110,10 +2318,10 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* BPM */}
 <div>
-<label className="block text-sm font-medium text-gray-700 mb-1">
+<label className="block text-sm font-medium text-slate-700 mb-1">
 BPM
 {newSong.tempo && getBPMRangeFromTempo(newSong.tempo) && (
-<span className="text-xs text-gray-500 ml-2">
+<span className="text-xs text-slate-500 ml-2">
 ({getBPMRangeFromTempo(newSong.tempo)?.min} ~ {getBPMRangeFromTempo(newSong.tempo)?.max})
 </span>
 )}
@@ -2127,18 +2335,18 @@ placeholder={newSong.tempo && getBPMRangeFromTempo(newSong.tempo)
 : "예: 120"}
 min={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.min : 1}
 max={newSong.tempo && getBPMRangeFromTempo(newSong.tempo) ? getBPMRangeFromTempo(newSong.tempo)?.max : 300}
-className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+className="w-full px-3 py-2 border border-slate-200 rounded-lg"
 />
 </div>
               </div>
 
               {/* 절기 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">절기</label>
                 <select
                   value={newSong.season}
                   onChange={(e) => setNewSong({ ...newSong, season: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 >
                   <option value="">선택</option>
                   {SEASONS.filter(s => s !== '전체').map(season => (
@@ -2149,17 +2357,17 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
               {/* 🆕 테마 다중 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   테마 (다중 선택 가능)
                 </label>
 
                 {/* 선택된 테마 표시 */}
                 {newSong.themes.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-indigo-50 rounded-lg">
                     {newSong.themes.map((theme) => (
                       <span
                         key={theme}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#C5D7F2] text-white text-sm rounded-full"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-sm rounded-full"
                       >
                         {theme}
                         <button
@@ -2180,7 +2388,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 {/* 기존 테마 선택 */}
                 <div className="flex flex-wrap gap-2">
                   {themesLoading ? (
-                    <p className="text-sm text-gray-500">테마 로딩 중...</p>
+                    <p className="text-sm text-slate-500">테마 로딩 중...</p>
                   ) : (
                     themeCounts.map(({ theme }) => (
                       <button
@@ -2201,8 +2409,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                         }}
                         className={`px-3 py-1 rounded-full text-sm transition ${
                           newSong.themes.includes(theme)
-                            ? 'bg-[#C5D7F2] text-white'
-                            : 'bg-gray-100 hover:bg-gray-200'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-100 hover:bg-slate-200'
                         }`}
                       >
                         {theme}
@@ -2219,7 +2427,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     value={newThemeInput}
                     onChange={(e) => setNewThemeInput(e.target.value)}
                     placeholder="새 테마 직접 입력..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
                     onKeyDown={(e) => {
                       // 한글 IME 조합 중이면 무시
                       if (e.nativeEvent.isComposing) return
@@ -2248,19 +2456,19 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                         setNewThemeInput('')
                       }
                     }}
-                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition"
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition"
                   >
                     추가
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-slate-500">
                   * Enter를 누르거나 추가 버튼을 클릭하면 새 테마가 추가됩니다
                 </p>
               </div>
 
               {/*  YouTube URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   YouTube URL (선택사항)
                 </label>
                 <input
@@ -2268,13 +2476,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   value={newSong.youtube_url}
                   onChange={(e) => setNewSong({ ...newSong, youtube_url: e.target.value })}
                   placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 />
               </div>
 
               {/* 가사 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   가사 (선택사항)
                 </label>
                 <textarea
@@ -2282,12 +2490,12 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   onChange={(e) => setNewSong({ ...newSong, lyrics: e.target.value })}
                   rows={4}
                   placeholder="곡의 가사를 입력하세요..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   악보 파일 <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
@@ -2301,7 +2509,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition flex items-center justify-center"
+                    className="w-full px-4 py-3 border-2 border-dashed border-slate-200 rounded-lg hover:border-indigo-500 transition flex items-center justify-center"
                   >
                     <Upload className="mr-2" size={20} />
                     {uploadingFile ? (
@@ -2344,14 +2552,14 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   })
                   setUploadingFile(null)
                 }}
-                className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+                className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium"
               >
                 취소
               </button>
               <button
                 onClick={addNewSong}
                 disabled={uploading || !newSong.song_name.trim() || !uploadingFile || (newSong.visibility === 'teams' && newSong.shared_with_teams.length === 0)}
-                className="flex-1 px-6 py-3 bg-[#C5D7F2] hover:bg-[#A8C4E8] text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-[#C5D7F2] hover:bg-indigo-700 text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {uploading ? '추가 중...' : '곡 추가'}
               </button>
@@ -2365,7 +2573,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-4">파일명 변경</h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-slate-600 mb-4">
               "{renameNote.song_name}"의 파일명을 변경합니다.
             </p>
             <input
@@ -2373,7 +2581,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder="새 파일명 입력..."
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoFocus
             />
             <div className="flex gap-3 mt-6">
@@ -2383,7 +2591,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   setRenameNote(null)
                   setNewTitle('')
                 }}
-                className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+                className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium"
               >
                 취소
               </button>
@@ -2402,7 +2610,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   }
                 }}
                 disabled={!newTitle.trim()}
-                className="flex-1 px-4 py-3 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-medium disabled:bg-gray-400"
+                className="flex-1 px-4 py-3 bg-blue-100 hover:bg-blue-200 text-indigo-700 rounded-lg font-medium disabled:bg-gray-400"
               >
                 변경
               </button>
@@ -2416,25 +2624,25 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-4">악보 내보내기</h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-slate-600 mb-4">
               형식을 선택하고 공유하거나 다운로드하세요.
             </p>
 
             {/* 파일명 입력 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">파일명</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">파일명</label>
               <input
                 type="text"
                 value={shareFileName}
                 onChange={(e) => setShareFileName(e.target.value)}
                 placeholder="파일명 입력..."
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
 
             {/* 공유 섹션 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 <Share2 size={14} className="inline mr-1" />
                 공유하기
               </label>
@@ -2540,18 +2748,18 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   }
                 }}
                 disabled={sharing || !shareFileName.trim()}
-                className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition disabled:opacity-50"
+                className="flex flex-col items-center justify-center p-4 bg-indigo-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition disabled:opacity-50"
               >
                 <Image size={32} className="text-blue-600 mb-2" />
-                <span className="font-medium text-blue-700">이미지</span>
-                <span className="text-xs text-blue-500 mt-1">PNG 공유</span>
+                <span className="font-medium text-indigo-700">이미지</span>
+                <span className="text-xs text-indigo-500 mt-1">PNG 공유</span>
               </button>
               </div>
             </div>
 
             {/* 다운로드 섹션 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 <Download size={14} className="inline mr-1" />
                 다운로드
               </label>
@@ -2586,10 +2794,10 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     }
                   }}
                   disabled={sharing || !shareFileName.trim()}
-                  className="flex flex-col items-center justify-center p-3 bg-gray-50 hover:bg-gray-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
+                  className="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-slate-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
                 >
-                  <FileText size={24} className="text-gray-600 mb-1" />
-                  <span className="font-medium text-gray-700 text-sm">PDF</span>
+                  <FileText size={24} className="text-slate-600 mb-1" />
+                  <span className="font-medium text-slate-700 text-sm">PDF</span>
                 </button>
 
                 <button
@@ -2622,17 +2830,17 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     }
                   }}
                   disabled={sharing || !shareFileName.trim()}
-                  className="flex flex-col items-center justify-center p-3 bg-gray-50 hover:bg-gray-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
+                  className="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-slate-100 border-2 border-gray-200 rounded-lg transition disabled:opacity-50"
                 >
-                  <Image size={24} className="text-gray-600 mb-1" />
-                  <span className="font-medium text-gray-700 text-sm">이미지</span>
+                  <Image size={24} className="text-slate-600 mb-1" />
+                  <span className="font-medium text-slate-700 text-sm">이미지</span>
                 </button>
               </div>
             </div>
 
             {sharing && (
-              <div className="flex items-center justify-center py-2 text-gray-600">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
+              <div className="flex items-center justify-center py-2 text-slate-600">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500 mr-2"></div>
                 준비 중...
               </div>
             )}
@@ -2644,7 +2852,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 setShareFileName('')
               }}
               disabled={sharing}
-              className="w-full mt-4 px-4 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium disabled:opacity-50"
+              className="w-full mt-4 px-4 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium disabled:opacity-50"
             >
               취소
             </button>
@@ -2657,13 +2865,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-lg w-full max-w-2xl p-6 my-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">곡 정보 수정</h2>
+              <h2 className="text-2xl font-bold text-slate-900">곡 정보 수정</h2>
               <button
                 onClick={() => {
                   setShowEditModal(false)
                   setEditingSongId(null)
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-slate-500 hover:text-slate-700"
               >
                 <X size={24} />
               </button>
@@ -2671,7 +2879,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   곡 제목 <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -2679,12 +2887,12 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   value={editSong.song_name}
                   onChange={(e) => setEditSong({ ...editSong, song_name: e.target.value })}
                   placeholder="예: 주의 이름 높이며"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   팀명 / 아티스트
                 </label>
                 <input
@@ -2692,20 +2900,20 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   value={editSong.team_name}
                   onChange={(e) => setEditSong({ ...editSong, team_name: e.target.value })}
                   placeholder="예: 위러브(Welove)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 />
               </div>
 
               {/* 🆕 공유 범위 선택 */}
               <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-3">
                   공유 범위 <span className="text-red-500">*</span>
                 </label>
                 <div className="space-y-2">
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     editSong.visibility === 'public'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -2716,18 +2924,18 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       className="mr-3 accent-blue-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${editSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
-                      <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${editSong.visibility === 'public' ? 'text-indigo-700' : 'text-slate-900'}`}>전체 공개</div>
+                      <div className="text-sm text-slate-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
                     </div>
                     {editSong.visibility === 'public' && (
-                      <span className="text-blue-500 text-xl">✓</span>
+                      <span className="text-indigo-500 text-xl">✓</span>
                     )}
                   </label>
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     editSong.visibility === 'teams'
                       ? 'border-violet-500 bg-violet-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -2738,8 +2946,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       className="mr-3 accent-violet-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${editSong.visibility === 'teams' ? 'text-violet-700' : 'text-gray-900'}`}>팀 공개</div>
-                      <div className="text-sm text-gray-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${editSong.visibility === 'teams' ? 'text-violet-700' : 'text-slate-900'}`}>팀 공개</div>
+                      <div className="text-sm text-slate-500">선택한 팀만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {editSong.visibility === 'teams' && (
                       <span className="text-violet-500 text-xl">✓</span>
@@ -2748,8 +2956,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                   <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                     editSong.visibility === 'private'
-                      ? 'border-gray-500 bg-gray-100'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-gray-500 bg-slate-100'
+                      : 'border-gray-200 hover:bg-slate-50'
                   }`}>
                     <input
                       type="radio"
@@ -2760,11 +2968,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       className="mr-3 accent-gray-500"
                     />
                     <div className="flex-1">
-                      <div className={`font-medium ${editSong.visibility === 'private' ? 'text-gray-700' : 'text-gray-900'}`}>비공개</div>
-                      <div className="text-sm text-gray-500">나만 이 곡을 볼 수 있습니다</div>
+                      <div className={`font-medium ${editSong.visibility === 'private' ? 'text-slate-700' : 'text-slate-900'}`}>비공개</div>
+                      <div className="text-sm text-slate-500">나만 이 곡을 볼 수 있습니다</div>
                     </div>
                     {editSong.visibility === 'private' && (
-                      <span className="text-gray-500 text-xl">✓</span>
+                      <span className="text-slate-500 text-xl">✓</span>
                     )}
                   </label>
                 </div>
@@ -2772,7 +2980,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 {/* 팀 선택 (팀 공개 선택 시에만 표시) */}
                 {editSong.visibility === 'teams' && (
                   <div className="mt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       공유할 팀 선택 <span className="text-red-500">*</span>
                     </label>
                     {userTeams.length > 0 ? (
@@ -2783,7 +2991,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                             <label key={team.id} className={`flex items-center p-2 rounded cursor-pointer transition ${
                               isSelected
                                 ? 'bg-violet-100 border border-violet-300'
-                                : 'hover:bg-gray-50 border border-transparent'
+                                : 'hover:bg-slate-50 border border-transparent'
                             }`}>
                               <input
                                 type="checkbox"
@@ -2809,7 +3017,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                         })}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">소속된 팀이 없습니다.</p>
+                      <p className="text-sm text-slate-500">소속된 팀이 없습니다.</p>
                     )}
                   </div>
                 )}
@@ -2818,15 +3026,15 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               <div className="grid grid-cols-2 gap-4">
                 {/* Key */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Key</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Key</label>
                   <div className="flex gap-2 mb-2">
                     <button
                       type="button"
                       onClick={() => setEditSong({ ...editSong, key: editSong.key.replace('m', '') })}
                       className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
                         !editSong.key.includes('m')
-                          ? 'bg-[#C5D7F2] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       Major
@@ -2840,8 +3048,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       }}
                       className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
                         editSong.key.includes('m')
-                          ? 'bg-[#C4BEE2] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-violet-500 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
                       Minor
@@ -2854,7 +3062,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       const isMinor = editSong.key.includes('m')
                       setEditSong({ ...editSong, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   >
                     <option value="">선택</option>
                     {KEYS.map(key => (
@@ -2865,11 +3073,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* 박자 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">박자</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">박자</label>
                   <select
                     value={editSong.time_signature}
                     onChange={(e) => setEditSong({ ...editSong, time_signature: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   >
                     <option value="">선택</option>
                     {TIME_SIGNATURES.map(ts => (
@@ -2880,11 +3088,11 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* 템포 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">템포</label>
                   <select
                     value={editSong.tempo}
                     onChange={(e) => handleEditTempoChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   >
                     <option value="">선택</option>
                     {TEMPOS.map(tempo => (
@@ -2895,10 +3103,10 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                 {/* BPM */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
                     BPM
                     {editSong.tempo && getBPMRangeFromTempo(editSong.tempo) && (
-                      <span className="text-xs text-gray-500 ml-2">
+                      <span className="text-xs text-slate-500 ml-2">
                         ({getBPMRangeFromTempo(editSong.tempo)?.min} ~ {getBPMRangeFromTempo(editSong.tempo)?.max})
                       </span>
                     )}
@@ -2908,18 +3116,18 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                     value={editSong.bpm}
                     onChange={(e) => handleEditBPMChange(e.target.value)}
                     placeholder="예: 120"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   />
                 </div>
               </div>
 
               {/* 절기 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">절기</label>
                 <select
                   value={editSong.season}
                   onChange={(e) => setEditSong({ ...editSong, season: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 >
                   <option value="">선택</option>
                   {SEASONS.filter(s => s !== '전체').map(season => (
@@ -2930,17 +3138,17 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
               {/* 🆕 테마 다중 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   테마 (다중 선택 가능)
                 </label>
 
                 {/* 선택된 테마 표시 */}
                 {editSong.themes.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-blue-50 rounded-lg">
+                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-indigo-50 rounded-lg">
                     {editSong.themes.map((theme) => (
                       <span
                         key={theme}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[#C5D7F2] text-white text-sm rounded-full"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-sm rounded-full"
                       >
                         {theme}
                         <button
@@ -2961,7 +3169,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 {/* 기존 테마 선택 */}
                 <div className="flex flex-wrap gap-2">
                   {themesLoading ? (
-                    <p className="text-sm text-gray-500">테마 로딩 중...</p>
+                    <p className="text-sm text-slate-500">테마 로딩 중...</p>
                   ) : (
                     themeCounts.map(({ theme }) => (
                       <button
@@ -2982,8 +3190,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                         }}
                         className={`px-3 py-1 rounded-full text-sm transition ${
                           editSong.themes.includes(theme)
-                            ? 'bg-[#C5D7F2] text-white'
-                            : 'bg-gray-100 hover:bg-gray-200'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-100 hover:bg-slate-200'
                         }`}
                       >
                         {theme}
@@ -3013,7 +3221,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       }
                     }}
                     placeholder="새 테마 직접 입력..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
                   />
                   <button
                     type="button"
@@ -3029,19 +3237,19 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                         setEditCustomTheme('')
                       }
                     }}
-                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition"
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-medium transition"
                   >
                     추가
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-slate-500">
                   * Enter를 누르거나 추가 버튼을 클릭하면 새 테마가 추가됩니다
                 </p>
               </div>
 
               {/* YouTube URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   YouTube URL (선택사항)
                 </label>
                 <input
@@ -3049,13 +3257,13 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   value={editSong.youtube_url}
                   onChange={(e) => setEditSong({ ...editSong, youtube_url: e.target.value })}
                   placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 />
               </div>
 
               {/* 악보 파일 수정 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   악보 파일
                 </label>
                 <div className="mt-1">
@@ -3069,8 +3277,8 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
                   {/* 현재 파일 표시 */}
                   {editCurrentFileUrl && !editFile && (
-                    <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="mb-2 p-3 bg-slate-50 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
                         <FileText size={16} />
                         <span>현재 파일: {editCurrentFileUrl.split('/').pop()?.substring(0, 30)}...</span>
                       </div>
@@ -3086,7 +3294,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   <button
                     type="button"
                     onClick={() => editFileInputRef.current?.click()}
-                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition flex items-center justify-center"
+                    className="w-full px-4 py-3 border-2 border-dashed border-slate-200 rounded-lg hover:border-indigo-500 transition flex items-center justify-center"
                   >
                     <Upload className="mr-2" size={20} />
                     {editFile ? (
@@ -3112,7 +3320,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
 
               {/* 가사 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
                   가사 (선택사항)
                 </label>
                 <textarea
@@ -3120,7 +3328,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   onChange={(e) => setEditSong({ ...editSong, lyrics: e.target.value })}
                   rows={4}
                   placeholder="곡의 가사를 입력하세요..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 />
               </div>
             </div>
@@ -3131,7 +3339,7 @@ className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   setShowEditModal(false)
                   setEditingSongId(null)
                 }}
-                className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium"
+                className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium"
               >
                 취소
               </button>

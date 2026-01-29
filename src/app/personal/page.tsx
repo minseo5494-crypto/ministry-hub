@@ -103,12 +103,24 @@ export default function PersonalPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Music className="w-8 h-8 text-blue-600 flex-shrink-0" />
-              <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">내 악보</h1>
+              {/* 뒤로가기 */}
+              <button
+                onClick={() => router.push('/main')}
+                className="p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+                title="뒤로가기 (메인)"
+              >
+                <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
+              </button>
+              {/* 로고 */}
+              <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+                WORSHEEP
+              </Link>
+              <span className="text-slate-300 hidden sm:inline">|</span>
+              <h1 className="text-lg sm:text-xl font-bold whitespace-nowrap hidden sm:block">내 악보</h1>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
