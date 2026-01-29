@@ -35,7 +35,7 @@ import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 import OnboardingGuide from '@/components/OnboardingGuide'
 
 // Types
-import { Filters, SortBy, SongFilter, ViewMode, NewSongForm, UserTeam, LocalSheetMusicNote } from './types'
+import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote } from './types'
 
 declare global {
   interface Window {
@@ -166,7 +166,6 @@ export default function MainPage() {
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
 
   // Data state
   const [songs, setSongs] = useState<Song[]>([])
@@ -1417,8 +1416,6 @@ export default function MainPage() {
               displayCount={displayCount}
               showFilterPanel={showFilterPanel}
               setShowFilterPanel={setShowFilterPanel}
-              viewMode={viewMode}
-              setViewMode={setViewMode}
               sortBy={sortBy}
               setSortBy={setSortBy}
               songFilter={songFilter}
@@ -1433,7 +1430,7 @@ export default function MainPage() {
               displayedSongs={displayedSongs}
               filteredSongs={filteredSongs}
               selectedSongs={selectedSongs}
-              viewMode={viewMode}
+              viewMode="list"
               focusedSongIndex={focusedSongIndex}
               setFocusedSongIndex={setFocusedSongIndex}
               previewStates={previewStates}

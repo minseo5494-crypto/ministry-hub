@@ -51,28 +51,44 @@ interface Props {
 
 // 색상 프리셋
 const COLOR_PRESETS = [
-  { name: '보라', value: '#7C3AED' },
-  { name: '파랑', value: '#2563EB' },
-  { name: '빨강', value: '#DC2626' },
-  { name: '초록', value: '#16A34A' },
-  { name: '주황', value: '#EA580C' },
-  { name: '검정', value: '#1F2937' },
+  { name: '파랑', value: '#3B82F6' },
+  { name: '인디고', value: '#6366F1' },
+  { name: '보라', value: '#8B5CF6' },
+  { name: '빨강', value: '#EF4444' },
+  { name: '초록', value: '#22C55E' },
+  { name: '검정', value: '#374151' },
 ]
 
 // 파트 태그 색상 (부드러운 파스텔 톤)
 const PART_COLORS: { [key: string]: string } = {
-  'I': '#F87171',      // 부드러운 코랄
-  'V': '#60A5FA',      // 부드러운 파랑
-  'V1': '#7DD3FC',     // 연한 스카이블루
-  'V2': '#60A5FA',     // 부드러운 파랑
-  'V3': '#818CF8',     // 연한 인디고
-  'PC': '#FBBF24',     // 부드러운 앰버
-  'C': '#4ADE80',      // 부드러운 초록
-  'C1': '#86EFAC',     // 연한 민트
-  'C2': '#4ADE80',     // 부드러운 초록
-  'B': '#C084FC',      // 부드러운 보라
-  '간주': '#FB923C',   // 부드러운 주황
-  'Out': '#9CA3AF',    // 부드러운 회색
+  'I': '#FDA4AF',      // 파스텔 핑크
+  'V': '#93C5FD',      // 파스텔 블루
+  'V1': '#A5B4FC',     // 파스텔 인디고
+  'V2': '#93C5FD',     // 파스텔 블루
+  'V3': '#C4B5FD',     // 파스텔 퍼플
+  'PC': '#FDE68A',     // 파스텔 옐로우
+  'C': '#86EFAC',      // 파스텔 그린
+  'C1': '#A7F3D0',     // 파스텔 민트
+  'C2': '#86EFAC',     // 파스텔 그린
+  'B': '#DDD6FE',      // 파스텔 바이올렛
+  '간주': '#FDBA74',   // 파스텔 오렌지
+  'Out': '#D1D5DB',    // 파스텔 그레이
+}
+
+// 파트 태그 텍스트 색상 (어두운 버전)
+const PART_TEXT_COLORS: { [key: string]: string } = {
+  'I': '#9F1239',      // 다크 핑크
+  'V': '#1E40AF',      // 다크 블루
+  'V1': '#3730A3',     // 다크 인디고
+  'V2': '#1E40AF',     // 다크 블루
+  'V3': '#5B21B6',     // 다크 퍼플
+  'PC': '#92400E',     // 다크 옐로우
+  'C': '#166534',      // 다크 그린
+  'C1': '#065F46',     // 다크 민트
+  'C2': '#166534',     // 다크 그린
+  'B': '#5B21B6',      // 다크 바이올렛
+  '간주': '#9A3412',   // 다크 오렌지
+  'Out': '#374151',    // 다크 그레이
 }
 
 // 사용 가능한 파트 태그
@@ -162,7 +178,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     x: 50,
     y: 5,
     fontSize: 36,
-    color: '#7C3AED',
+    color: '#3B82F6',
     opacity: 1
   }
 
@@ -184,7 +200,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             x: 50,
             y: 5,
             fontSize: 36,
-            color: '#7C3AED',
+            color: '#3B82F6',
             opacity: 1
           }
         }))
@@ -684,7 +700,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }
 
     const styleToSave = songFormStyles[currentSong.id] || {
-      x: 50, y: 5, fontSize: 36, color: '#7C3AED', opacity: 1
+      x: 50, y: 5, fontSize: 36, color: '#3B82F6', opacity: 1
     }
     const allTagsToSave = partTagStyles[currentSong.id] || []
     const forms = songForms[currentSong.id] || currentSong.selectedForm || []
@@ -819,21 +835,20 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-white rounded-lg w-full max-w-7xl max-h-[98vh] md:max-h-[95vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 md:p-4">
+      <div className="bg-white rounded-xl w-full max-w-7xl max-h-[98vh] md:max-h-[95vh] flex flex-col shadow-2xl">
         {/* 헤더 */}
-        <div className="p-2 md:p-4 border-b bg-white">
+        <div className="p-3 md:p-4 border-b border-gray-200">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h2 className="text-base md:text-xl font-bold text-gray-900">송폼 & 파트 태그 편집</h2>
-              <p className="text-xs md:text-sm text-gray-600 truncate">
-                <span className="font-semibold text-blue-600">
-                  곡 {currentSongIndex + 1}/{songsWithForms.length}
-                </span>
-                {' - '}
-                <span className="font-medium">{currentSong.song_name}</span>
+              <h2 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-lg md:text-xl text-blue-600">edit_note</span>
+                송폼 & 파트 태그 편집
+              </h2>
+              <p className="text-xs md:text-sm text-gray-500 truncate mt-0.5">
+                {currentSong.song_name}
                 {totalPages > 1 && (
-                  <span className="ml-1 md:ml-2 text-blue-600 font-semibold">
+                  <span className="ml-2 text-blue-600 font-medium">
                     (페이지 {currentPageIndex + 1}/{totalPages})
                   </span>
                 )}
@@ -841,7 +856,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             </div>
             <button
               onClick={onCancel}
-              className="p-1.5 md:p-2 hover:bg-white rounded-lg transition-colors flex-shrink-0"
+              className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 text-gray-500"
             >
               <X size={20} className="md:w-6 md:h-6" />
             </button>
@@ -851,20 +866,21 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
         {/* 본문 - 모바일: 세로, 데스크톱: 좌우 분할 */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* 왼쪽: 파트 태그 팔레트 + 컨트롤 */}
-          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-gray-50 p-3 md:p-4 overflow-y-auto flex-shrink-0 max-h-[40vh] md:max-h-none">
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 p-3 md:p-4 overflow-y-auto flex-shrink-0 max-h-[40vh] md:max-h-none">
             {/* 모바일: 가로 2컬럼 레이아웃 / 데스크톱: 세로 레이아웃 */}
             <div className="flex flex-col md:block gap-3">
               {/* 송폼 설정 + 파트 태그를 모바일에서 나란히 */}
               <div className="flex flex-row md:flex-col gap-3 md:gap-0">
                 {/* 송폼 설정 */}
                 <div className="flex-1 md:mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">송폼 설정</h3>
+                  <h3 className="font-semibold text-gray-800 mb-2 md:mb-3 text-sm">송폼 설정</h3>
                   <p className="text-xs text-gray-500 mb-2 hidden md:block">※ 송폼은 모든 페이지에 표시됩니다</p>
 
-                  {/* 크기 슬라이더 */}
-                  <div className="mb-2 md:mb-4">
-                    <label className="text-xs md:text-sm text-gray-600 block mb-1">
-                      크기: <span className="font-bold">{currentFormStyle.fontSize}pt</span>
+                  {/* 텍스트 크기 슬라이더 */}
+                  <div className="mb-3 md:mb-4">
+                    <label className="text-xs text-gray-600 block mb-1 flex items-center justify-between">
+                      <span>텍스트 크기</span>
+                      <span className="font-medium text-gray-800">{currentFormStyle.fontSize}pt</span>
                     </label>
                     <input
                       type="range"
@@ -872,7 +888,10 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                       max="72"
                       value={currentFormStyle.fontSize}
                       onChange={(e) => updateFormStyle({ fontSize: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((currentFormStyle.fontSize - 16) / (72 - 16)) * 100}%, #D1D5DB ${((currentFormStyle.fontSize - 16) / (72 - 16)) * 100}%, #D1D5DB 100%)`
+                      }}
                     />
                     <div className="hidden md:flex justify-between text-xs text-gray-400 mt-1">
                       <span>16pt</span>
@@ -880,18 +899,18 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                     </div>
                   </div>
 
-                  {/* 색상 선택 */}
-                  <div className="mb-2 md:mb-4">
-                    <label className="text-xs md:text-sm text-gray-600 block mb-1 md:mb-2">색상</label>
-                    <div className="flex flex-wrap gap-1.5 md:gap-2">
+                  {/* 글자 색상 */}
+                  <div className="mb-3 md:mb-4">
+                    <label className="text-xs text-gray-600 block mb-1.5">글자 색상</label>
+                    <div className="flex flex-wrap gap-1.5">
                       {COLOR_PRESETS.map(color => (
                         <button
                           key={color.value}
                           onClick={() => updateFormStyle({ color: color.value })}
-                          className={`w-6 h-6 md:w-8 md:h-8 rounded-full border-2 transition-all ${
+                          className={`w-6 h-6 md:w-7 md:h-7 rounded-full transition-all ${
                             currentFormStyle.color === color.value
-                              ? 'border-gray-800 scale-110'
-                              : 'border-gray-300'
+                              ? 'ring-2 ring-offset-1 ring-blue-500 scale-110'
+                              : 'hover:scale-105'
                           }`}
                           style={{ backgroundColor: color.value }}
                           title={color.name}
@@ -901,9 +920,10 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   </div>
 
                   {/* 투명도 */}
-                  <div className="mb-2 md:mb-4">
-                    <label className="text-xs md:text-sm text-gray-600 block mb-1">
-                      투명도: <span className="font-bold">{Math.round(currentFormStyle.opacity * 100)}%</span>
+                  <div className="mb-3 md:mb-4">
+                    <label className="text-xs text-gray-600 block mb-1 flex items-center justify-between">
+                      <span>투명도</span>
+                      <span className="font-medium text-gray-800">{Math.round(currentFormStyle.opacity * 100)}%</span>
                     </label>
                     <input
                       type="range"
@@ -912,25 +932,29 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                       step="0.1"
                       value={currentFormStyle.opacity}
                       onChange={(e) => updateFormStyle({ opacity: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((currentFormStyle.opacity - 0.3) / 0.7) * 100}%, #D1D5DB ${((currentFormStyle.opacity - 0.3) / 0.7) * 100}%, #D1D5DB 100%)`
+                      }}
                     />
                   </div>
 
-                  {/* 모든 곡에 적용 */}
+                  {/* 모든 페이지에 동일 적용 */}
                   <button
                     onClick={applyToAll}
-                    className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-blue-100 text-blue-700 rounded-lg text-xs md:text-sm font-medium hover:bg-blue-100"
+                    className="w-full px-2 md:px-3 py-2 text-gray-600 text-xs font-medium hover:bg-gray-100 rounded-lg transition-all flex items-center justify-center gap-1"
                   >
-                    📋 모든 곡에 적용
+                    <span className="material-symbols-outlined text-sm">content_copy</span>
+                    모든 페이지에 동일 적용
                   </button>
                 </div>
 
-                {/* 파트 태그 팔레트 */}
+                {/* 파트 태그 */}
                 <div className="flex-1 md:mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-2 text-sm md:text-base">파트 태그</h3>
+                  <h3 className="font-semibold text-gray-800 mb-2 text-sm">파트 태그</h3>
                   <p className="text-xs text-gray-500 mb-2 md:mb-3 hidden md:block">
-                    드래그해서 악보 위에 배치하세요
-                    {totalPages > 1 && <><br/>현재 <b>페이지 {currentPageIndex + 1}</b>에 배치됩니다</>}
+                    탭하거나 드래그해서 배치
+                    {totalPages > 1 && <><br/>현재 <b className="text-blue-600">페이지 {currentPageIndex + 1}</b>에 배치됩니다</>}
                   </p>
                   <div
                     className="grid grid-cols-4 md:grid-cols-3 gap-1.5 md:gap-2"
@@ -951,9 +975,10 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                         onDragEnd={() => setDraggingNewTag(null)}
                         onClick={() => handlePartTagTap(part.key)}
                         onTouchStart={(e) => handlePartTagTouchStart(part.key, e)}
-                        className="flex items-center justify-center p-2 md:p-3 text-white rounded cursor-pointer hover:opacity-80 active:opacity-60 transition-opacity text-xs md:text-sm font-bold min-h-[36px] md:min-h-[44px]"
+                        className="flex items-center justify-center p-2 md:p-2.5 rounded-lg cursor-pointer hover:opacity-80 active:scale-95 transition-all text-xs md:text-sm font-semibold min-h-[36px] md:min-h-[40px]"
                         style={{
                           backgroundColor: PART_COLORS[part.key],
+                          color: PART_TEXT_COLORS[part.key],
                           WebkitTouchCallout: 'none',
                           WebkitUserSelect: 'none',
                           userSelect: 'none',
@@ -964,45 +989,48 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-blue-600 mt-1 md:mt-2 font-medium">
-                    📱 탭하면 중앙에 추가
-                  </p>
                 </div>
               </div>
             </div>
 
             {/* 배치된 파트 태그 목록 (현재 페이지) */}
             {currentPartTags.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-600 mb-2">
+              <div className="mt-4">
+                <h4 className="text-xs font-medium text-gray-600 mb-2">
                   배치된 태그 (페이지 {currentPageIndex + 1})
                 </h4>
                 <div className="space-y-2">
                   {currentPartTags.map(tag => (
-                    <div key={tag.id} className="bg-white p-2 rounded border">
-                      <div className="flex items-center justify-between mb-2">
+                    <div key={tag.id} className="bg-white p-2 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between mb-1.5">
                         <span
-                          className="px-2 py-0.5 rounded text-white text-sm font-bold"
-                          style={{ backgroundColor: tag.color }}
+                          className="px-2 py-0.5 rounded text-xs font-semibold"
+                          style={{
+                            backgroundColor: PART_COLORS[tag.label] || tag.color,
+                            color: PART_TEXT_COLORS[tag.label] || '#fff'
+                          }}
                         >
                           {tag.label}
                         </span>
                         <button
                           onClick={() => deletePartTag(tag.id)}
-                          className="text-red-500 hover:text-red-700"
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={14} />
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{tag.fontSize}pt</span>
+                        <span className="text-xs text-gray-500 min-w-[28px]">{tag.fontSize}pt</span>
                         <input
                           type="range"
                           min="12"
                           max="48"
                           value={tag.fontSize}
                           onChange={(e) => updatePartTag(tag.id, { fontSize: Number(e.target.value) })}
-                          className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                          className="flex-1 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((tag.fontSize - 12) / (48 - 12)) * 100}%, #E5E7EB ${((tag.fontSize - 12) / (48 - 12)) * 100}%, #E5E7EB 100%)`
+                          }}
                         />
                       </div>
                     </div>
@@ -1014,30 +1042,33 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
           {/* 오른쪽: 미리보기 */}
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            {/* 안내 메시지 - 모바일에서 간략하게 */}
-            <div className="p-2 md:p-3 bg-blue-50 border-b text-xs md:text-sm text-blue-700">
-              💡 <span className="hidden md:inline"><strong>송폼이나 파트 태그를 터치한 후 드래그</strong>해서 위치를 이동하세요.</span>
-              <span className="md:hidden"><strong>터치 후 드래그</strong>로 위치 이동</span>
+            {/* 안내 메시지 */}
+            <div className="p-2 md:p-3 bg-yellow-50 border-b border-yellow-100 text-xs md:text-sm text-yellow-800 flex items-center gap-2">
+              <span className="material-symbols-outlined text-base text-yellow-600">warning</span>
+              <span>
+                <span className="hidden md:inline">태그를 탭/드래그한 후 악보 위치로 이동하세요 (수정됨)</span>
+                <span className="md:hidden">태그를 드래그해서 위치 이동</span>
+              </span>
             </div>
 
             {/* 페이지 네비게이션 */}
             {totalPages > 1 && (
-              <div className="p-1.5 md:p-2 bg-gray-100 border-b flex items-center justify-center gap-2 md:gap-4">
+              <div className="p-1.5 md:p-2 bg-gray-50 border-b border-gray-200 flex items-center justify-center gap-2 md:gap-4">
                 <button
                   onClick={handlePrevPage}
                   disabled={currentPageIndex === 0}
-                  className="px-2 md:px-3 py-1 bg-white border rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1 text-xs md:text-sm"
+                  className="px-2 md:px-3 py-1 bg-white border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1 text-xs md:text-sm"
                 >
                   <ChevronLeft size={14} className="md:w-4 md:h-4" />
                   이전
                 </button>
-                <span className="text-xs md:text-sm font-semibold text-gray-700">
-                  페이지 {currentPageIndex + 1} / {totalPages}
+                <span className="text-xs md:text-sm font-medium text-gray-700">
+                  PAGE {currentPageIndex + 1} / {totalPages}
                 </span>
                 <button
                   onClick={handleNextPage}
                   disabled={currentPageIndex >= totalPages - 1}
-                  className="px-2 md:px-3 py-1 bg-white border rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1 text-xs md:text-sm"
+                  className="px-2 md:px-3 py-1 bg-white border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 flex items-center gap-1 text-xs md:text-sm"
                 >
                   다음
                   <ChevronRight size={14} className="md:w-4 md:h-4" />
@@ -1049,7 +1080,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             <div className="flex-1 p-2 md:p-4 bg-gray-100 overflow-auto flex items-start justify-center min-h-0">
               <div
                 ref={containerRef}
-                className="relative bg-white rounded-lg shadow-lg border-2 border-gray-300 overflow-hidden cursor-crosshair flex-shrink-0"
+                className="relative bg-white rounded-lg shadow-lg border border-gray-300 overflow-hidden cursor-crosshair flex-shrink-0"
                 style={{
                   width: '100%',
                   maxWidth: '480px',
@@ -1072,9 +1103,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               >
                 {/* 로딩 */}
                 {isLoadingFile && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-20">
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/90 z-20">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-gray-300 border-t-blue-500 mx-auto mb-2"></div>
                       <p className="text-sm text-gray-600">악보 로딩 중...</p>
                     </div>
                   </div>
@@ -1097,7 +1128,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 {!currentSong.file_url && !isLoadingFile && (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-400">
                     <div className="text-center">
-                      <div className="text-6xl mb-4">🎵</div>
+                      <span className="material-symbols-outlined text-5xl text-gray-300 mb-2 block">music_note</span>
                       <p>악보 파일이 없습니다</p>
                     </div>
                   </div>
@@ -1105,8 +1136,8 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
                 {/* 드래그 안내 오버레이 */}
                 {(draggingNewTag || touchDraggingTag) && (
-                  <div className="absolute inset-0 border-4 border-dashed border-purple-500 flex items-start justify-center pt-4 z-10 pointer-events-none">
-                    <p className="bg-purple-100 text-purple-700 font-bold text-sm px-3 py-1 rounded-full shadow-lg">
+                  <div className="absolute inset-0 border-4 border-dashed border-blue-400 bg-blue-50/30 flex items-start justify-center pt-4 z-10 pointer-events-none">
+                    <p className="bg-blue-500 text-white font-medium text-sm px-3 py-1.5 rounded-full shadow">
                       여기에 드롭하세요
                     </p>
                   </div>
@@ -1116,12 +1147,13 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
               {/* 터치 드래그 플로팅 인디케이터 */}
               {touchDraggingTag && touchPosition && (
                 <div
-                  className="fixed pointer-events-none z-[100] px-3 py-2 rounded font-bold text-white shadow-lg text-lg"
+                  className="fixed pointer-events-none z-[100] px-3 py-1.5 rounded-lg font-semibold shadow-lg"
                   style={{
                     left: touchPosition.x - 20,
                     top: touchPosition.y - 40,
                     backgroundColor: PART_COLORS[touchDraggingTag] || '#6B7280',
-                    transform: 'scale(1.2)'
+                    color: PART_TEXT_COLORS[touchDraggingTag] || '#fff',
+                    transform: 'scale(1.1)'
                   }}
                 >
                   {touchDraggingTag}
@@ -1132,32 +1164,32 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
         </div>
 
         {/* 하단 버튼 */}
-        <div className="p-2 md:p-4 border-t bg-gray-50">
+        <div className="p-3 md:p-4 border-t border-gray-200 bg-white">
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={handlePrev}
               disabled={currentSongIndex === 0}
-              className="px-2 md:px-4 py-1.5 md:py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 md:gap-2 font-medium text-xs md:text-sm"
+              className="px-3 md:px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1 md:gap-2 font-medium text-xs md:text-sm"
             >
               <ChevronLeft size={16} className="md:w-5 md:h-5" />
-              <span className="hidden md:inline">이전 곡</span>
+              <span className="hidden md:inline">이전 곡으로 돌아가기</span>
               <span className="md:hidden">이전</span>
             </button>
 
-            <div className="flex gap-1.5 md:gap-2">
+            <div className="flex gap-2">
               <button
                 onClick={onCancel}
-                className="px-3 md:px-5 py-1.5 md:py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium text-xs md:text-sm"
+                className="px-4 md:px-5 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium text-xs md:text-sm"
               >
                 취소
               </button>
               <button
                 onClick={handleNext}
-                className="px-3 md:px-6 py-1.5 md:py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-all font-semibold flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+                className="px-4 md:px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all font-medium flex items-center gap-1 md:gap-2 text-xs md:text-sm"
               >
                 {currentSongIndex < songsWithForms.length - 1 ? (
                   <>
-                    <span className="hidden md:inline">다음 곡</span>
+                    <span className="hidden md:inline">확정하고 넘어가기</span>
                     <span className="md:hidden">다음</span>
                     <ChevronRight size={16} className="md:w-5 md:h-5" />
                   </>
@@ -1169,24 +1201,6 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                   </>
                 )}
               </button>
-            </div>
-          </div>
-
-          {/* 진행 상황 */}
-          <div className="mt-2 md:mt-3">
-            <div className="flex gap-0.5 md:gap-1">
-              {songsWithForms.map((_, index) => (
-                <div
-                  key={index}
-                  className={`flex-1 h-1 md:h-1.5 rounded-full transition-all ${
-                    index === currentSongIndex
-                      ? 'bg-blue-100'
-                      : index < currentSongIndex
-                      ? 'bg-blue-300'
-                      : 'bg-gray-300'
-                  }`}
-                />
-              ))}
             </div>
           </div>
         </div>

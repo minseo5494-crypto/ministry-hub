@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Filter, Grid, List, ChevronDown, Pencil } from 'lucide-react'
-import { User, Song, Filters, SortBy, SongFilter, ViewMode, LocalSheetMusicNote } from '../types'
+import { Filter, ChevronDown, Pencil } from 'lucide-react'
+import { User, Song, Filters, SortBy, SongFilter, LocalSheetMusicNote } from '../types'
 
 type SongListToolbarProps = {
   user: User | null
@@ -10,8 +10,6 @@ type SongListToolbarProps = {
   displayCount: number
   showFilterPanel: boolean
   setShowFilterPanel: (show: boolean) => void
-  viewMode: ViewMode
-  setViewMode: (mode: ViewMode) => void
   sortBy: SortBy
   setSortBy: (sort: SortBy) => void
   songFilter: SongFilter
@@ -27,8 +25,6 @@ export default function SongListToolbar({
   displayCount,
   showFilterPanel,
   setShowFilterPanel,
-  viewMode,
-  setViewMode,
   sortBy,
   setSortBy,
   songFilter,
@@ -160,22 +156,6 @@ export default function SongListToolbar({
             </button>
           )}
 
-          <div className="w-px h-6 bg-gray-200 hidden md:block"></div>
-
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 sm:p-2 rounded-lg transition ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
-              }`}
-          >
-            <Grid size={18} className="sm:w-5 sm:h-5" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 sm:p-2 rounded-lg transition ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
-              }`}
-          >
-            <List size={18} className="sm:w-5 sm:h-5" />
-          </button>
         </div>
       </div>
 
