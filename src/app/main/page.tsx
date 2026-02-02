@@ -566,6 +566,8 @@ export default function MainPage() {
       result = result.filter(song => song.is_official === true)
     } else if (songFilter === 'user') {
       result = result.filter(song => song.is_user_uploaded === true)
+    } else if (songFilter === 'team') {
+      result = result.filter(song => song.visibility === 'teams')
     }
 
     // 검색어가 있을 때 제목 일치 우선 정렬

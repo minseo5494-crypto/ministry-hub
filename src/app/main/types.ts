@@ -16,7 +16,7 @@ export type Filters = {
 }
 
 export type SortBy = 'recent' | 'likes' | 'name' | 'weekly'
-export type SongFilter = 'all' | 'official' | 'user'
+export type SongFilter = 'all' | 'official' | 'user' | 'team'
 export type ViewMode = 'grid' | 'list'
 
 export type NewSongForm = {

@@ -106,10 +106,12 @@ export default function SongListToolbar({
                 ? 'bg-blue-100 text-blue-700'
                 : songFilter === 'user'
                   ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : songFilter === 'team'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
             >
-              <span>{songFilter === 'all' ? '전체' : songFilter === 'official' ? '공식' : '사용자'}</span>
+              <span>{songFilter === 'all' ? '전체' : songFilter === 'official' ? '공식' : songFilter === 'user' ? '사용자' : '팀공개'}</span>
               <ChevronDown size={10} className={`transition-transform ${showSongFilterDropdown ? 'rotate-180' : ''}`} />
             </button>
             {showSongFilterDropdown && (
@@ -133,6 +135,12 @@ export default function SongListToolbar({
                     className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${songFilter === 'user' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
                   >
                     사용자
+                  </button>
+                  <button
+                    onClick={() => { setSongFilter('team'); setShowSongFilterDropdown(false); }}
+                    className={`w-full px-2 py-1.5 text-left text-[11px] hover:bg-gray-50 ${songFilter === 'team' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    팀공개
                   </button>
                 </div>
               </>
@@ -180,6 +188,7 @@ export default function SongListToolbar({
           <option value="all">전체</option>
           <option value="official">공식</option>
           <option value="user">사용자</option>
+          <option value="team">팀공개</option>
         </select>
         {/* 내 필기 노트 포함 토글 - 모바일 */}
         {user && mySheetNotes.length > 0 && (
