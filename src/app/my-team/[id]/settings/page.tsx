@@ -8,7 +8,8 @@ import { useTeamPermissions } from '@/hooks/useTeamPermissions'
 import TeamRolesManager from '@/components/TeamRolesManager'
 import {
   ArrowLeft, Save, Trash2, RefreshCw, Users,
-  Crown, Shield, User, UserX, Copy, Check, Settings
+  Crown, Shield, User, UserX, Copy, Check, Settings,
+  UserPlus, UserCheck, X, Clock
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -44,6 +45,7 @@ export default function TeamSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [team, setTeam] = useState<TeamInfo | null>(null)
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [pendingMembers, setPendingMembers] = useState<TeamMember[]>([])
   const [copiedCode, setCopiedCode] = useState(false)
 
   // 편집 상태
@@ -66,6 +68,7 @@ export default function TeamSettingsPage() {
     if (user && teamId) {
       fetchTeamData()
       fetchMembers()
+      fetchPendingMembers()
     }
   }, [user, teamId])
 
@@ -161,6 +164,90 @@ export default function TeamSettingsPage() {
       setMembers((data as any) || [])
     } catch (error) {
       console.error('Error fetching members:', error)
+    }
+  }
+
+  const fetchPendingMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select(`
+          id,
+          user_id,
+          role,
+          status,
+          joined_at,
+          users:user_id (
+            email,
+            name
+          )
+        `)
+        .eq('team_id', teamId)
+        .eq('status', 'pending')
+        .order('joined_at', { ascending: true })
+
+      if (error) throw error
+      setPendingMembers((data as any) || [])
+    } catch (error) {
+      console.error('Error fetching pending members:', error)
+    }
+  }
+
+  const handleApproveJoinRequest = async (memberId: string, memberEmail: string) => {
+    if (userRole !== 'leader' && userRole !== 'admin' && !isSystemAdmin) {
+      alert('권한이 없습니다.')
+      return
+    }
+
+    try {
+      // 1. 멤버 상태를 active로 변경
+      const { error: memberError } = await supabase
+        .from('team_members')
+        .update({ status: 'active', joined_at: new Date().toISOString() })
+        .eq('id', memberId)
+
+      if (memberError) throw memberError
+
+      // 2. 팀 멤버 수 증가
+      if (team) {
+        await supabase
+          .from('teams')
+          .update({ member_count: (team as any).member_count ? (team as any).member_count + 1 : 1 })
+          .eq('id', teamId)
+      }
+
+      alert(`✅ ${memberEmail}님의 가입 신청을 승인했습니다.`)
+      fetchMembers()
+      fetchPendingMembers()
+    } catch (error: any) {
+      console.error('Error approving join request:', error)
+      alert(`승인 실패: ${error.message}`)
+    }
+  }
+
+  const handleRejectJoinRequest = async (memberId: string, memberEmail: string) => {
+    if (userRole !== 'leader' && userRole !== 'admin' && !isSystemAdmin) {
+      alert('권한이 없습니다.')
+      return
+    }
+
+    if (!confirm(`${memberEmail}님의 가입 신청을 거절하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .delete()
+        .eq('id', memberId)
+
+      if (error) throw error
+
+      alert(`가입 신청을 거절했습니다.`)
+      fetchPendingMembers()
+    } catch (error: any) {
+      console.error('Error rejecting join request:', error)
+      alert(`거절 실패: ${error.message}`)
     }
   }
 
@@ -542,6 +629,58 @@ export default function TeamSettingsPage() {
             </button>
           </div>
         </div>
+
+        {/* 가입 신청 관리 */}
+        {pendingMembers.length > 0 && (
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center text-amber-900">
+              <Clock className="mr-2" size={24} />
+              가입 신청 대기 ({pendingMembers.length}명)
+            </h2>
+            <p className="text-sm text-amber-700 mb-4">
+              아래 사용자들이 팀 가입을 요청했습니다. 승인하거나 거절해주세요.
+            </p>
+
+            <div className="space-y-3">
+              {pendingMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between p-4 bg-white border border-amber-200 rounded-lg"
+                >
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3 bg-amber-100">
+                      <UserPlus className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{member.users?.name || member.users?.email}</p>
+                      <p className="text-sm text-gray-500">{member.users?.email}</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(member.joined_at).toLocaleDateString('ko-KR')} 신청
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleApproveJoinRequest(member.id, member.users?.email)}
+                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center text-sm font-medium"
+                    >
+                      <UserCheck size={16} className="mr-1" />
+                      승인
+                    </button>
+                    <button
+                      onClick={() => handleRejectJoinRequest(member.id, member.users?.email)}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center text-sm font-medium"
+                    >
+                      <X size={16} className="mr-1" />
+                      거절
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 멤버 관리 */}
         <div className="bg-white rounded-lg shadow-md p-6">

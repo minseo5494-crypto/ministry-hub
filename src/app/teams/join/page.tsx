@@ -59,7 +59,7 @@ export default function JoinTeamPage() {
         return
       }
 
-      // 2. 이미 팀 멤버인지 확인
+      // 2. 이미 팀 멤버인지 또는 신청 중인지 확인
       const { data: existingMember } = await supabase
         .from('team_members')
         .select('*')
@@ -68,43 +68,45 @@ export default function JoinTeamPage() {
         .single()
 
       if (existingMember) {
-        alert('이미 이 팀의 멤버입니다.')
-        router.push(`/my-team/${teamData.id}`)
+        if (existingMember.status === 'pending') {
+          alert('이미 가입 신청 중입니다. 팀 리더의 승인을 기다려주세요.')
+        } else {
+          alert('이미 이 팀의 멤버입니다.')
+          router.push(`/my-team/${teamData.id}`)
+        }
         return
       }
 
-      // 3. 팀에 멤버로 추가
-      const { error: memberError } = await supabase
+      // 3. 팀에 가입 신청 (pending 상태로)
+      const insertData = {
+        team_id: teamData.id,
+        user_id: user.id,
+        role: 'member',
+        status: 'pending'  // 승인 대기 상태
+      }
+      console.log('🔵 Inserting team member with data:', insertData)
+
+      const { data: insertResult, error: memberError } = await supabase
         .from('team_members')
-        .insert({
-          team_id: teamData.id,
-          user_id: user.id,
-          role: 'member',
-          status: 'active'
-        })
+        .insert(insertData)
+        .select()
+
+      console.log('🟢 Insert result:', insertResult, 'Error:', memberError)
 
       if (memberError) throw memberError
 
-      // 4. 팀 멤버 수 증가
-      const { error: updateError } = await supabase
-        .from('teams')
-        .update({ member_count: teamData.member_count + 1 })
-        .eq('id', teamData.id)
-
-      if (updateError) throw updateError
-
-      // 📊 팀 가입 로깅
+      // 📊 팀 가입 신청 로깅
       logActivity({
-        actionType: 'team_join',
+        actionType: 'team_join_request',
         userId: user.id,
         teamId: teamData.id
-      }).catch(err => console.error('팀 가입 로깅 실패:', err))
+      }).catch(err => console.error('팀 가입 신청 로깅 실패:', err))
 
       // GA4 트래킹
       trackTeamJoin()
 
-      alert(`✅ "${teamData.name}" 팀에 참여했습니다!`)
-      router.push(`/my-team/${teamData.id}`)
+      alert(`✅ "${teamData.name}" 팀에 가입 신청을 보냈습니다!\n팀 리더의 승인을 기다려주세요.`)
+      router.push('/my-team')
     } catch (error: any) {
       console.error('Error joining team:', error)
       alert(`팀 참여 실패: ${error.message}`)
@@ -193,11 +195,11 @@ export default function JoinTeamPage() {
 
             {/* 안내 문구 */}
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="font-semibold text-green-900 mb-2">💡 초대 코드는 어디서?</h3>
+              <h3 className="font-semibold text-green-900 mb-2">💡 가입 안내</h3>
               <ul className="text-sm text-green-800 space-y-1">
                 <li>• 팀 리더나 관리자에게 초대 코드를 요청하세요</li>
-                <li>• 팀 상세 페이지에서 초대 코드를 확인할 수 있습니다</li>
                 <li>• 코드는 대소문자를 구분하지 않습니다</li>
+                <li>• 가입 신청 후 <strong>팀 리더의 승인</strong>이 필요합니다</li>
               </ul>
             </div>
 
