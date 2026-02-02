@@ -1,18 +1,39 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import getStroke from 'perfect-freehand'
+import { PageAnnotation, Stroke, TextElement } from '@/lib/supabase'
 
 interface SheetMusicViewerProps {
   fileUrl: string
   fileType: 'pdf' | 'image'
   songName?: string
+  annotations?: PageAnnotation[]  // 필기 데이터 (선택적)
   onClose: () => void
+}
+
+// SVG path 생성 함수
+const getSvgPathFromStroke = (stroke: number[][]) => {
+  if (!stroke.length) return ''
+
+  const d = stroke.reduce(
+    (acc, [x0, y0], i, arr) => {
+      const [x1, y1] = arr[(i + 1) % arr.length]
+      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2)
+      return acc
+    },
+    ['M', ...stroke[0], 'Q']
+  )
+
+  d.push('Z')
+  return d.join(' ')
 }
 
 export default function SheetMusicViewer({
   fileUrl,
   fileType,
   songName,
+  annotations = [],
   onClose
 }: SheetMusicViewerProps) {
   // 페이지 상태
@@ -28,6 +49,7 @@ export default function SheetMusicViewer({
   // refs
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const annotationCanvasRef = useRef<HTMLCanvasElement>(null)
   const pdfDocRef = useRef<any>(null)
   const renderTaskRef = useRef<any>(null)
   const hasInitializedScale = useRef(false)
@@ -40,9 +62,71 @@ export default function SheetMusicViewer({
   const lastTapTime = useRef<number>(0)
   const lastTapX = useRef<number>(0)
   const lastTapY = useRef<number>(0)
-  const touchTapHandled = useRef<boolean>(false) // 터치 탭 처리 후 클릭 이벤트 방지
+  const touchTapHandled = useRef<boolean>(false)
 
-  // 화면에 맞추기 (패딩 없이 꽉 채움)
+  // 스트로크 그리기
+  const drawStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: Stroke) => {
+    if (!stroke.points || stroke.points.length === 0) return
+
+    const points = stroke.points.map((p) => [p.x, p.y, p.pressure || 0.5])
+
+    const strokeOptions = {
+      size: stroke.size * (stroke.tool === 'highlighter' ? 8 : 1),
+      thinning: stroke.tool === 'highlighter' ? 0 : 0.5,
+      smoothing: 0.5,
+      streamline: 0.5,
+      simulatePressure: !stroke.points[0]?.pressure,
+    }
+
+    const outlinePoints = getStroke(points, strokeOptions)
+    const pathData = getSvgPathFromStroke(outlinePoints)
+
+    if (!pathData) return
+
+    const path = new Path2D(pathData)
+    ctx.globalAlpha = stroke.opacity
+    ctx.fillStyle = stroke.color
+    ctx.fill(path)
+    ctx.globalAlpha = 1
+  }, [])
+
+  // 텍스트 그리기
+  const drawText = useCallback((ctx: CanvasRenderingContext2D, text: TextElement) => {
+    ctx.font = `${text.fontSize}px sans-serif`
+    ctx.fillStyle = text.color
+    ctx.fillText(text.text, text.x, text.y + text.fontSize)
+  }, [])
+
+  // 어노테이션 렌더링
+  const renderAnnotations = useCallback((width: number, height: number) => {
+    const canvas = annotationCanvasRef.current
+    if (!canvas || annotations.length === 0) return
+
+    canvas.width = width
+    canvas.height = height
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, width, height)
+
+    const pageAnnotation = annotations[currentPage - 1]
+    if (!pageAnnotation) return
+
+    if (pageAnnotation.strokes) {
+      pageAnnotation.strokes.forEach(stroke => {
+        drawStroke(ctx, stroke)
+      })
+    }
+
+    if (pageAnnotation.textElements) {
+      pageAnnotation.textElements.forEach(text => {
+        drawText(ctx, text)
+      })
+    }
+  }, [annotations, currentPage, drawStroke, drawText])
+
+  // 화면에 맞추기
   const fitToScreen = useCallback((cWidth: number, cHeight: number) => {
     const container = containerRef.current
     if (!container || cWidth === 0 || cHeight === 0) return
@@ -50,7 +134,6 @@ export default function SheetMusicViewer({
     const containerWidth = container.clientWidth
     const containerHeight = container.clientHeight
 
-    // 화면에 꽉 차게 (패딩 없음)
     const scaleX = containerWidth / cWidth
     const scaleY = containerHeight / cHeight
     const newScale = Math.min(scaleX, scaleY)
@@ -74,7 +157,6 @@ export default function SheetMusicViewer({
           return
         }
 
-        // 이전 렌더링 취소
         if (renderTaskRef.current) {
           try {
             renderTaskRef.current.cancel()
@@ -82,7 +164,6 @@ export default function SheetMusicViewer({
           renderTaskRef.current = null
         }
 
-        // PDF 문서 로드
         if (!pdfDocRef.current) {
           const loadingTask = pdfjsLib.getDocument(fileUrl)
           pdfDocRef.current = await loadingTask.promise
@@ -94,7 +175,7 @@ export default function SheetMusicViewer({
         const page = await pdf.getPage(currentPage)
         if (isCancelled) return
 
-        const viewport = page.getViewport({ scale: 2 }) // 고해상도
+        const viewport = page.getViewport({ scale: 2 })
 
         const canvas = canvasRef.current
         if (!canvas) return
@@ -115,7 +196,9 @@ export default function SheetMusicViewer({
 
         setCanvasSize({ width: viewport.width, height: viewport.height })
 
-        // 초기 로드 시 화면에 맞추기
+        // 어노테이션 렌더링
+        renderAnnotations(viewport.width, viewport.height)
+
         if (!hasInitializedScale.current) {
           hasInitializedScale.current = true
           requestAnimationFrame(() => {
@@ -140,7 +223,7 @@ export default function SheetMusicViewer({
         } catch (e) {}
       }
     }
-  }, [fileUrl, fileType, currentPage, fitToScreen])
+  }, [fileUrl, fileType, currentPage, fitToScreen, renderAnnotations])
 
   // 이미지 렌더링
   useEffect(() => {
@@ -154,15 +237,17 @@ export default function SheetMusicViewer({
       const context = canvas.getContext('2d')
       if (!context) return
 
-      // 고해상도 렌더링
-      const scale = 2
-      canvas.width = img.width * scale
-      canvas.height = img.height * scale
-      context.scale(scale, scale)
+      const scaleFactor = 2
+      canvas.width = img.width * scaleFactor
+      canvas.height = img.height * scaleFactor
+      context.scale(scaleFactor, scaleFactor)
       context.drawImage(img, 0, 0)
 
       setCanvasSize({ width: canvas.width, height: canvas.height })
       setTotalPages(1)
+
+      // 어노테이션 렌더링
+      renderAnnotations(canvas.width, canvas.height)
 
       if (!hasInitializedScale.current) {
         hasInitializedScale.current = true
@@ -174,12 +259,19 @@ export default function SheetMusicViewer({
       }
     }
     img.src = fileUrl
-  }, [fileUrl, fileType, fitToScreen])
+  }, [fileUrl, fileType, fitToScreen, renderAnnotations])
 
   // 페이지 변경 시 초기화
   useEffect(() => {
     hasInitializedScale.current = false
   }, [currentPage])
+
+  // 페이지 변경 시 어노테이션 다시 렌더링
+  useEffect(() => {
+    if (canvasSize.width > 0 && canvasSize.height > 0) {
+      renderAnnotations(canvasSize.width, canvasSize.height)
+    }
+  }, [currentPage, canvasSize, renderAnnotations])
 
   // 줌 핸들러
   const handleZoom = useCallback((delta: number) => {
@@ -189,7 +281,6 @@ export default function SheetMusicViewer({
   // 터치 시작
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // 핀치 줌 시작
       const dx = e.touches[0].clientX - e.touches[1].clientX
       const dy = e.touches[0].clientY - e.touches[1].clientY
       lastTouchDistance.current = Math.sqrt(dx * dx + dy * dy)
@@ -204,7 +295,6 @@ export default function SheetMusicViewer({
   // 터치 이동
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastTouchDistance.current !== null) {
-      // 핀치 줌
       const dx = e.touches[0].clientX - e.touches[1].clientX
       const dy = e.touches[0].clientY - e.touches[1].clientY
       const distance = Math.sqrt(dx * dx + dy * dy)
@@ -225,25 +315,21 @@ export default function SheetMusicViewer({
       const deltaX = endX - swipeStartX.current
       const deltaY = endY - swipeStartY.current
 
-      // 스와이프 감지
       const isSwipe = Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50
 
       if (isSwipe && scale <= minScale + 0.01) {
-        // 스와이프로 페이지 변경 (확대 안된 상태에서만)
         if (deltaX > 0 && currentPage > 1) {
           setCurrentPage(p => p - 1)
         } else if (deltaX < 0 && currentPage < totalPages) {
           setCurrentPage(p => p + 1)
         }
       } else if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
-        // 탭 감지
         const now = Date.now()
         const tapDistance = Math.sqrt(
           Math.pow(endX - lastTapX.current, 2) +
           Math.pow(endY - lastTapY.current, 2)
         )
 
-        // 더블탭 감지
         if (now - lastTapTime.current < 300 && tapDistance < 50) {
           if (scale > minScale + 0.1) {
             fitToScreen(canvasSize.width, canvasSize.height)
@@ -252,7 +338,6 @@ export default function SheetMusicViewer({
           }
           lastTapTime.current = 0
         } else {
-          // 싱글 탭: 영역별 동작
           lastTapTime.current = now
           lastTapX.current = endX
           lastTapY.current = endY
@@ -263,11 +348,9 @@ export default function SheetMusicViewer({
             const tapX = endX - rect.left
             const containerWidth = rect.width
 
-            // 화면을 3등분
             const leftZone = containerWidth * 0.25
             const rightZone = containerWidth * 0.75
 
-            // 터치 탭 처리 플래그 설정 (onClick 중복 방지)
             touchTapHandled.current = true
 
             if (tapX < leftZone && currentPage > 1) {
@@ -285,9 +368,8 @@ export default function SheetMusicViewer({
     isSwiping.current = false
   }, [scale, minScale, currentPage, totalPages, canvasSize, fitToScreen])
 
-  // 마우스 클릭 (데스크톱)
+  // 마우스 클릭
   const handleClick = useCallback((e: React.MouseEvent) => {
-    // 터치로 이미 처리된 경우 무시
     if (touchTapHandled.current) {
       touchTapHandled.current = false
       return
@@ -310,7 +392,7 @@ export default function SheetMusicViewer({
     }
   }, [currentPage, totalPages])
 
-  // 마우스 더블클릭 (데스크톱 줌)
+  // 마우스 더블클릭
   const handleDoubleClick = useCallback(() => {
     if (scale > minScale + 0.1) {
       fitToScreen(canvasSize.width, canvasSize.height)
@@ -353,6 +435,13 @@ export default function SheetMusicViewer({
         </svg>
       </button>
 
+      {/* 필기 표시 안내 */}
+      {annotations.length > 0 && (
+        <div className="fixed top-4 left-4 z-[60] bg-amber-500/80 text-white px-3 py-1 rounded-full text-sm">
+          내 필기 포함
+        </div>
+      )}
+
       {/* 페이지 인디케이터 */}
       {totalPages > 1 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-black/50 text-white px-3 py-1 rounded-full text-sm">
@@ -376,14 +465,28 @@ export default function SheetMusicViewer({
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
             transformOrigin: 'center center',
-            transition: 'transform 0.1s ease-out'
+            transition: 'transform 0.1s ease-out',
+            position: 'relative'
           }}
         >
+          {/* 악보 캔버스 */}
           <canvas
             ref={canvasRef}
             style={{
               maxWidth: 'none',
               maxHeight: 'none'
+            }}
+          />
+          {/* 어노테이션 캔버스 */}
+          <canvas
+            ref={annotationCanvasRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              maxWidth: 'none',
+              maxHeight: 'none',
+              pointerEvents: 'none'
             }}
           />
         </div>

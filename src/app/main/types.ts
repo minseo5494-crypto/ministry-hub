@@ -52,6 +52,15 @@ export type LocalSheetMusicNote = {
   songForms?: string[]
 }
 
+// 내 필기 목록 표시용 확장 타입
+export type SongWithNote = Song & {
+  isNoteItem?: boolean
+  noteId?: string
+  noteAnnotations?: PageAnnotation[]
+  noteSongForms?: string[]
+  originalSongId?: string  // 원본 곡 ID (저장 시 사용)
+}
+
 export type MainPageProps = {
   // Props can be extended as needed
 }

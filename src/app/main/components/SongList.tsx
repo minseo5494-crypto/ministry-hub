@@ -4,13 +4,13 @@ import { useRef } from 'react'
 import { Music } from 'lucide-react'
 import SongGridItem from './SongGridItem'
 import SongListItem from './SongListItem'
-import { Song, ViewMode } from '../types'
+import { Song, SongWithNote, ViewMode } from '../types'
 
 type SongListProps = {
   loading: boolean
-  displayedSongs: Song[]
-  filteredSongs: Song[]
-  selectedSongs: Song[]
+  displayedSongs: (Song | SongWithNote)[]
+  filteredSongs: (Song | SongWithNote)[]
+  selectedSongs: (Song | SongWithNote)[]
   viewMode: ViewMode
   focusedSongIndex: number
   setFocusedSongIndex: (index: number) => void
@@ -25,6 +25,7 @@ type SongListProps = {
   onLoadMore: () => void
   onToggleSongSelection: (song: Song) => void
   onTogglePreview: (songId: string) => void
+  onOpenNotePreview?: (song: Song | SongWithNote) => void
   onToggleYoutube: (songId: string) => void
   onToggleLike: (e: React.MouseEvent, songId: string) => void
   onSetPreviewSong: (song: Song) => void
@@ -58,6 +59,7 @@ export default function SongList({
   onLoadMore,
   onToggleSongSelection,
   onTogglePreview,
+  onOpenNotePreview,
   onToggleYoutube,
   onToggleLike,
   onSetPreviewSong,
@@ -144,6 +146,7 @@ export default function SongList({
                 }}
                 onFocus={() => setFocusedSongIndex(index)}
                 onTogglePreview={() => onTogglePreview(song.id)}
+                onOpenNotePreview={onOpenNotePreview ? () => onOpenNotePreview(song) : undefined}
                 onToggleYoutube={() => onToggleYoutube(song.id)}
                 onToggleLike={(e) => onToggleLike(e, song.id)}
                 onOpenFormModal={() => onOpenFormModal(song)}

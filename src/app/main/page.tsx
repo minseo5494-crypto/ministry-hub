@@ -35,7 +35,7 @@ import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 import OnboardingGuide from '@/components/OnboardingGuide'
 
 // Types
-import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote } from './types'
+import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote, SongWithNote } from './types'
 
 declare global {
   interface Window {
@@ -196,7 +196,8 @@ export default function MainPage() {
 
   // Note editor state
   const [showNoteEditor, setShowNoteEditor] = useState(false)
-  const [editingSong, setEditingSong] = useState<Song | null>(null)
+  const [editingSong, setEditingSong] = useState<Song | SongWithNote | null>(null)
+  const [noteEditorMode, setNoteEditorMode] = useState<'view' | 'edit'>('edit')
   const { saveNote, notes: mySheetNotes, fetchNotes: fetchMyNotes } = useSheetMusicNotes()
   const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])
 
@@ -212,7 +213,7 @@ export default function MainPage() {
   const [showMultiSongEditor, setShowMultiSongEditor] = useState(false)
 
   // Simple viewer
-  const [simpleViewerSong, setSimpleViewerSong] = useState<Song | null>(null)
+  const [simpleViewerSong, setSimpleViewerSong] = useState<Song | SongWithNote | null>(null)
 
   // Lyrics modal state
   const [showLyricsModal, setShowLyricsModal] = useState(false)
@@ -620,14 +621,54 @@ export default function MainPage() {
     }
 
     if (filters.includeMyNotes && mySheetNotes.length > 0) {
-      const searchText = filters.searchText.toLowerCase().replace(/\s+/g, '')
-      const matchedNotes = mySheetNotes.filter(note => {
-        if (!searchText) return true
-        const normalizedSongName = (note.song_name || '').toLowerCase().replace(/\s+/g, '')
-        const normalizedTeamName = (note.team_name || '').toLowerCase().replace(/\s+/g, '')
-        return normalizedSongName.includes(searchText) || normalizedTeamName.includes(searchText)
+      // 내 필기 노트를 기반으로 목록 생성 (같은 곡도 필기별로 각각 표시)
+      const noteBasedSongs: SongWithNote[] = mySheetNotes.map(note => {
+        // 원본 곡 정보 찾기
+        const originalSong = songs.find(s => s.id === note.song_id)
+
+        return {
+          // 원본 곡 정보가 있으면 사용, 없으면 필기 노트 정보로 대체
+          id: `note_${note.id}`, // 고유 ID (같은 곡 여러 필기 구분)
+          song_name: note.song_name,
+          team_name: note.team_name || originalSong?.team_name || '',
+          file_url: note.file_url,
+          file_type: note.file_type,
+          key: originalSong?.key || '',
+          time_signature: originalSong?.time_signature || '',
+          tempo: originalSong?.tempo || '',
+          bpm: originalSong?.bpm,
+          theme1: originalSong?.theme1,
+          theme2: originalSong?.theme2,
+          themes: originalSong?.themes,
+          youtube_url: originalSong?.youtube_url,
+          lyrics: originalSong?.lyrics,
+          is_official: originalSong?.is_official,
+          is_user_uploaded: originalSong?.is_user_uploaded,
+          visibility: originalSong?.visibility,
+          like_count: originalSong?.like_count || 0,
+          // 필기 관련 정보
+          isNoteItem: true,
+          noteId: note.id,
+          noteAnnotations: note.annotations,
+          noteSongForms: note.songForms,
+          originalSongId: note.song_id,  // 원본 곡 ID
+        } as SongWithNote
       })
-      setMatchingNotes(matchedNotes)
+
+      // 검색어 필터링 적용
+      if (searchKeywords.length > 0) {
+        result = noteBasedSongs.filter(song => {
+          const normalizedSongName = normalizeText(song.song_name)
+          const normalizedTeamName = normalizeText(song.team_name || '')
+          return searchKeywords.some(keyword => {
+            const normalizedKeyword = normalizeText(keyword)
+            return normalizedSongName.includes(normalizedKeyword) || normalizedTeamName.includes(normalizedKeyword)
+          })
+        })
+      } else {
+        result = noteBasedSongs
+      }
+      setMatchingNotes(mySheetNotes)
     } else {
       setMatchingNotes([])
     }
@@ -935,6 +976,7 @@ export default function MainPage() {
       }
     } else {
       setEditingSong(clickedSong)
+      setNoteEditorMode('edit')
       setShowNoteEditor(true)
       // 악보 필기 보드 열 때 활동 로깅 (인기 차트 집계용)
       if (user) {
@@ -946,6 +988,14 @@ export default function MainPage() {
   const openSimpleViewer = (song: Song) => {
     if (!song.file_url) return
     setSimpleViewerSong(song)
+  }
+
+  // 내 필기 미리보기 (view 모드로 열기)
+  const openNotePreview = (song: Song | SongWithNote) => {
+    if (!song.file_url) return
+    setEditingSong(song)
+    setNoteEditorMode('view')
+    setShowNoteEditor(true)
   }
 
   const handleDoubleTap = (song: Song) => {
@@ -1446,6 +1496,7 @@ export default function MainPage() {
               onLoadMore={loadMore}
               onToggleSongSelection={toggleSongSelection}
               onTogglePreview={togglePreview}
+              onOpenNotePreview={openNotePreview}
               onToggleYoutube={toggleYoutube}
               onToggleLike={toggleLike}
               onSetPreviewSong={setPreviewSong}
@@ -1589,6 +1640,7 @@ export default function MainPage() {
           fileUrl={simpleViewerSong.file_url}
           fileType={simpleViewerSong.file_type === 'pdf' ? 'pdf' : 'image'}
           songName={simpleViewerSong.song_name}
+          annotations={(simpleViewerSong as SongWithNote).noteAnnotations}
           onClose={() => setSimpleViewerSong(null)}
         />
       )}
@@ -1598,22 +1650,26 @@ export default function MainPage() {
           fileUrl={editingSong.file_url}
           fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
           songName={editingSong.song_name}
-          songForms={songForms[editingSong.id]}
+          songForms={(editingSong as SongWithNote).noteSongForms || songForms[editingSong.id]}
+          initialAnnotations={(editingSong as SongWithNote).noteAnnotations || []}
+          initialMode={noteEditorMode}
           onSave={async (annotations, extra) => {
             if (!user) {
               alert('로그인이 필요합니다.')
               return
             }
+            // 필기 아이템이면 원본 song_id 사용
+            const songId = (editingSong as SongWithNote).originalSongId || editingSong.id
             const result = await saveNote({
               user_id: user.id,
-              song_id: editingSong.id,
+              song_id: songId,
               song_name: editingSong.song_name,
               team_name: editingSong.team_name || undefined,
               file_url: editingSong.file_url,
               file_type: editingSong.file_type === 'pdf' ? 'pdf' : 'image',
               title: `${editingSong.song_name} 필기`,
               annotations,
-              songForms: songForms[editingSong.id],
+              songForms: (editingSong as SongWithNote).noteSongForms || songForms[editingSong.id],
               songFormEnabled: extra?.songFormEnabled,
               songFormStyle: extra?.songFormStyle,
               partTags: extra?.partTags,

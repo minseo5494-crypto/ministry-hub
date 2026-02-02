@@ -33,7 +33,7 @@ export default function AnnotatedPreview({
   fileUrl,
   fileType,
   annotations,
-  maxHeight = 400,
+  maxHeight = 600,
   className = '',
 }: AnnotatedPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -44,6 +44,8 @@ export default function AnnotatedPreview({
   const [totalPages, setTotalPages] = useState(1)
   const [currentPage, setCurrentPage] = useState(1)
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
+  const renderingRef = useRef(false)
+  const pdfDocRef = useRef<any>(null)
 
   // 스트로크 그리기 함수
   const drawStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: Stroke) => {
@@ -110,15 +112,18 @@ export default function AnnotatedPreview({
     }
   }, [annotations, currentPage, drawStroke, drawText])
 
-  // 이미지 렌더링
+  // 이미지 렌더링 (scaleFactor: 2 적용 - 에디터와 동일)
   const renderImage = useCallback(async () => {
     if (fileType !== 'image') return
+    if (renderingRef.current) return
 
     const imageCanvas = imageCanvasRef.current
     if (!imageCanvas) return
 
     const ctx = imageCanvas.getContext('2d')
     if (!ctx) return
+
+    renderingRef.current = true
 
     try {
       setLoading(true)
@@ -133,27 +138,32 @@ export default function AnnotatedPreview({
         img.src = fileUrl
       })
 
-      // 최대 높이에 맞게 스케일 조정
-      const scale = maxHeight / img.height
-      const displayWidth = img.width * scale
-      const displayHeight = maxHeight
+      // 에디터와 동일한 scaleFactor: 2 적용
+      const scaleFactor = 2
+      const canvasWidth = img.naturalWidth * scaleFactor
+      const canvasHeight = img.naturalHeight * scaleFactor
 
-      imageCanvas.width = img.width
-      imageCanvas.height = img.height
-      ctx.drawImage(img, 0, 0, img.width, img.height)
+      imageCanvas.width = canvasWidth
+      imageCanvas.height = canvasHeight
+      ctx.scale(scaleFactor, scaleFactor)
+      ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight)
+      ctx.setTransform(1, 0, 0, 1, 0, 0) // 스케일 리셋
 
-      setCanvasSize({ width: img.width, height: img.height })
-      renderAnnotations(img.width, img.height)
+      setCanvasSize({ width: canvasWidth, height: canvasHeight })
+      renderAnnotations(canvasWidth, canvasHeight)
       setLoading(false)
     } catch (err: any) {
       setError(err.message || '이미지를 불러올 수 없습니다')
       setLoading(false)
+    } finally {
+      renderingRef.current = false
     }
-  }, [fileUrl, fileType, maxHeight, renderAnnotations])
+  }, [fileUrl, fileType, renderAnnotations])
 
-  // PDF 렌더링
+  // PDF 렌더링 (scale: 2 - 에디터와 동일)
   const renderPDF = useCallback(async () => {
     if (fileType !== 'pdf') return
+    if (renderingRef.current) return
 
     const imageCanvas = imageCanvasRef.current
     if (!imageCanvas) return
@@ -161,56 +171,87 @@ export default function AnnotatedPreview({
     const ctx = imageCanvas.getContext('2d')
     if (!ctx) return
 
+    renderingRef.current = true
+
     try {
       setLoading(true)
       setError(null)
 
       const pdfjsLib = (window as any).pdfjsLib
       if (!pdfjsLib) {
-        setError('PDF 뷰어를 불러오는 중...')
         // PDF.js 로드 대기
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, 500))
         const pdfjsLibRetry = (window as any).pdfjsLib
         if (!pdfjsLibRetry) {
           setError('PDF 뷰어를 불러올 수 없습니다')
           setLoading(false)
+          renderingRef.current = false
           return
         }
       }
 
-      const loadingTask = (window as any).pdfjsLib.getDocument(fileUrl)
-      const pdf = await loadingTask.promise
-      setTotalPages(pdf.numPages)
+      // PDF 문서 캐싱
+      if (!pdfDocRef.current) {
+        const loadingTask = (window as any).pdfjsLib.getDocument(fileUrl)
+        pdfDocRef.current = await loadingTask.promise
+        setTotalPages(pdfDocRef.current.numPages)
+      }
 
+      const pdf = pdfDocRef.current
       const page = await pdf.getPage(currentPage)
-      const viewport = page.getViewport({ scale: 2 }) // 고해상도
+      const viewport = page.getViewport({ scale: 2 }) // 에디터와 동일한 scale: 2
 
+      // 캔버스 크기 설정 전 이전 내용 클리어
       imageCanvas.width = viewport.width
       imageCanvas.height = viewport.height
 
-      await page.render({
+      const renderTask = page.render({
         canvasContext: ctx,
         viewport: viewport,
-      }).promise
+      })
+
+      await renderTask.promise
 
       setCanvasSize({ width: viewport.width, height: viewport.height })
       renderAnnotations(viewport.width, viewport.height)
-      setError(null)  // 성공 시 에러 상태 클리어
+      setError(null)
       setLoading(false)
     } catch (err: any) {
-      console.error('PDF render error:', err)
-      setError('PDF를 불러올 수 없습니다')
+      // 취소된 렌더링은 에러로 처리하지 않음
+      if (err.name !== 'RenderingCancelledException') {
+        console.error('PDF render error:', err)
+        setError('PDF를 불러올 수 없습니다')
+      }
       setLoading(false)
+    } finally {
+      renderingRef.current = false
     }
   }, [fileUrl, fileType, currentPage, renderAnnotations])
 
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      pdfDocRef.current = null
+    }
+  }, [])
+
+  // fileUrl 변경 시 캐시 초기화
+  useEffect(() => {
+    pdfDocRef.current = null
+    setCurrentPage(1)
+  }, [fileUrl])
+
   // 파일 로드 및 렌더링
   useEffect(() => {
-    if (fileType === 'image') {
-      renderImage()
-    } else if (fileType === 'pdf') {
-      renderPDF()
-    }
+    const timer = setTimeout(() => {
+      if (fileType === 'image') {
+        renderImage()
+      } else if (fileType === 'pdf') {
+        renderPDF()
+      }
+    }, 100) // 약간의 딜레이로 중복 렌더링 방지
+
+    return () => clearTimeout(timer)
   }, [fileType, renderImage, renderPDF])
 
   // 페이지 변경 시 어노테이션 다시 렌더링
@@ -224,12 +265,20 @@ export default function AnnotatedPreview({
   const goToPrevPage = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1)
+      if (fileType === 'pdf') {
+        renderingRef.current = false
+        renderPDF()
+      }
     }
   }
 
   const goToNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1)
+      if (fileType === 'pdf') {
+        renderingRef.current = false
+        renderPDF()
+      }
     }
   }
 

@@ -2,13 +2,14 @@
 
 import {
   Eye, EyeOff, Pencil, Youtube, Shield, UserPlus,
-  FileText, Presentation, Heart
+  FileText, Presentation, Heart, NotebookPen
 } from 'lucide-react'
 import ResponsiveImage from '@/components/ResponsiveImage'
-import { Song } from '../types'
+import AnnotatedPreview from '@/components/AnnotatedPreview'
+import { Song, SongWithNote } from '../types'
 
 type SongListItemProps = {
-  song: Song
+  song: Song | SongWithNote
   index: number
   isSelected: boolean
   isFocused: boolean
@@ -20,6 +21,7 @@ type SongListItemProps = {
   onSelect: () => void
   onFocus: () => void
   onTogglePreview: () => void
+  onOpenNotePreview?: () => void
   onToggleYoutube: () => void
   onToggleLike: (e: React.MouseEvent) => void
   onOpenFormModal: () => void
@@ -43,6 +45,7 @@ export default function SongListItem({
   onSelect,
   onFocus,
   onTogglePreview,
+  onOpenNotePreview,
   onToggleYoutube,
   onToggleLike,
   onOpenFormModal,
@@ -80,11 +83,17 @@ export default function SongListItem({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-gray-900">{song.song_name}</h3>
-                {song.is_official ? (
+                {(song as SongWithNote).isNoteItem && (
+                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full flex items-center gap-0.5" title="내 필기">
+                    <NotebookPen size={10} />
+                    <span className="text-[10px]">내 필기</span>
+                  </span>
+                )}
+                {!((song as SongWithNote).isNoteItem) && song.is_official ? (
                   <span className="flex-shrink-0 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center" title="공식 악보">
                     <Shield size={12} />
                   </span>
-                ) : song.is_user_uploaded && (
+                ) : !((song as SongWithNote).isNoteItem) && song.is_user_uploaded && (
                   <span className="flex-shrink-0 px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs rounded-full flex items-center gap-0.5" title="사용자 추가">
                     <UserPlus size={10} />
                   </span>
@@ -268,8 +277,35 @@ export default function SongListItem({
           )}
           {song.file_url && (
             <div className="w-full">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm">악보 <span className="text-xs text-gray-400">(더블탭하여 전체화면)</span></h4>
-              {song.file_type === 'pdf' ? (
+              <h4 className="font-semibold text-gray-700 mb-2 text-sm">
+                악보
+                {(song as SongWithNote).isNoteItem && (
+                  <span className="ml-2 text-xs text-amber-600">(내 필기 포함)</span>
+                )}
+                <span className="text-xs text-gray-400 ml-1">(더블탭하여 전체화면)</span>
+              </h4>
+              {/* 필기 아이템이면 AnnotatedPreview 사용 */}
+              {(song as SongWithNote).isNoteItem && (song as SongWithNote).noteAnnotations ? (
+                <div
+                  className="cursor-pointer"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    onDoubleClick()
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation()
+                    onDoubleTap()
+                  }}
+                >
+                  <AnnotatedPreview
+                    fileUrl={song.file_url}
+                    fileType={song.file_type === 'pdf' ? 'pdf' : 'image'}
+                    annotations={(song as SongWithNote).noteAnnotations || []}
+                    maxHeight={600}
+                    className="rounded shadow-sm"
+                  />
+                </div>
+              ) : song.file_type === 'pdf' ? (
                 <div
                   className="relative w-full h-[80vh] sm:h-[600px] cursor-pointer"
                   onDoubleClick={(e) => {
