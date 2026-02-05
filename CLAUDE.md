@@ -19,6 +19,26 @@
 - **Name**: ministry-hub
 - **Region**: ap-southeast-1 (Singapore)
 
+## 환경변수
+
+`.env.example`을 `.env.local`로 복사 후 실제 값 입력:
+
+```bash
+cp .env.example .env.local
+```
+
+| 변수명 | 필수 | 설명 |
+|--------|------|------|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase 프로젝트 URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+| `ANTHROPIC_API_KEY` | ❌ | AI 검색 기능용 (Claude API) |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | ❌ | Google Analytics 4 측정 ID |
+| `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry DSN (에러 모니터링) |
+| `SENTRY_ORG` | ❌ | Sentry 조직명 |
+| `SENTRY_PROJECT` | ❌ | Sentry 프로젝트명 |
+
+> ⚠️ `.env.local`은 절대 Git에 커밋하지 마세요!
+
 ## 프로젝트 구조
 
 ```
@@ -58,7 +78,7 @@ src/
 | feedbacks | 사용자 피드백 |
 | profiles | 사용자 프로필 |
 
-## 코딩 컨벤션
+## Git Workflow
 
 ### 커밋 메시지 (한국어)
 ```
@@ -70,6 +90,19 @@ docs: 문서 수정
 chore: 기타 작업
 ```
 
+### 커밋 가이드라인
+- 기능 구현 시 **작은 단위로 자주 커밋** (한 번에 몰아서 X)
+- 각 커밋은 **논리적 마일스톤** 단위로 분리
+- `/commit-kr` 스킬로 한국어 커밋 메시지 자동 생성
+- 커밋 전 `npm run build`로 빌드 에러 확인 권장
+
+### 세션 관리
+- 복잡한 기능은 **하나의 목표**에 집중 (여러 기능 동시 진행 X)
+- 세션 종료 전 `/handoff` 실행하여 진행 상황 기록
+- 다음 세션에서 이어갈 작업이 있으면 TODO 목록으로 정리
+
+## 코딩 컨벤션
+
 ### 파일 네이밍
 - 컴포넌트: PascalCase (`SheetMusicViewer.tsx`)
 - 훅: camelCase with use prefix (`useSheetMusicNotes.ts`)
@@ -78,6 +111,13 @@ chore: 기타 작업
 ### 타입 정의
 - 인터페이스보다 type 선호
 - Supabase 자동 생성 타입 활용 (`Database['public']['Tables']`)
+
+### TypeScript 컨벤션
+- **tsconfig**: strict: false (점진적 마이그레이션 중)
+- 새 코드 작성 시에도 **타입 안전성** 고려
+- `any` 사용 최소화, 필요시 주석으로 이유 명시
+- Supabase 타입: `src/types/database.types.ts` 활용
+- 컴포넌트 Props는 명시적 type 정의
 
 ## 주의사항
 
@@ -96,6 +136,27 @@ chore: 기타 작업
 - 환경변수는 `.env.local`에 저장
 - CAPTCHA: 회원가입에 Turnstile 적용
 - 관리자 권한: `profiles.is_admin` 체크
+
+## Common Issues
+
+### npm 권한 에러
+```bash
+# EACCES 에러 발생 시
+sudo npm install -g <package>
+# 또는 npm 권한 설정
+sudo chown -R $(whoami) ~/.npm
+```
+
+### 빌드 에러 해결
+```bash
+# 캐시 클리어 후 재빌드
+rm -rf .next && npm run build
+```
+
+### Vercel 배포 실패
+- 빌드 로그에서 에러 확인
+- 환경변수 설정 확인 (Vercel Dashboard)
+- `npm run build` 로컬 테스트 필수
 
 ## 자주 사용하는 명령어
 

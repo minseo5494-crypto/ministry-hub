@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { SEASONS, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
+import { cleanSongText } from '@/lib/textUtils'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
@@ -890,8 +891,8 @@ setNewSong({ ...newSong, tempo: tempoValue })
     const { error: insertError } = await supabase
       .from('songs')
       .insert({
-        song_name: newSong.song_name.trim().normalize('NFC'),
-        team_name: newSong.team_name.trim().normalize('NFC') || null,
+        song_name: cleanSongText(newSong.song_name),
+        team_name: cleanSongText(newSong.team_name) || null,
         key: newSong.key || null,
         time_signature: newSong.time_signature || null,
         tempo: newSong.tempo || null,
@@ -908,7 +909,8 @@ setNewSong({ ...newSong, tempo: tempoValue })
           ? newSong.shared_with_teams
           : null,
         is_user_uploaded: true,
-        is_official: isOfficial
+        is_official: isOfficial,
+        is_hidden: false  // 새 곡은 기본적으로 표시
       })
 
     if (insertError) throw insertError

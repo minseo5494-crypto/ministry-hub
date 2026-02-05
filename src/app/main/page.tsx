@@ -13,6 +13,7 @@ import { logSongSearch, logSongView } from '@/lib/activityLogger'
 import { trackSetlistCreate, trackSongView, trackSongLike } from '@/lib/analytics'
 import { getErrorMessage } from '@/lib/errorMessages'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
+import { cleanSongText } from '@/lib/textUtils'
 
 // Components
 import {
@@ -61,20 +62,13 @@ const isSpamContent = (text: string): boolean => {
   if (koreanChars.length < 3) return false
 
   // 3. 자주 사용되는 한글 음절 패턴 (정상적인 단어에 자주 등장)
-  // ㅏ: 가나다라마바사아자차카타파하
-  // ㅓ: 거너더러머버서어저처커터퍼허
-  // ㅗ: 고노도로모보소오조초코토포호
-  // ㅜ: 구누두루무부수우주추쿠투푸후
-  // ㅡ: 그느드르므브스으즈츠크트프흐
-  // ㅣ: 기니디리미비시이지치키티피히
-  // 조사/어미: 은는이가를의에서로와과도면만요네데게세레케테페헤
-  // 받침 있는 흔한 글자: 한글음절상중하인신문원선전정명성현진영민준수빛곡팀힘찬
-  const commonSyllables = /[가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤한글음절상중하인신문원선전정명성현진영민준빛곡팀힘찬양배워러브제이어]/g
+  // 기본 모음 조합 + 흔한 받침 글자 + 찬양 관련 단어
+  const commonSyllables = /[가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐기니디리미비시이지치키티피히은는이가를의에서로와과도면만요네데게세레케테페헤한글음절상중하인신문원선전정명성현진영민준빛곡팀힘찬양배워러브제이어해내온맘님께복날달밤별빛땅길손발눈귀입몸말씀품안길잡손잡일어나앉으심김박이정최강조윤장임송신유권황안홍류배송천강풍물불꽃새온세땅끝위왕주예수그리스도하나님아버지성령십자가부활사랑은혜믿음소망찬양경배감사기도헌신섬김축복영광존귀거룩전능승리평화자유치유회복구원능력권능임재영원거하심비추심깨우심부어쏟부르심보내심인도하심붙드심품으심지으심]/g
   const commonCount = (cleaned.match(commonSyllables) || []).length
   const koreanRatio = commonCount / koreanChars.length
 
-  // 4. 흔한 음절 비율이 30% 미만이면 스팸으로 판단
-  if (koreanRatio < 0.3 && koreanChars.length >= 4) {
+  // 4. 흔한 음절 비율이 20% 미만이면 스팸으로 판단 (기준 완화)
+  if (koreanRatio < 0.2 && koreanChars.length >= 5) {
     return true
   }
 
@@ -1210,8 +1204,10 @@ export default function MainPage() {
       if (!confirmed) return
     }
 
-    // 스팸 방지: 콘텐츠 검증
-    if (isSpamContent(newSong.song_name.trim()) || isSpamContent(newSong.team_name.trim())) {
+    // 스팸 방지: 콘텐츠 검증 (cleanSongText 적용 후 체크)
+    const cleanedSongName = cleanSongText(newSong.song_name)
+    const cleanedTeamName = cleanSongText(newSong.team_name)
+    if (isSpamContent(cleanedSongName) || isSpamContent(cleanedTeamName)) {
       alert('⚠️ 곡 제목 또는 아티스트명이 유효하지 않습니다.\n올바른 정보를 입력해주세요.')
       return
     }
@@ -1267,8 +1263,8 @@ export default function MainPage() {
       const publisherId = publisherAccount?.publisher_id || null
 
       const { error: insertError } = await supabase.from('songs').insert({
-        song_name: newSong.song_name.trim(),
-        team_name: newSong.team_name.trim() || null,
+        song_name: cleanSongText(newSong.song_name),
+        team_name: cleanSongText(newSong.team_name) || null,
         key: newSong.key || null,
         time_signature: newSong.time_signature || null,
         tempo: newSong.tempo || null,
@@ -1285,7 +1281,8 @@ export default function MainPage() {
         shared_with_teams: newSong.visibility === 'teams' ? newSong.shared_with_teams : null,
         is_user_uploaded: true,
         is_official: isOfficial,
-        publisher_id: publisherId
+        publisher_id: publisherId,
+        is_hidden: false  // 새 곡은 기본적으로 표시
       })
 
       if (insertError) throw insertError
