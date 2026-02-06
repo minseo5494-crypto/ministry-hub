@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 1월 30일 (오전)
+**마지막 업데이트**: 2026년 2월 6일
 
 ---
 
@@ -19,33 +19,44 @@
 
 ---
 
-## 2. 최근 작업 (2026-01-30 오전)
+## 2. 최근 작업 (2026-02-06)
 
 ### 완료된 작업
-- [x] **송폼 편집 모달 디자인 개선**: SongFormPositionModal.tsx 리디자인
-  - 그라디언트 제거, 심플한 흰색/회색 배경
-  - 단색 파란색(#3B82F6) 테마 적용
-  - 파트 태그 파스텔 톤 색상 적용
-  - 커스텀 슬라이더 스타일 추가
-- [x] **그리드 뷰 제거**: 메인 페이지 리스트 뷰만 유지
-- [x] **메인페이지 로고 새로고침**: 로고 클릭 시 페이지 새로고침
-- [x] **SheetMusicEditor.tsx 복구**: 이전 세션에서 잘못 수정된 부분 원상복구
+- [x] **커스텀 역할 시스템 활성화**: `team_roles` DB 연동
+  - `getTeamRoles()`: 항상 기본값 반환 → DB 조회 + fallback
+  - `getTeamMembersWithRoles()`: `role_id` 기반 `team_roles` 조인 추가
+  - `fetchPermissions()`: `role_id` 우선 조회, 없으면 legacy `role` 필드 사용
+  - `updateMemberRole()`: `role_id` + legacy `role` 동시 업데이트
+- [x] **역할 변경 모달 동적화** (settings/page.tsx)
+  - 하드코딩 3개 역할 → DB에서 로드한 동적 역할 목록
+  - "새 역할 추가" 인라인 폼 (이름 입력 + 권한 수준 선택)
+  - 멤버 목록에 커스텀 역할 이름 표시
 
-### 이전 작업 (1/29)
-- 네비게이션 통일 (로고→메인, 뒤로가기 버튼)
-- 사이드바 사용자 프로필 클릭 → 계정 관리 이동
-- 체크박스 색상 통일, 버튼 텍스트 색상 수정
+### 커밋되지 않은 변경사항 (⚠️)
+- `src/hooks/useTeamPermissions.ts` — 커스텀 역할 시스템 활성화
+- `src/app/my-team/[id]/settings/page.tsx` — 역할 모달 동적화
+- `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` — (이전 세션 변경)
+- `src/components/SetlistDevotionals.tsx` — (이전 세션, 새 파일)
+- `supabase/migrations/20260206_setlist_devotional*.sql` — (이전 세션, 새 파일)
+- `docs/개발자_상담_질문지.md` — (이전 세션, 새 파일)
+- `docs/내부/교회_엔티티_구조_변경_계획.md` — (삭제됨)
+
+### 이전 작업 (1/30 이전)
+- 송폼 편집 모달 디자인 개선
+- 그리드 뷰 제거, 네비게이션 통일
+- 다크모드 제거, 아이패드 에디터 헤더 개선
 
 ---
 
 ## 3. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **테스터 모집** 우선 진행
-2. [ ] **베타 테스트 준비**: 핵심 기능 안정화
+1. [ ] **커밋되지 않은 변경사항 정리/커밋** — 위 변경사항 검토 후 커밋
+2. [ ] **커스텀 역할 기능 실제 테스트** — 팀 설정에서 역할 추가/할당/표시 확인
+3. [ ] **세트리스트 묵상가이드 기능 완성** (setlist devotionals 관련 파일들)
 
 ### 단기 (베타 전 - 2월 20일까지)
-- [ ] 테스터 피드백 수집 체계 구축
+- [ ] 테스터 모집 및 피드백 수집 체계 구축
 - [ ] UI/UX 개선 (디자이너 합류 시)
 
 ### 중기 (베타 기간)
@@ -62,8 +73,9 @@
 |------|------|
 | 메인 페이지 | `src/app/main/page.tsx` |
 | AI 검색 API | `src/app/api/ai-search/route.ts` |
-| AI 검색 훅 | `src/hooks/useAISearch.ts` |
-| 콘텐츠 관리 | `src/app/admin/content-management/page.tsx` |
+| 팀 설정 페이지 | `src/app/my-team/[id]/settings/page.tsx` |
+| 팀 권한 훅 | `src/hooks/useTeamPermissions.ts` |
+| 직책 관리 컴포넌트 | `src/components/TeamRolesManager.tsx` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
 | 송폼 편집 모달 | `src/components/SongFormPositionModal.tsx` |
 
@@ -119,9 +131,9 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 송폼 편집 모달 디자인 개선 완료
+- 커스텀 역할 시스템 활성화 완료 (커밋 필요)
+- 커밋되지 않은 변경사항 여러 개 있음 — 다음 세션에서 정리 필요
 - 베타 테스트 준비에 집중 권장
-- 기존 Team 기반 구조 유지 중
 
 ---
 
