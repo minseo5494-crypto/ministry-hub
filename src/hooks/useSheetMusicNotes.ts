@@ -103,7 +103,6 @@ interface UseSheetMusicNotesReturn {
 
   // CRUD 작업
   fetchNotes: (userId: string) => Promise<void>
-  fetchNotesBySong: (userId: string, songId: string) => Promise<LocalSheetMusicNote[]>
   saveNote: (note: Omit<LocalSheetMusicNote, 'id' | 'created_at' | 'updated_at'>) => Promise<LocalSheetMusicNote | null>
   updateNote: (id: string, annotations: PageAnnotation[], title?: string, extra?: { songFormEnabled?: boolean, songFormStyle?: SavedSongFormStyle, partTags?: SavedPartTagStyle[], pianoScores?: SavedPianoScoreElement[], drumScores?: SavedDrumScoreElement[] }) => Promise<boolean>
   updateNoteTitle: (id: string, title: string) => Promise<boolean>
@@ -302,19 +301,6 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
       setError('노트를 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
-    }
-  }, [])
-
-  // 특정 곡의 노트 가져오기
-  const fetchNotesBySong = useCallback(async (userId: string, songId: string): Promise<LocalSheetMusicNote[]> => {
-    try {
-      const allNotes = getStoredNotes()
-      return allNotes
-        .filter(note => note.user_id === userId && note.song_id === songId)
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    } catch (err) {
-      console.error('노트 불러오기 오류:', err)
-      return []
     }
   }, [])
 
@@ -644,7 +630,6 @@ export function useSheetMusicNotes(): UseSheetMusicNotesReturn {
     loading,
     error,
     fetchNotes,
-    fetchNotesBySong,
     saveNote,
     updateNote,
     updateNoteTitle,

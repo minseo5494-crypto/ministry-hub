@@ -1165,7 +1165,7 @@ const removeSongForm = (index: number) => {
   // 🎵 악보 에디터 닫기
   const closeSheetMusicEditor = () => {
     if (sheetEditorSongs.length > 0) {
-      if (!confirm('필기 내용이 저장되지 않을 수 있습니다. 정말 닫으시겠습니까?')) {
+      if (!confirm('필기 내용이 저장되지 않습니다. 정말 닫으시겠습니까?')) {
         return
       }
     }
