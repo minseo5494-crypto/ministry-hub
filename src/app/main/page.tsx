@@ -567,22 +567,46 @@ export default function MainPage() {
 
     // 검색어가 있을 때 제목 일치 우선 정렬
     if (searchKeywords.length > 0) {
-      // 키워드 등장 횟수 계산 함수
-      const countKeywordOccurrences = (title: string, keywords: string[]): number => {
+      // 검색어 전체 문자열 (원본)
+      const fullSearchQuery = searchKeywords.join(' ').trim()
+      const normalizedSearchQuery = normalizeText(fullSearchQuery)
+
+      // 제목 매칭 점수 계산 함수
+      const calculateTitleScore = (title: string): number => {
         const normalizedTitle = normalizeText(title)
-        return keywords.reduce((total, keyword) => {
+        let score = 0
+
+        // 1. 정확히 일치 (가장 높은 점수)
+        if (normalizedTitle === normalizedSearchQuery) {
+          score += 10000
+        }
+        // 2. 제목이 검색어로 시작
+        else if (normalizedTitle.startsWith(normalizedSearchQuery)) {
+          score += 5000
+        }
+        // 3. 제목이 검색어를 포함 (짧은 제목일수록 높은 점수)
+        else if (normalizedTitle.includes(normalizedSearchQuery)) {
+          // 제목 길이가 짧을수록 높은 점수 (더 정확한 매칭)
+          score += 1000 + Math.max(0, 100 - title.length)
+        }
+
+        // 4. 개별 키워드 등장 횟수 추가 점수
+        searchKeywords.forEach(keyword => {
           const normalizedKeyword = normalizeText(keyword)
-          if (!normalizedKeyword) return total
-          // 제목에서 키워드가 몇 번 등장하는지 카운트
+          if (!normalizedKeyword) return
           const regex = new RegExp(normalizedKeyword, 'g')
           const matches = normalizedTitle.match(regex)
-          return total + (matches ? matches.length : 0)
-        }, 0)
+          if (matches) {
+            score += matches.length
+          }
+        })
+
+        return score
       }
 
       result.sort((a, b) => {
-        const aTitleScore = countKeywordOccurrences(a.song_name, searchKeywords)
-        const bTitleScore = countKeywordOccurrences(b.song_name, searchKeywords)
+        const aTitleScore = calculateTitleScore(a.song_name)
+        const bTitleScore = calculateTitleScore(b.song_name)
 
         // 제목 일치 점수가 높은 순으로 정렬
         if (bTitleScore !== aTitleScore) {

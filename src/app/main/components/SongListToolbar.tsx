@@ -172,18 +172,20 @@ export default function SongListToolbar({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
-          className="h-8 px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
+          className="h-9 w-[72px] px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500 appearance-none text-center"
+          style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'m6 8 4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 4px center', backgroundRepeat: 'no-repeat', backgroundSize: '16px', paddingRight: '20px' }}
         >
           <option value="recent">최신순</option>
-          <option value="likes">좋아요순</option>
+          <option value="likes">좋아요</option>
           <option value="name">이름순</option>
-          <option value="weekly">많이 찾은 순</option>
+          <option value="weekly">인기순</option>
         </select>
         {/* 공식/사용자 악보 필터 - 모바일 */}
         <select
           value={songFilter}
           onChange={(e) => setSongFilter(e.target.value as SongFilter)}
-          className="h-8 px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500"
+          className="h-9 w-[72px] px-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium border-0 focus:ring-2 focus:ring-blue-500 appearance-none text-center"
+          style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'m6 8 4 4 4-4\'/%3E%3C/svg%3E")', backgroundPosition: 'right 4px center', backgroundRepeat: 'no-repeat', backgroundSize: '16px', paddingRight: '20px' }}
         >
           <option value="all">전체</option>
           <option value="official">공식</option>
@@ -194,13 +196,16 @@ export default function SongListToolbar({
         {user && mySheetNotes.length > 0 && (
           <button
             onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
-            className={`h-8 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium transition-all ${filters.includeMyNotes
-              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+            className={`h-9 w-[72px] flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all ${filters.includeMyNotes
+              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 w-auto px-3'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
             <Pencil size={12} className="flex-shrink-0" />
             <span>내 필기</span>
+            {filters.includeMyNotes && (
+              <span className="text-[9px] bg-purple-200 px-1 rounded-full">{mySheetNotes.length}</span>
+            )}
           </button>
         )}
       </div>
