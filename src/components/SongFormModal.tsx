@@ -59,7 +59,6 @@ interface SongFormModalProps {
   onSave: (songId: string, form: string[]) => void
   onClose: () => void
   userId?: string
-  isDarkMode?: boolean
 }
 
 const availableSections = [
@@ -75,7 +74,6 @@ export default function SongFormModal({
   onSave,
   onClose,
   userId,
-  isDarkMode = false
 }: SongFormModalProps) {
   const [tempSelectedForm, setTempSelectedForm] = useState<string[]>(initialForm)
   const [customSection, setCustomSection] = useState('')
@@ -209,25 +207,23 @@ export default function SongFormModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className={`w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden border flex flex-col h-[85vh] ${
-        isDarkMode
-          ? 'bg-slate-900 border-slate-800'
-          : 'bg-white border-gray-200'
+        'bg-white border-gray-200'
       }`}>
         {/* 헤더 */}
         <div className={`px-8 py-6 border-b flex justify-between items-center ${
-          isDarkMode ? 'border-slate-800' : 'border-gray-100'
+          'border-gray-100'
         }`}>
           <div>
-            <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            <h1 className={`text-2xl font-bold ${'text-gray-900'}`}>
               {song.song_name} - 송폼 설정
             </h1>
-            <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-sm mt-1 ${'text-gray-500'}`}>
               곡의 구성을 자유롭게 배치하고 저장하세요.
             </p>
           </div>
           <TouchButton
             onClick={onClose}
-            className={`transition-colors ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`transition-colors ${'text-gray-400 hover:text-gray-600'}`}
           >
             <span className="material-symbols-outlined text-3xl">close</span>
           </TouchButton>
@@ -237,13 +233,11 @@ export default function SongFormModal({
         <div className="flex-1 flex overflow-hidden">
           {/* 왼쪽: 사용 가능한 섹션 */}
           <div className={`w-1/4 border-r p-6 flex flex-col gap-6 ${
-            isDarkMode
-              ? 'border-slate-800 bg-slate-900/30'
-              : 'border-gray-100 bg-slate-50/50'
+            'border-gray-100 bg-slate-50/50'
           }`}>
             <div>
               <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${
-                isDarkMode ? 'text-slate-300' : 'text-gray-700'
+                'text-gray-700'
               }`}>
                 <span className="material-symbols-outlined text-lg">list_alt</span>
                 사용 가능한 섹션
@@ -256,18 +250,14 @@ export default function SongFormModal({
                       key={section}
                       onClick={() => addSection(section)}
                       className={`flex items-center justify-between w-full p-3 border rounded-xl transition-all cursor-pointer group ${
-                        isDarkMode
-                          ? 'bg-slate-800 border-slate-700 hover:border-indigo-500'
-                          : 'bg-white border-gray-200 hover:border-indigo-500'
+                        'bg-white border-gray-200 hover:border-indigo-500'
                       }`}
                     >
-                      <span className={`font-medium ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>
+                      <span className={`font-medium ${'text-gray-700'}`}>
                         {section}
                       </span>
                       <span className={`px-2 py-1 text-xs font-bold rounded ${
-                        isDarkMode
-                          ? 'bg-blue-900/40 text-blue-300'
-                          : 'bg-blue-100 text-blue-600'
+                        'bg-blue-100 text-blue-600'
                       }`}>
                         {abbr}
                       </span>
@@ -278,8 +268,8 @@ export default function SongFormModal({
             </div>
 
             {/* 직접 입력 */}
-            <div className={`mt-auto border-t pt-6 ${isDarkMode ? 'border-slate-800' : 'border-gray-100'}`}>
-              <h2 className={`text-sm font-bold mb-3 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+            <div className={`mt-auto border-t pt-6 ${'border-gray-100'}`}>
+              <h2 className={`text-sm font-bold mb-3 ${'text-gray-700'}`}>
                 직접 입력
               </h2>
               <div className="flex gap-2 overflow-hidden">
@@ -289,9 +279,7 @@ export default function SongFormModal({
                   onChange={(e) => setCustomSection(e.target.value)}
                   placeholder="예: 기도회, 멘트"
                   className={`flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 ${
-                    isDarkMode
-                      ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
-                      : 'bg-white border-gray-200 text-gray-900'
+                    'bg-white border-gray-200 text-gray-900'
                   }`}
                   style={{ touchAction: 'manipulation', fontSize: '16px' }}
                   onKeyPress={(e) => e.key === 'Enter' && addCustomSection()}
@@ -299,9 +287,7 @@ export default function SongFormModal({
                 <TouchButton
                   onClick={addCustomSection}
                   className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    isDarkMode
-                      ? 'bg-slate-600 hover:bg-slate-500'
-                      : 'bg-slate-700 hover:bg-slate-800'
+                    'bg-slate-700 hover:bg-slate-800'
                   }`}
                   style={{ color: '#ffffff' }}
                 >
@@ -315,7 +301,7 @@ export default function SongFormModal({
           <div className="flex-1 p-6 flex flex-col gap-4 overflow-hidden">
             <div className="flex justify-between items-center mb-2">
               <h2 className={`text-sm font-bold flex items-center gap-2 ${
-                isDarkMode ? 'text-slate-300' : 'text-gray-700'
+                'text-gray-700'
               }`}>
                 <span className="material-symbols-outlined text-lg">format_list_numbered</span>
                 선택된 순서
@@ -324,9 +310,7 @@ export default function SongFormModal({
                 <TouchButton
                   onClick={() => setShowAddFavoriteModal(true)}
                   className={`flex items-center gap-1 px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors ${
-                    isDarkMode
-                      ? 'bg-yellow-900/20 text-yellow-400 border-yellow-900/50 hover:bg-yellow-900/30'
-                      : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                    'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
                   }`}
                   title="현재 송폼을 즐겨찾기에 추가"
                 >
@@ -338,20 +322,18 @@ export default function SongFormModal({
 
             {/* 선택된 순서 리스트 */}
             <div className={`flex-1 border-2 border-dashed rounded-2xl p-4 overflow-y-auto custom-scrollbar ${
-              isDarkMode
-                ? 'border-slate-700 bg-slate-900/20'
-                : 'border-gray-200 bg-gray-50/30'
+              'border-gray-200 bg-gray-50/30'
             }`}>
               {tempSelectedForm.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-sm mb-4 ${
-                    isDarkMode ? 'bg-slate-800' : 'bg-white'
+                    'bg-white'
                   }`}>
                     <span className={`material-symbols-outlined text-3xl ${
-                      isDarkMode ? 'text-slate-600' : 'text-gray-300'
+                      'text-gray-300'
                     }`}>queue_music</span>
                   </div>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  <p className={`text-sm ${'text-gray-500'}`}>
                     왼쪽에서 섹션을 선택하세요
                   </p>
                 </div>
@@ -361,15 +343,13 @@ export default function SongFormModal({
                     <div
                       key={index}
                       className={`flex items-center gap-4 p-4 rounded-xl border shadow-sm ${
-                        isDarkMode
-                          ? 'bg-slate-800 border-slate-700'
-                          : 'bg-white border-gray-100'
+                        'bg-white border-gray-100'
                       }`}
                     >
-                      <span className={`font-bold w-6 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>
+                      <span className={`font-bold w-6 ${'text-gray-400'}`}>
                         {index + 1}.
                       </span>
-                      <span className={`flex-1 font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>
+                      <span className={`flex-1 font-semibold ${'text-gray-800'}`}>
                         {abbr}
                       </span>
                       <div className="flex items-center gap-1">
@@ -378,8 +358,8 @@ export default function SongFormModal({
                           disabled={index === 0}
                           className={`p-1 rounded transition-colors ${
                             index === 0
-                              ? isDarkMode ? 'text-slate-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
-                              : isDarkMode ? 'text-indigo-400 hover:bg-indigo-900/20' : 'text-indigo-500 hover:bg-indigo-50'
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-indigo-500 hover:bg-indigo-50'
                           }`}
                         >
                           <span className="material-symbols-outlined">expand_less</span>
@@ -389,8 +369,8 @@ export default function SongFormModal({
                           disabled={index === tempSelectedForm.length - 1}
                           className={`p-1 rounded transition-colors ${
                             index === tempSelectedForm.length - 1
-                              ? isDarkMode ? 'text-slate-600 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed'
-                              : isDarkMode ? 'text-indigo-400 hover:bg-indigo-900/20' : 'text-indigo-500 hover:bg-indigo-50'
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-indigo-500 hover:bg-indigo-50'
                           }`}
                         >
                           <span className="material-symbols-outlined">expand_more</span>
@@ -398,7 +378,7 @@ export default function SongFormModal({
                         <TouchButton
                           onClick={() => removeSection(index)}
                           className={`p-1 ml-2 transition-colors ${
-                            isDarkMode ? 'text-red-400 hover:text-red-300' : 'text-red-400 hover:text-red-600'
+                            'text-red-400 hover:text-red-600'
                           }`}
                         >
                           <span className="material-symbols-outlined">close</span>
@@ -413,14 +393,12 @@ export default function SongFormModal({
             {/* 미리보기 */}
             {tempSelectedForm.length > 0 && (
               <div className={`p-4 rounded-xl border ${
-                isDarkMode
-                  ? 'bg-blue-950/40 border-blue-900/50'
-                  : 'bg-blue-50 border-blue-100'
+                'bg-blue-50 border-blue-100'
               }`}>
                 <span className={`text-xs font-bold block mb-1 uppercase tracking-wider ${
-                  isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                  'text-blue-600'
                 }`}>Preview</span>
-                <p className={`text-lg font-bold ${isDarkMode ? 'text-blue-200' : 'text-blue-900'}`}>
+                <p className={`text-lg font-bold ${'text-blue-900'}`}>
                   {tempSelectedForm.join(' — ')}
                 </p>
               </div>
@@ -430,19 +408,17 @@ export default function SongFormModal({
           {/* 오른쪽: 즐겨찾기 */}
           {userId && (
             <div className={`w-1/4 p-6 flex flex-col gap-4 ${
-              isDarkMode ? 'bg-slate-900/20' : 'bg-slate-50/30'
+              'bg-slate-50/30'
             }`}>
               <h2 className={`text-sm font-bold flex items-center gap-2 ${
-                isDarkMode ? 'text-slate-300' : 'text-gray-700'
+                'text-gray-700'
               }`}>
                 <span className="material-symbols-outlined text-lg text-yellow-500">star</span>
                 즐겨찾기
               </h2>
 
               <div className={`flex-1 flex flex-col overflow-hidden border rounded-2xl ${
-                isDarkMode
-                  ? 'border-yellow-900/30 bg-yellow-950/10'
-                  : 'border-yellow-100 bg-yellow-50/20'
+                'border-yellow-100 bg-yellow-50/20'
               }`}>
                 {loadingFavorites ? (
                   <div className="flex-1 flex items-center justify-center">
@@ -451,13 +427,13 @@ export default function SongFormModal({
                 ) : favorites.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
                     <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-sm mb-4 ${
-                      isDarkMode ? 'bg-slate-800' : 'bg-white'
+                      'bg-white'
                     }`}>
                       <span className={`material-symbols-outlined text-3xl ${
-                        isDarkMode ? 'text-slate-600' : 'text-gray-300'
+                        'text-gray-300'
                       }`}>folder_open</span>
                     </div>
-                    <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                    <p className={`text-sm leading-relaxed ${'text-gray-500'}`}>
                       저장된 즐겨찾기가 없습니다.<br/>
                       송폼을 설정한 후 즐겨찾기에 추가해보세요!
                     </p>
@@ -468,9 +444,7 @@ export default function SongFormModal({
                       <div
                         key={fav.id}
                         className={`border rounded-lg p-3 transition cursor-pointer group ${
-                          isDarkMode
-                            ? 'bg-slate-800 border-yellow-900/50 hover:border-yellow-500'
-                            : 'bg-white border-yellow-300 hover:border-yellow-500'
+                          'bg-white border-yellow-300 hover:border-yellow-500'
                         }`}
                         onClick={() => applyFavorite(fav.songform_pattern)}
                         onTouchEnd={(e) => {
@@ -484,13 +458,13 @@ export default function SongFormModal({
                           <div className="flex-1 min-w-0">
                             {fav.label && (
                               <p className={`font-bold text-sm mb-1 truncate ${
-                                isDarkMode ? 'text-yellow-400' : 'text-yellow-800'
+                                'text-yellow-800'
                               }`}>
                                 {fav.label}
                               </p>
                             )}
                             <p className={`text-xs font-mono truncate ${
-                              isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                              'text-gray-600'
                             }`}>
                               {fav.songform_pattern.join(' — ')}
                             </p>
@@ -507,7 +481,7 @@ export default function SongFormModal({
                               removeFavorite(fav.id)
                             }}
                             className={`p-2 transition ${
-                              isDarkMode ? 'text-slate-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'
+                              'text-gray-400 hover:text-red-500'
                             }`}
                             style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
                             title="삭제"
@@ -521,7 +495,7 @@ export default function SongFormModal({
                 )}
               </div>
 
-              <p className={`text-xs text-center ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>
+              <p className={`text-xs text-center ${'text-gray-500'}`}>
                 클릭하여 송폼 적용
               </p>
             </div>
@@ -530,14 +504,12 @@ export default function SongFormModal({
 
         {/* 푸터 버튼 */}
         <div className={`px-8 py-5 border-t flex justify-end gap-3 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-gray-100 bg-white'
+          'border-gray-100 bg-white'
         }`}>
           <TouchButton
             onClick={onClose}
             className={`px-6 py-2.5 border font-semibold rounded-xl transition-colors ${
-              isDarkMode
-                ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              'border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
             취소
@@ -559,12 +531,10 @@ export default function SongFormModal({
           style={{ zIndex: 60 }}
         >
           <div className={`rounded-2xl p-6 w-full max-w-md mx-4 border ${
-            isDarkMode
-              ? 'bg-slate-900 border-slate-800'
-              : 'bg-white border-gray-200'
+            'bg-white border-gray-200'
           }`}>
             <div className="flex items-center justify-between mb-4">
-              <h4 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h4 className={`text-lg font-bold ${'text-gray-900'}`}>
                 즐겨찾기 추가
               </h4>
               <TouchButton
@@ -573,7 +543,7 @@ export default function SongFormModal({
                   setNewFavoriteLabel('')
                 }}
                 className={`p-2 rounded-lg transition-colors ${
-                  isDarkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-gray-500 hover:bg-gray-100'
+                  'text-gray-500 hover:bg-gray-100'
                 }`}
               >
                 <span className="material-symbols-outlined">close</span>
@@ -581,11 +551,11 @@ export default function SongFormModal({
             </div>
 
             <div className="mb-4">
-              <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
+              <p className={`text-sm mb-2 ${'text-gray-600'}`}>
                 현재 송폼:
               </p>
               <p className={`font-mono text-sm p-3 rounded-lg ${
-                isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-gray-100 text-gray-700'
+                'bg-gray-100 text-gray-700'
               }`}>
                 {tempSelectedForm.join(' — ')}
               </p>
@@ -593,7 +563,7 @@ export default function SongFormModal({
 
             <div className="mb-6">
               <label className={`block text-sm font-medium mb-2 ${
-                isDarkMode ? 'text-slate-300' : 'text-gray-700'
+                'text-gray-700'
               }`}>
                 즐겨찾기 이름 (선택사항)
               </label>
@@ -603,9 +573,7 @@ export default function SongFormModal({
                 onChange={(e) => setNewFavoriteLabel(e.target.value)}
                 placeholder="예: 주일 기본 송폼"
                 className={`w-full px-4 py-3 border rounded-xl ${
-                  isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
-                    : 'bg-white border-gray-200 text-gray-900'
+                  'bg-white border-gray-200 text-gray-900'
                 }`}
                 style={{ touchAction: 'manipulation', fontSize: '16px' }}
               />
@@ -618,9 +586,7 @@ export default function SongFormModal({
                   setNewFavoriteLabel('')
                 }}
                 className={`flex-1 px-4 py-3 rounded-xl font-medium transition-colors ${
-                  isDarkMode
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 취소
@@ -645,7 +611,7 @@ export default function SongFormModal({
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: ${isDarkMode ? '#334155' : '#CBD5E1'};
+          background: #CBD5E1;
           border-radius: 10px;
         }
       `}</style>
