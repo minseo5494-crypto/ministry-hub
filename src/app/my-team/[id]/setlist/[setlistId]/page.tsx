@@ -32,7 +32,7 @@ import {
   ArrowLeft, Edit, Trash2, Plus, Music, X,
   Save, Eye, EyeOff, ChevronUp, ChevronDown,
   Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation,
-  GripVertical // 🆕 드래그 핸들 아이콘 추가
+  GripVertical, BookOpen, Check
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
@@ -41,6 +41,7 @@ import { usePersonalSetlistView } from '@/hooks/usePersonalSetlistView'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
 import ImagePreviewModal from '@/components/ImagePreviewModal'
+import SetlistDevotionals from '@/components/SetlistDevotionals'
 
 interface SetlistSong {
   id: string
@@ -57,6 +58,7 @@ interface SetlistDetail {
   service_date: string
   service_type?: string
   notes?: string
+  devotional_guide?: string
   team_id: string
   created_by: string
 }
@@ -353,6 +355,11 @@ export default function TeamSetlistDetailPage() {
   const [availableSongs, setAvailableSongs] = useState<Song[]>([])
   const [searchText, setSearchText] = useState('')
 
+  // 인도자 묵상 가이드
+  const [isEditingGuide, setIsEditingGuide] = useState(false)
+  const [editGuideContent, setEditGuideContent] = useState('')
+  const [savingGuide, setSavingGuide] = useState(false)
+
   // 미리보기 상태 (각 곡별로 토글)
   const [previewStates, setPreviewStates] = useState<{ [key: string]: boolean }>({})
   
@@ -580,6 +587,7 @@ useEffect(() => {
       setEditDate(setlistData.service_date)
       setEditType(setlistData.service_type || '')
       setEditNotes(setlistData.notes || '')
+      setEditGuideContent(setlistData.devotional_guide || '')
 
       // 콘티에 포함된 곡들
       const { data: songsData, error: songsError } = await supabase
@@ -666,6 +674,33 @@ const canEdit = () => {
     } catch (error: any) {
       console.error('Error updating setlist:', error)
       alert(`수정 실패: ${error.message}`)
+    }
+  }
+
+  const handleSaveGuide = async () => {
+    if (!canEdit()) {
+      alert('수정 권한이 없습니다.')
+      return
+    }
+    setSavingGuide(true)
+    try {
+      const { error } = await supabase
+        .from('team_setlists')
+        .update({
+          devotional_guide: editGuideContent.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', setlistId)
+
+      if (error) throw error
+
+      setSetlist(prev => prev ? { ...prev, devotional_guide: editGuideContent.trim() || undefined } : prev)
+      setIsEditingGuide(false)
+    } catch (error: any) {
+      console.error('묵상 가이드 저장 실패:', error)
+      alert(`저장 실패: ${error.message}`)
+    } finally {
+      setSavingGuide(false)
     }
   }
 
@@ -1543,6 +1578,93 @@ const saveNote = async () => {
     </SortableContext>
   </DndContext>
 )}
+
+          {/* 인도자 묵상 가이드 */}
+          {setlist && (
+            <section className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={20} className="text-amber-600" />
+                  <h2 className="text-lg font-bold text-gray-900">묵상 가이드</h2>
+                </div>
+                {canEdit() && !isEditingGuide && (
+                  <button
+                    onClick={() => {
+                      setEditGuideContent(setlist.devotional_guide || '')
+                      setIsEditingGuide(true)
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition min-h-[44px]"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <Edit size={14} />
+                    {setlist.devotional_guide ? '수정' : '작성'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingGuide ? (
+                <div className="bg-white rounded-xl border border-amber-200 p-4">
+                  <textarea
+                    value={editGuideContent}
+                    onChange={e => setEditGuideContent(e.target.value)}
+                    placeholder="이번 콘티의 묵상 방향, 말씀 본문, 예배 흐름에 대해 적어주세요..."
+                    rows={5}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-[16px]"
+                    style={{ fontSize: '16px', touchAction: 'manipulation' }}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2 mt-3">
+                    <button
+                      onClick={() => {
+                        setIsEditingGuide(false)
+                        setEditGuideContent(setlist.devotional_guide || '')
+                      }}
+                      className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition min-h-[44px]"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleSaveGuide}
+                      disabled={savingGuide}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition min-h-[44px]"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      {savingGuide ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Check size={16} />
+                      )}
+                      저장
+                    </button>
+                  </div>
+                </div>
+              ) : setlist.devotional_guide ? (
+                <div className="bg-amber-50 rounded-xl border border-amber-100 p-5">
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {setlist.devotional_guide}
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <BookOpen size={28} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">아직 묵상 가이드가 없습니다.</p>
+                  {canEdit() && (
+                    <p className="text-xs mt-1 text-gray-400">위 작성 버튼을 눌러 묵상 방향을 공유해보세요.</p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 묵상 나눔 */}
+          {user && (
+            <SetlistDevotionals
+              setlistId={setlistId}
+              teamId={teamId}
+              currentUserId={user.id}
+            />
+          )}
         </main>
       </div>
 
