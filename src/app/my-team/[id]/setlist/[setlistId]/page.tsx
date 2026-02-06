@@ -1585,7 +1585,7 @@ const saveNote = async () => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <BookOpen size={20} className="text-amber-600" />
-                  <h2 className="text-lg font-bold text-gray-900">묵상 가이드</h2>
+                  <h2 className="text-lg font-bold text-gray-900">인도자 묵상</h2>
                 </div>
                 {canEdit() && !isEditingGuide && (
                   <button
@@ -1648,7 +1648,7 @@ const saveNote = async () => {
               ) : (
                 <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                   <BookOpen size={28} className="mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">아직 묵상 가이드가 없습니다.</p>
+                  <p className="text-sm">아직 인도자 묵상이 없습니다.</p>
                   {canEdit() && (
                     <p className="text-xs mt-1 text-gray-400">위 작성 버튼을 눌러 묵상 방향을 공유해보세요.</p>
                   )}
@@ -1931,37 +1931,38 @@ const saveNote = async () => {
 
       {/* 📝 메모 수정 모달 */}
 {noteModal.show && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg w-full max-w-2xl">
-      <div className="p-4 border-b">
-        <h3 className="text-lg font-bold text-gray-900">곡 메모</h3>
-        <p className="text-sm text-gray-600">{noteModal.songName}</p>
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="px-6 py-5 border-b border-slate-100">
+        <h3 className="text-xl font-bold text-slate-900 leading-tight">곡 메모</h3>
+        <p className="mt-1 text-sm font-medium text-slate-500">{noteModal.songName}</p>
       </div>
-      
-      <div className="p-4">
+
+      <div className="p-6">
         <textarea
           value={noteModal.currentNote}
           onChange={(e) => setNoteModal(prev => ({ ...prev, currentNote: e.target.value }))}
-          placeholder="이 곡에 대한 메모를 입력하세요...&#10;(예: 2절까지만, 키 반음 낮춤, 속도 조절 등)"
-          className="w-full h-64 p-3 border border-gray-300 rounded-lg resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder={"이 곡에 대한 메모를 입력하세요...\n(예: 2절까지만, 키 반음 낮춤, 속도 조절 등)"}
+          className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all resize-none placeholder:text-slate-400"
+          style={{ fontSize: '16px' }}
+          rows={8}
           autoFocus
         />
-        <p className="text-xs text-gray-500 mt-2">
-          💡 팀원들이 플레이리스트에서 이 메모를 볼 수 있습니다.
-        </p>
       </div>
-      
-      <div className="p-4 border-t flex gap-2 justify-end">
+
+      <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
         <button
           onClick={() => setNoteModal({ show: false, songId: '', songName: '', currentNote: '' })}
-          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+          className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors min-h-[44px]"
+          style={{ touchAction: 'manipulation' }}
         >
           취소
         </button>
         <button
           onClick={saveNote}
           disabled={savingNote}
-          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50"
+          className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-600/20 rounded-lg transition-all disabled:opacity-50 min-h-[44px]"
+          style={{ touchAction: 'manipulation' }}
         >
           {savingNote ? '저장 중...' : '저장'}
         </button>
