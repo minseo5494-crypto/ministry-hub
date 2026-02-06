@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { useTeamPermissions } from '@/hooks/useTeamPermissions'
+import { useTeamPermissions, getTeamRoles, createTeamRole, updateMemberRole } from '@/hooks/useTeamPermissions'
 import TeamRolesManager from '@/components/TeamRolesManager'
+import { TeamRole, Permission } from '@/lib/supabase'
 import {
   ArrowLeft, Save, Trash2, RefreshCw, Users,
   Crown, Shield, User, UserX, Copy, Check, Settings,
-  UserPlus, UserCheck, X, Clock
+  UserPlus, UserCheck, X, Clock, Plus
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -26,6 +27,7 @@ interface TeamMember {
   id: string
   user_id: string
   role: 'leader' | 'admin' | 'member'
+  role_id?: string
   status: string
   joined_at: string
   users: {
@@ -56,6 +58,18 @@ export default function TeamSettingsPage() {
   // 탭 상태 (기본정보 / 권한관리)
   const [activeTab, setActiveTab] = useState<'info' | 'roles'>('info')
 
+  // 역할 변경 모달
+  const [roleModalMember, setRoleModalMember] = useState<TeamMember | null>(null)
+  const [roleModalSaving, setRoleModalSaving] = useState(false)
+  const [teamRoles, setTeamRoles] = useState<TeamRole[]>([])
+  const [rolesLoading, setRolesLoading] = useState(false)
+
+  // 새 역할 추가 (모달 내 인라인 폼)
+  const [showAddRoleForm, setShowAddRoleForm] = useState(false)
+  const [newRoleName, setNewRoleName] = useState('')
+  const [newRoleLevel, setNewRoleLevel] = useState<'leader' | 'admin' | 'member'>('member')
+  const [addingRole, setAddingRole] = useState(false)
+
   // 권한 훅 사용
   const { hasPermission, isAdmin, isLeader } = useTeamPermissions(teamId, user?.id)
   const canManageRoles = hasPermission('manage_roles')
@@ -69,6 +83,8 @@ export default function TeamSettingsPage() {
       fetchTeamData()
       fetchMembers()
       fetchPendingMembers()
+      // 역할 목록 미리 로드 (멤버 목록에서 커스텀 역할 이름 표시용)
+      getTeamRoles(teamId).then(roles => setTeamRoles(roles)).catch(() => {})
     }
   }, [user, teamId])
 
@@ -149,6 +165,7 @@ export default function TeamSettingsPage() {
           id,
           user_id,
           role,
+          role_id,
           status,
           joined_at,
           users:user_id (
@@ -314,35 +331,115 @@ export default function TeamSettingsPage() {
     }
   }
 
-  const handleChangeRole = async (memberId: string, currentRole: string) => {
+  const handleChangeRole = async (member: TeamMember) => {
     if (userRole !== 'leader' && !isSystemAdmin) {
       alert('리더 또는 시스템 관리자만 역할을 변경할 수 있습니다.')
       return
     }
+    setRoleModalMember(member)
+    setShowAddRoleForm(false)
+    setNewRoleName('')
+    setNewRoleLevel('member')
 
-    const roles = ['member', 'admin', 'leader']
-    const newRole = prompt(
-      `새 역할을 입력하세요:\n- member (일반 멤버)\n- admin (관리자)\n- leader (리더)`,
-      currentRole
-    )
-
-    if (!newRole || !roles.includes(newRole)) {
-      return
-    }
-
+    // 역할 목록 로드
+    setRolesLoading(true)
     try {
-      const { error } = await supabase
-        .from('team_members')
-        .update({ role: newRole })
-        .eq('id', memberId)
+      const roles = await getTeamRoles(teamId)
+      setTeamRoles(roles)
+    } catch (err) {
+      console.error('역할 목록 로드 실패:', err)
+    } finally {
+      setRolesLoading(false)
+    }
+  }
 
-      if (error) throw error
+  // 역할의 legacy role 매핑 결정
+  const getLegacyRole = (role: TeamRole): 'leader' | 'admin' | 'member' => {
+    if (role.is_leader) return 'leader'
+    const perms = role.permissions || []
+    if (perms.includes('manage_members') || perms.includes('manage_roles')) return 'admin'
+    return 'member'
+  }
 
-      alert('✅ 역할이 변경되었습니다.')
+  const handleConfirmRoleChange = async (selectedRole: TeamRole) => {
+    if (!roleModalMember) return
+    setRoleModalSaving(true)
+    try {
+      const legacyRole = getLegacyRole(selectedRole)
+
+      // default- prefix 역할은 DB role_id가 아닌 legacy role만 업데이트
+      if (selectedRole.id.startsWith('default-')) {
+        const { error } = await supabase
+          .from('team_members')
+          .update({ role: legacyRole, role_id: null })
+          .eq('id', roleModalMember.id)
+        if (error) throw error
+      } else {
+        const success = await updateMemberRole(roleModalMember.id, selectedRole.id, legacyRole)
+        if (!success) throw new Error('역할 변경 실패')
+      }
+
+      setRoleModalMember(null)
       fetchMembers()
     } catch (error: any) {
       console.error('Error changing role:', error)
       alert(`역할 변경 실패: ${error.message}`)
+    } finally {
+      setRoleModalSaving(false)
+    }
+  }
+
+  // 모달 내 새 역할 추가
+  const handleAddNewRole = async () => {
+    if (!newRoleName.trim()) {
+      alert('역할 이름을 입력하세요.')
+      return
+    }
+    setAddingRole(true)
+    try {
+      // 권한 레벨에 따른 권한 설정
+      let perms: Permission[]
+      if (newRoleLevel === 'leader') {
+        perms = [
+          'view_setlist', 'create_setlist', 'edit_setlist', 'delete_setlist', 'copy_setlist',
+          'view_sheet', 'download_sheet',
+          'add_fixed_song', 'edit_fixed_song', 'delete_fixed_song',
+          'manage_members', 'manage_roles', 'edit_team_settings'
+        ]
+      } else if (newRoleLevel === 'admin') {
+        perms = [
+          'view_setlist', 'create_setlist', 'edit_setlist', 'copy_setlist',
+          'view_sheet', 'download_sheet',
+          'add_fixed_song', 'edit_fixed_song',
+          'manage_members'
+        ]
+      } else {
+        perms = ['view_setlist', 'copy_setlist', 'view_sheet', 'download_sheet']
+      }
+
+      const result = await createTeamRole(
+        teamId,
+        newRoleName.trim(),
+        '',
+        perms,
+        newRoleLevel === 'leader' ? 1 : newRoleLevel === 'admin' ? 3 : 5
+      )
+
+      if (result) {
+        // 역할 목록 새로고침
+        const roles = await getTeamRoles(teamId)
+        setTeamRoles(roles)
+        setShowAddRoleForm(false)
+        setNewRoleName('')
+        setNewRoleLevel('member')
+      } else {
+        alert('역할 추가에 실패했습니다.')
+      }
+    } catch (err) {
+      console.error('역할 추가 오류:', err)
+      alert('역할 추가 중 오류가 발생했습니다.')
+    } finally {
+      setAddingRole(false)
     }
   }
 
@@ -476,6 +573,15 @@ export default function TeamSettingsPage() {
       default:
         return 'bg-gray-100 text-gray-700'
     }
+  }
+
+  // 멤버의 표시용 역할 이름 가져오기 (커스텀 역할 이름 우선)
+  const getMemberRoleDisplayName = (member: TeamMember): string => {
+    if (member.role_id && teamRoles.length > 0) {
+      const customRole = teamRoles.find(r => r.id === member.role_id)
+      if (customRole) return customRole.name
+    }
+    return member.role === 'leader' ? '리더' : member.role === 'admin' ? '관리자' : '멤버'
   }
 
   if (loading) {
@@ -709,13 +815,13 @@ export default function TeamSettingsPage() {
 
                 <div className="flex items-center gap-2">
                   <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getRoleBadge(member.role)}`}>
-                    {member.role === 'leader' ? '리더' : member.role === 'admin' ? '관리자' : '멤버'}
+                    {getMemberRoleDisplayName(member)}
                   </span>
                   
                   {(userRole === 'leader' || isSystemAdmin) && member.user_id !== user.id && (
                     <>
                       <button
-                        onClick={() => handleChangeRole(member.id, member.role)}
+                        onClick={() => handleChangeRole(member)}
                         className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
                         title="역할 변경"
                       >
@@ -753,6 +859,158 @@ export default function TeamSettingsPage() {
           </div>
         )}
           </>
+        )}
+
+        {/* 역할 변경 모달 */}
+        {roleModalMember && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-sm w-full shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+              <div className="px-6 py-4 border-b bg-gray-50 flex-shrink-0">
+                <h3 className="text-lg font-bold text-gray-900">역할 변경</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {roleModalMember.users?.name || roleModalMember.users.email}
+                </p>
+              </div>
+
+              <div className="p-4 space-y-2 overflow-y-auto flex-1">
+                {rolesLoading ? (
+                  <div className="flex justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {teamRoles.map((role) => {
+                      const isCurrentRole = roleModalMember.role_id
+                        ? roleModalMember.role_id === role.id
+                        : (role.id === 'default-leader' && roleModalMember.role === 'leader') ||
+                          (role.id === 'default-admin' && roleModalMember.role === 'admin') ||
+                          (role.id === 'default-member' && roleModalMember.role === 'member')
+                      const Icon = role.is_leader ? Crown : (role.permissions || []).includes('manage_members') ? Shield : User
+                      const color = role.is_leader
+                        ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+                        : (role.permissions || []).includes('manage_members')
+                          ? 'text-blue-600 bg-blue-50 border-blue-200'
+                          : 'text-gray-600 bg-gray-50 border-gray-200'
+
+                      return (
+                        <button
+                          key={role.id}
+                          onClick={() => handleConfirmRoleChange(role)}
+                          disabled={roleModalSaving || isCurrentRole}
+                          className={`w-full p-4 border-2 rounded-xl text-left flex items-center gap-3 transition min-h-[44px] ${
+                            isCurrentRole
+                              ? `${color} border-current`
+                              : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50'
+                          } disabled:opacity-60`}
+                          style={{ touchAction: 'manipulation' }}
+                        >
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isCurrentRole ? color : 'bg-gray-100'
+                          }`}>
+                            <Icon size={20} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-900">{role.name}</span>
+                              {isCurrentRole && (
+                                <span className="text-xs px-2 py-0.5 bg-white rounded-full border font-medium">현재</span>
+                              )}
+                            </div>
+                            {role.description && (
+                              <p className="text-xs text-gray-500 mt-0.5">{role.description}</p>
+                            )}
+                          </div>
+                          {roleModalSaving && !isCurrentRole && (
+                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          )}
+                        </button>
+                      )
+                    })}
+
+                    {/* 새 역할 추가 */}
+                    {!showAddRoleForm ? (
+                      <button
+                        onClick={() => setShowAddRoleForm(true)}
+                        className="w-full p-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 hover:border-blue-300 hover:text-blue-600 flex items-center justify-center gap-2 transition min-h-[44px]"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        <Plus size={18} />
+                        <span className="text-sm font-medium">새 역할 추가</span>
+                      </button>
+                    ) : (
+                      <div className="p-4 border-2 border-blue-200 rounded-xl bg-blue-50 space-y-3">
+                        <input
+                          type="text"
+                          value={newRoleName}
+                          onChange={(e) => setNewRoleName(e.target.value)}
+                          placeholder="역할 이름 (예: 파트장, 부팀장)"
+                          className="w-full px-3 py-2 border rounded-lg text-base"
+                          style={{ fontSize: '16px' }}
+                          autoFocus
+                        />
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1.5">권한 수준</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { value: 'leader' as const, label: '리더급', desc: '모든 권한' },
+                              { value: 'admin' as const, label: '관리자급', desc: '편집+관리' },
+                              { value: 'member' as const, label: '멤버급', desc: '조회만' },
+                            ].map(({ value, label, desc }) => (
+                              <button
+                                key={value}
+                                onClick={() => setNewRoleLevel(value)}
+                                className={`p-2 border-2 rounded-lg text-center transition min-h-[44px] ${
+                                  newRoleLevel === value
+                                    ? 'border-blue-500 bg-blue-100 text-blue-800'
+                                    : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                                style={{ touchAction: 'manipulation' }}
+                              >
+                                <div className="text-sm font-semibold">{label}</div>
+                                <div className="text-xs text-gray-500">{desc}</div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleAddNewRole}
+                            disabled={addingRole || !newRoleName.trim()}
+                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm disabled:bg-gray-400 min-h-[44px]"
+                            style={{ touchAction: 'manipulation' }}
+                          >
+                            {addingRole ? '추가 중...' : '추가'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAddRoleForm(false)
+                              setNewRoleName('')
+                              setNewRoleLevel('member')
+                            }}
+                            className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm min-h-[44px]"
+                            style={{ touchAction: 'manipulation' }}
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="px-4 pb-4 flex-shrink-0">
+                <button
+                  onClick={() => setRoleModalMember(null)}
+                  disabled={roleModalSaving}
+                  className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium transition min-h-[44px]"
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

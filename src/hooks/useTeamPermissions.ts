@@ -67,10 +67,10 @@ export function useTeamPermissions(teamId: string | null, userId: string | null)
         return
       }
 
-      // 2. 팀 멤버 정보 조회 (기존 role 필드 사용 - role_id는 아직 없음)
+      // 2. 팀 멤버 정보 조회 (role_id + role 필드 모두)
       const { data: memberData, error: memberError } = await supabase
         .from('team_members')
-        .select('role')
+        .select('role, role_id')
         .eq('team_id', teamId)
         .eq('user_id', userId)
         .eq('status', 'active')
@@ -85,7 +85,36 @@ export function useTeamPermissions(teamId: string | null, userId: string | null)
         return
       }
 
-      // 기존 role 필드 기반으로 권한 설정 (leader, admin, member)
+      // role_id가 있으면 DB에서 역할+권한 조회
+      if (memberData.role_id) {
+        const { data: roleData } = await supabase
+          .from('team_roles')
+          .select('*')
+          .eq('id', memberData.role_id)
+          .single()
+
+        if (roleData) {
+          const { data: permsData } = await supabase
+            .from('role_permissions')
+            .select('permission')
+            .eq('role_id', memberData.role_id)
+
+          const rolePerms = (permsData || []).map(p => p.permission as Permission)
+
+          setIsLeader(roleData.is_leader)
+          setPermissions(roleData.is_leader ? [
+            'view_setlist', 'create_setlist', 'edit_setlist', 'delete_setlist', 'copy_setlist',
+            'view_sheet', 'download_sheet',
+            'add_fixed_song', 'edit_fixed_song', 'delete_fixed_song',
+            'manage_members', 'manage_roles', 'edit_team_settings'
+          ] : rolePerms)
+          setRole({ ...roleData, permissions: rolePerms })
+          setLoading(false)
+          return
+        }
+      }
+
+      // fallback: 기존 role 필드 기반으로 권한 설정 (leader, admin, member)
       const legacyRole = memberData.role as string
 
       if (legacyRole === 'leader' || legacyRole === 'admin') {
@@ -169,8 +198,41 @@ export function useTeamPermissions(teamId: string | null, userId: string | null)
 
 // 팀의 모든 직책 조회
 export async function getTeamRoles(teamId: string): Promise<TeamRole[]> {
-  // DB 마이그레이션 전까지는 기본 직책만 반환 (500 에러 방지)
-  return getDefaultRoles(teamId)
+  try {
+    // 1. team_roles 조회
+    const { data: rolesData, error: rolesError } = await supabase
+      .from('team_roles')
+      .select('*')
+      .eq('team_id', teamId)
+      .order('sort_order', { ascending: true })
+
+    if (rolesError || !rolesData || rolesData.length === 0) {
+      // DB 테이블이 없거나 데이터가 없으면 기본값 반환
+      return getDefaultRoles(teamId)
+    }
+
+    // 2. 각 역할의 권한 조회
+    const roleIds = rolesData.map(r => r.id)
+    const { data: permsData } = await supabase
+      .from('role_permissions')
+      .select('role_id, permission')
+      .in('role_id', roleIds)
+
+    // 3. 권한을 역할에 매핑
+    const permsByRole: Record<string, Permission[]> = {}
+    ;(permsData || []).forEach(p => {
+      if (!permsByRole[p.role_id]) permsByRole[p.role_id] = []
+      permsByRole[p.role_id].push(p.permission as Permission)
+    })
+
+    return rolesData.map(role => ({
+      ...role,
+      permissions: permsByRole[role.id] || []
+    }))
+  } catch (err) {
+    console.error('팀 직책 조회 오류:', err)
+    return getDefaultRoles(teamId)
+  }
 }
 
 // 기본 직책 목록 반환 (DB 마이그레이션 전)
@@ -337,11 +399,20 @@ export async function deleteTeamRole(roleId: string): Promise<boolean> {
   return true
 }
 
-// 팀원 직책 변경
-export async function updateMemberRole(memberId: string, roleId: string): Promise<boolean> {
+// 팀원 직책 변경 (role_id + 후방 호환 role 필드 동시 업데이트)
+export async function updateMemberRole(
+  memberId: string,
+  roleId: string,
+  legacyRole?: 'leader' | 'admin' | 'member'
+): Promise<boolean> {
+  const updateData: Record<string, string> = { role_id: roleId }
+  if (legacyRole) {
+    updateData.role = legacyRole
+  }
+
   const { error } = await supabase
     .from('team_members')
-    .update({ role_id: roleId })
+    .update(updateData)
     .eq('id', memberId)
 
   if (error) {
@@ -355,49 +426,56 @@ export async function updateMemberRole(memberId: string, roleId: string): Promis
 // 팀원 목록 조회 (직책 정보 포함)
 export async function getTeamMembersWithRoles(teamId: string): Promise<TeamMember[]> {
   try {
-    // team_roles 테이블 없이 기본 조회만 수행 (DB 마이그레이션 전까지)
     const { data, error } = await supabase
       .from('team_members')
       .select(`
         *,
-        user:users(id, email, name)
+        user:users(id, email, name),
+        team_role:team_roles(*)
       `)
       .eq('team_id', teamId)
       .eq('status', 'active')
 
     if (error) {
-      console.error('팀원 조회 오류:', error)
-      return []
+      // team_roles 조인 실패 시 기본 조회로 fallback
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('team_members')
+        .select(`
+          *,
+          user:users(id, email, name)
+        `)
+        .eq('team_id', teamId)
+        .eq('status', 'active')
+
+      if (fallbackError || !fallbackData) {
+        console.error('팀원 조회 오류:', fallbackError)
+        return []
+      }
+
+      return fallbackData.map(member => ({
+        ...member,
+        team_role: legacyRoleToTeamRole(member.role, teamId)
+      }))
     }
 
-    // 기존 role 필드를 기반으로 team_role 객체 생성
+    // role_id가 있고 team_role이 조인된 경우 그대로 사용, 아니면 legacy fallback
     return (data || []).map(member => ({
       ...member,
-      team_role: member.role === 'leader' ? {
-        id: 'default-leader',
-        team_id: teamId,
-        name: '인도자',
-        is_leader: true,
-        is_default: false,
-        sort_order: 1
-      } : member.role === 'admin' ? {
-        id: 'default-admin',
-        team_id: teamId,
-        name: '부리더',
-        is_leader: false,
-        is_default: false,
-        sort_order: 2
-      } : {
-        id: 'default-member',
-        team_id: teamId,
-        name: '팀원',
-        is_leader: false,
-        is_default: true,
-        sort_order: 10
-      }
+      team_role: member.team_role || legacyRoleToTeamRole(member.role, teamId)
     }))
   } catch (err) {
     console.error('팀원 조회 중 예외:', err)
     return []
   }
+}
+
+// 기존 role 필드를 TeamRole 객체로 변환 (후방 호환)
+function legacyRoleToTeamRole(role: string, teamId: string) {
+  if (role === 'leader') {
+    return { id: 'default-leader', team_id: teamId, name: '인도자', is_leader: true, is_default: false, sort_order: 1 }
+  }
+  if (role === 'admin') {
+    return { id: 'default-admin', team_id: teamId, name: '부리더', is_leader: false, is_default: false, sort_order: 2 }
+  }
+  return { id: 'default-member', team_id: teamId, name: '팀원', is_leader: false, is_default: true, sort_order: 10 }
 }
