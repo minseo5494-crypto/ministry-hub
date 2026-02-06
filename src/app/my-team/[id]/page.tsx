@@ -1465,17 +1465,17 @@ export default function TeamDetailPage() {
                       </div>
                       <div className="col-span-3 flex justify-end items-center gap-2">
                         <div className="flex gap-1">
-                          {/* 필기 노트에 복사 */}
+                          {/* 악보 에디터 */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               handleCopySetlistToNotes(setlist)
                             }}
                             disabled={copying}
-                            className="p-1.5 hover:bg-white rounded-lg border border-transparent hover:border-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-50"
-                            title="필기 노트에 복사"
+                            className="p-1.5 hover:bg-white rounded-lg border border-transparent hover:border-slate-100 text-slate-400 hover:text-indigo-500 disabled:opacity-50"
+                            title="악보 에디터"
                           >
-                            <Pencil size={16} />
+                            <Presentation size={16} />
                           </button>
                           {setlist.canEdit && (
                             <>
@@ -1572,10 +1572,10 @@ export default function TeamDetailPage() {
                             handleCopySetlistToNotes(setlist)
                           }}
                           disabled={copying}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-slate-600 hover:bg-slate-50 rounded-lg disabled:opacity-50"
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-indigo-600 hover:bg-indigo-50 rounded-lg disabled:opacity-50"
                         >
-                          <Pencil size={14} />
-                          <span>필기</span>
+                          <Presentation size={14} />
+                          <span>악보</span>
                         </button>
                         {setlist.canEdit && (
                           <>
