@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 9일
+**마지막 업데이트**: 2026년 2월 10일
 
 ---
 
@@ -19,32 +19,28 @@
 
 ---
 
-## 2. 최근 작업 (2026-02-09)
+## 2. 최근 작업 (2026-02-10)
 
 ### 완료된 작업
-- [x] **Agent Team으로 코드 리뷰 + iOS 호환성 검사 병렬 실행**
-- [x] **AI 검색 tempo 버그 수정**: HeroSection 버튼 클릭 시 `'빠른'` → `'빠름'` 통일
-- [x] **iOS Safari 호환성 개선**
-  - SheetMusicEditor 드래그 영역 `touch-action: none` 추가
-  - SongFormPositionModal 파트 태그 드래그 `touch-action: none` 추가
-  - SongFormModal 모바일 `h-[92vh]` → `h-[92dvh]` (주소바 대응)
-- [x] **코드 리뷰 기반 품질 개선**
-  - page.tsx: fetchSongs 중복 호출 제거
-  - page.tsx: normalizeText 컴포넌트 외부로 이동
-  - SongFormModal: deprecated `onKeyPress` → `onKeyDown`
-  - SetlistDevotionals: 삭제 실패 시 backup 배열로 안전한 롤백
-  - HeroSection: DOM 쿼리 → `useRef`로 React 패턴 준수
-- [x] **베타테스터 가이드 위치 변경** (마케팅 → 사용자가이드)
+- [x] **신규 사용자 데모 팀 자동 가입 기능**
+  - DB: `teams.is_demo` 컬럼 추가 + "새소망 찬양팀" 데모 팀/콘티/곡 데이터 생성
+  - `src/lib/demoTeam.ts`: `joinDemoTeam(userId)` 유틸 함수 (중복 방지, 실패 무시)
+  - `src/lib/auth.ts`: signUp + handleOAuthCallback에서 신규 사용자 시 자동 호출
+  - 마이그레이션 SQL: `supabase/migrations/20260210_demo_team_setup.sql` (Supabase에 적용 완료)
+- [x] **팀 콘티 악보 미리보기 더블탭 전체화면 기능**
+  - `src/app/my-team/[id]/setlist/[setlistId]/page.tsx`에 SheetMusicViewer 연동
+  - 데스크톱(더블클릭) + 모바일(더블탭 300ms 감지) 모두 지원
+  - PDF는 `pointer-events-none`으로 wrapper div가 이벤트 수신
 
-### 커밋 이력
-- `c2d67f8` refactor: 코드 리뷰 기반 품질 개선
-- `0b2e1af` docs: 베타테스터 가이드 위치 변경
-- `0dcd041` fix: AI 검색 tempo 버그 수정 및 iOS Safari 호환성 개선
+### 미커밋 변경사항 (커밋 필요)
+- `src/lib/demoTeam.ts` (신규)
+- `supabase/migrations/20260210_demo_team_setup.sql` (신규)
+- `src/lib/auth.ts`, `src/lib/supabase.ts`, `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` (수정)
 
-### 이전 작업 요약 (2/6 이전)
-- 커스텀 역할 시스템 활성화 + 역할 모달 동적화
-- 메인 페이지 히어로 섹션 리디자인
-- 송폼 설정 모바일 Preview 추가
+### 이전 작업 요약 (2/9)
+- 코드 리뷰 기반 품질 개선 + iOS Safari 호환성 개선
+- AI 검색 tempo 버그 수정
+- 메인 페이지 레이아웃 통일 및 히어로 섹션 조정
 
 ---
 
@@ -134,8 +130,9 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 코드 리뷰 기반 버그 수정 + 품질 개선 완료
-- page.tsx 대규모 리팩토링 필요 (다음 세션 우선 과제)
+- 데모 팀 자동 가입 기능 구현 완료 (DB 마이그레이션 적용됨)
+- 팀 콘티 악보 더블탭 전체화면 기능 추가 완료
+- 미커밋 변경사항 있음 → 커밋 필요
 - 베타 테스트 준비에 집중 권장 (2/20 마감)
 
 ---

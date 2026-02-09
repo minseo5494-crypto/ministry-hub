@@ -38,6 +38,7 @@ export interface Team {
   created_by: string;
   created_at?: string;
   updated_at?: string;
+  is_demo?: boolean;
 }
 
 export interface TeamMember {

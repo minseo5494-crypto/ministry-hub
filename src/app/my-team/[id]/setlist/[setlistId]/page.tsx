@@ -39,6 +39,7 @@ import { useDownload } from '@/hooks/useDownload'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import { usePersonalSetlistView } from '@/hooks/usePersonalSetlistView'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
+import SheetMusicViewer from '@/components/SheetMusicViewer'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
 import ImagePreviewModal from '@/components/ImagePreviewModal'
 import SetlistDevotionals from '@/components/SetlistDevotionals'
@@ -83,6 +84,7 @@ interface SortableSongItemProps {
   onOpenSheetViewer: (song: SetlistSong) => void
   onOpenYoutubeModal: (song: Song) => void
   onOpenNoteModal: (song: SetlistSong) => void  // ✅ 추가
+  onOpenSheetFullscreen: (song: Song) => void
   isPreviewOpen: boolean
   totalSongs: number
   // 개인화 관련 props
@@ -103,6 +105,7 @@ function SortableSongItem({
   onOpenSheetViewer,
   onOpenYoutubeModal,
   onOpenNoteModal,  // ✅ 추가
+  onOpenSheetFullscreen,
   isPreviewOpen,
   totalSongs,
   personalNote,
@@ -120,6 +123,8 @@ function SortableSongItem({
   } = useSortable({ id: song.id })
   // 메모 펼침 상태
   const [isNoteExpanded, setIsNoteExpanded] = useState(false)
+  // 더블탭 감지용 ref
+  const lastTapRef = useRef<number>(0)
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -301,19 +306,35 @@ function SortableSongItem({
             <div>
               <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
                 <span className="material-symbols-outlined text-base">description</span> 악보
+                <span className="text-xs text-gray-400 font-normal ml-1">(더블탭하여 전체화면)</span>
               </h4>
-              {song.songs.file_type === 'pdf' ? (
-                <iframe
-                  src={`${song.songs.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
-                  className="w-full h-[700px] rounded-lg border border-gray-200"
-                />
-              ) : (
-                <img
-                  src={song.songs.file_url}
-                  alt={`${song.songs.song_name} 악보`}
-                  className="w-full h-auto rounded-lg border border-gray-200"
-                />
-              )}
+              <div
+                onDoubleClick={(e) => { e.preventDefault(); onOpenSheetFullscreen(song.songs) }}
+                onTouchEnd={() => {
+                  const now = Date.now()
+                  if (now - lastTapRef.current < 300) {
+                    onOpenSheetFullscreen(song.songs)
+                    lastTapRef.current = 0
+                  } else {
+                    lastTapRef.current = now
+                  }
+                }}
+                style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                className="cursor-pointer"
+              >
+                {song.songs.file_type === 'pdf' ? (
+                  <iframe
+                    src={`${song.songs.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                    className="w-full h-[700px] rounded-lg border border-gray-200 pointer-events-none"
+                  />
+                ) : (
+                  <img
+                    src={song.songs.file_url}
+                    alt={`${song.songs.song_name} 악보`}
+                    className="w-full h-auto rounded-lg border border-gray-200"
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -395,6 +416,9 @@ export default function TeamSetlistDetailPage() {
 
   // 🎵 유튜브 모달 상태 추가
   const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
+
+  // 🔍 전체화면 뷰어 상태
+  const [simpleViewerSong, setSimpleViewerSong] = useState<Song | null>(null)
 
   // 📝 메모 수정 모달 상태
 const [noteModal, setNoteModal] = useState<{
@@ -901,6 +925,12 @@ const canEdit = () => {
     song.song_name.toLowerCase().includes(searchText.toLowerCase()) ||
     song.team_name?.toLowerCase().includes(searchText.toLowerCase())
   )
+
+  // 전체화면 뷰어 열기
+  const openSimpleViewer = (song: Song) => {
+    if (!song.file_url) return
+    setSimpleViewerSong(song)
+  }
 
   // 미리보기 토글
   const togglePreview = (songId: string) => {
@@ -1559,6 +1589,7 @@ const saveNote = async () => {
             onOpenSheetViewer={openSheetViewerForSong}
             onOpenYoutubeModal={setYoutubeModalSong}
             onOpenNoteModal={openNoteModal}
+            onOpenSheetFullscreen={openSimpleViewer}
             isPreviewOpen={previewStates[song.id] || false}
             totalSongs={songs.length}
             userNotes={songNotesMap[song.songs.id] || []}
@@ -1970,6 +2001,16 @@ const saveNote = async () => {
     </div>
   </div>
 )}
+
+      {/* 🔍 전체화면 악보 뷰어 */}
+      {simpleViewerSong && simpleViewerSong.file_url && (
+        <SheetMusicViewer
+          fileUrl={simpleViewerSong.file_url}
+          fileType={simpleViewerSong.file_type === 'pdf' ? 'pdf' : 'image'}
+          songName={simpleViewerSong.song_name}
+          onClose={() => setSimpleViewerSong(null)}
+        />
+      )}
 
       {/* 🎵 SheetMusicEditor - 다중 곡 악보 에디터 */}
       {showSheetMusicEditor && sheetEditorSongs.length > 0 && (
