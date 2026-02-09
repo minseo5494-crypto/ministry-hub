@@ -139,7 +139,12 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
   // 드래그 상태
   const [draggingItem, setDraggingItem] = useState<{ type: 'songForm' | 'partTag', id?: string } | null>(null)
+  const draggingItemRef = useRef<{ type: 'songForm' | 'partTag', id?: string } | null>(null)
   const [draggingNewTag, setDraggingNewTag] = useState<string | null>(null)
+
+  // 스타일 refs (native touch handler에서 최신 상태 접근용)
+  const songFormStylesRef = useRef(songFormStyles)
+  const partTagStylesRef = useRef(partTagStyles)
 
   // 폰트 로드 상태
   const [fontLoaded, setFontLoaded] = useState(false)
@@ -158,6 +163,11 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }
     loadFont()
   }, [])
+
+  // ref 동기화
+  useEffect(() => { draggingItemRef.current = draggingItem }, [draggingItem])
+  useEffect(() => { songFormStylesRef.current = songFormStyles }, [songFormStyles])
+  useEffect(() => { partTagStylesRef.current = partTagStyles }, [partTagStyles])
 
   useEffect(() => {
     if (songsWithForms.length === 0) {
@@ -541,57 +551,9 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     }
   }
 
-  const handlePreviewTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault() // 기본 터치 동작 방지
-    e.stopPropagation()
-
-    const pos = getPositionFromEvent(e)
-    if (!pos) return
-
-    // 송폼 클릭 체크 - 히트 영역 대폭 확대
-    if (currentForms.length > 0) {
-      const formStyle = currentFormStyle
-      const formX = formStyle.x
-      const formY = formStyle.y
-      const hitRadiusX = 40 // 가로 히트 영역 (송폼 텍스트가 가로로 길기 때문)
-      const hitRadiusY = 8  // 세로 히트 영역
-
-      if (Math.abs(pos.x - formX) < hitRadiusX && Math.abs(pos.y - formY) < hitRadiusY) {
-        setDraggingItem({ type: 'songForm' })
-        return
-      }
-    }
-
-    // 파트 태그 클릭 체크 - 히트 영역 확대
-    for (const tag of currentPartTags) {
-      const hitRadius = 12 // 터치 히트 영역 확대
-      if (Math.abs(pos.x - tag.x) < hitRadius && Math.abs(pos.y - tag.y) < hitRadius) {
-        setDraggingItem({ type: 'partTag', id: tag.id })
-        return
-      }
-    }
-  }
-
   const handlePreviewMouseMove = (e: React.MouseEvent) => {
     if (!draggingItem) return
 
-    const pos = getPositionFromEvent(e)
-    if (!pos) return
-
-    const x = Math.max(5, Math.min(95, pos.x))
-    const y = Math.max(3, Math.min(97, pos.y))
-
-    if (draggingItem.type === 'songForm') {
-      updateFormStyle({ x, y })
-    } else if (draggingItem.type === 'partTag' && draggingItem.id) {
-      updatePartTag(draggingItem.id, { x, y })
-    }
-  }
-
-  const handlePreviewTouchMove = (e: React.TouchEvent) => {
-    if (!draggingItem) return
-
-    e.preventDefault()
     const pos = getPositionFromEvent(e)
     if (!pos) return
 
@@ -609,9 +571,109 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
     setDraggingItem(null)
   }
 
-  const handlePreviewTouchEnd = () => {
-    setDraggingItem(null)
-  }
+  // 📱 Native touch event listeners (passive: false로 등록하여 iOS Safari에서 실시간 드래그 지원)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const getTouchPos = (e: TouchEvent) => {
+      const rect = container.getBoundingClientRect()
+      if (e.touches.length === 0) return null
+      const clientX = e.touches[0].clientX
+      const clientY = e.touches[0].clientY
+      const x = ((clientX - rect.left) / rect.width) * 100
+      const y = ((clientY - rect.top) / rect.height) * 100
+      return { x, y }
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      const pos = getTouchPos(e)
+      if (!pos) return
+
+      // 송폼 클릭 체크 - 히트 영역 확대
+      const styles = songFormStylesRef.current
+      const songId = currentSong.id
+      const formStyle = styles[songId] || { x: 50, y: 5, fontSize: 36, color: '#3B82F6', opacity: 1 }
+
+      if (currentForms.length > 0) {
+        const hitRadiusX = 40
+        const hitRadiusY = 8
+        if (Math.abs(pos.x - formStyle.x) < hitRadiusX && Math.abs(pos.y - formStyle.y) < hitRadiusY) {
+          const item = { type: 'songForm' as const }
+          setDraggingItem(item)
+          draggingItemRef.current = item
+          return
+        }
+      }
+
+      // 파트 태그 클릭 체크
+      const tags = (partTagStylesRef.current[songId] || []).filter(
+        t => (t.pageIndex || 0) === currentPageIndex
+      )
+      for (const tag of tags) {
+        const hitRadius = 12
+        if (Math.abs(pos.x - tag.x) < hitRadius && Math.abs(pos.y - tag.y) < hitRadius) {
+          const item = { type: 'partTag' as const, id: tag.id }
+          setDraggingItem(item)
+          draggingItemRef.current = item
+          return
+        }
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const item = draggingItemRef.current
+      if (!item) return
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      const rect = container.getBoundingClientRect()
+      if (e.touches.length === 0) return
+      const clientX = e.touches[0].clientX
+      const clientY = e.touches[0].clientY
+      const x = Math.max(5, Math.min(95, ((clientX - rect.left) / rect.width) * 100))
+      const y = Math.max(3, Math.min(97, ((clientY - rect.top) / rect.height) * 100))
+
+      const songId = currentSong.id
+
+      if (item.type === 'songForm') {
+        setSongFormStyles(prev => ({
+          ...prev,
+          [songId]: {
+            ...(prev[songId] || { x: 50, y: 5, fontSize: 36, color: '#3B82F6', opacity: 1 }),
+            x, y
+          }
+        }))
+      } else if (item.type === 'partTag' && item.id) {
+        const tagId = item.id
+        setPartTagStyles(prev => ({
+          ...prev,
+          [songId]: (prev[songId] || []).map(tag =>
+            tag.id === tagId ? { ...tag, x, y } : tag
+          )
+        }))
+      }
+    }
+
+    const handleTouchEnd = () => {
+      setDraggingItem(null)
+      draggingItemRef.current = null
+    }
+
+    container.addEventListener('touchstart', handleTouchStart, { passive: false })
+    container.addEventListener('touchmove', handleTouchMove, { passive: false })
+    container.addEventListener('touchend', handleTouchEnd, { passive: false })
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart)
+      container.removeEventListener('touchmove', handleTouchMove)
+      container.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [currentSong.id, currentForms.length, currentPageIndex])
 
   // 파트 태그 드롭 (마우스)
   const handleDrop = (e: React.DragEvent) => {
@@ -1095,9 +1157,6 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                 onMouseMove={handlePreviewMouseMove}
                 onMouseUp={handlePreviewMouseUp}
                 onMouseLeave={handlePreviewMouseUp}
-                onTouchStart={handlePreviewTouchStart}
-                onTouchMove={handlePreviewTouchMove}
-                onTouchEnd={handlePreviewTouchEnd}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
               >

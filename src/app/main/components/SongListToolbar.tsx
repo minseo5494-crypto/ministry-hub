@@ -196,13 +196,13 @@ export default function SongListToolbar({
         {user && mySheetNotes.length > 0 && (
           <button
             onClick={() => setFilters({ ...filters, includeMyNotes: !filters.includeMyNotes })}
-            className={`h-9 w-[72px] flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all ${filters.includeMyNotes
-              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 w-auto px-3'
+            className={`h-9 px-3 flex items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${filters.includeMyNotes
+              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
           >
             <Pencil size={12} className="flex-shrink-0" />
-            <span>내 필기</span>
+            <span className="whitespace-nowrap">내 필기</span>
             {filters.includeMyNotes && (
               <span className="text-[9px] bg-purple-200 px-1 rounded-full">{mySheetNotes.length}</span>
             )}
