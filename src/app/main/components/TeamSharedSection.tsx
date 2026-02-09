@@ -15,7 +15,7 @@ export default function TeamSharedSection({ setlists, loading, onSetlistClick }:
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4">
           우리 팀 최근 콘티
         </h2>
@@ -45,7 +45,7 @@ export default function TeamSharedSection({ setlists, loading, onSetlistClick }:
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg md:text-xl font-bold text-gray-900">
           우리 팀 최근 콘티
@@ -77,7 +77,7 @@ export default function TeamSharedSection({ setlists, loading, onSetlistClick }:
             onClick={() => onSetlistClick(setlist.id, setlist.team_id)}
             className="flex-shrink-0 w-64 md:w-72 snap-start text-left group"
           >
-            <div className="relative bg-gradient-to-br from-violet-300 to-purple-400 rounded-xl p-4 h-36 flex flex-col justify-between
+            <div className="relative bg-violet-300 rounded-xl p-4 h-36 flex flex-col justify-between
               shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
               {/* 팀명 배지 */}
               <div className="flex items-center justify-between">

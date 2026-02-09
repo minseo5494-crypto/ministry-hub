@@ -1568,8 +1568,8 @@ export default function MainPage() {
         />
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-3 lg:gap-6">
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className={`flex flex-col lg:flex-row ${showFilterPanel ? 'gap-3 lg:gap-6' : 'gap-0'}`}>
           {/* 필터 패널 */}
           <div
             className={`${showFilterPanel ? 'w-64 lg:w-80' : 'w-0'} transition-all duration-300 overflow-hidden ${isMobile && showFilterPanel ? 'fixed left-0 top-0 h-full z-40 bg-white shadow-xl pt-4' : ''}`}

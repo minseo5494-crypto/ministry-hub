@@ -73,16 +73,16 @@ export default function HeroSection({
 
         {/* 제목 텍스트 - 두 줄 */}
         <div className="text-center mb-3 md:mb-12 pl-16 md:pl-0">
-          <h1 className="text-[28px] md:text-4xl font-bold text-gray-900 leading-snug">
+          <h1 className="text-[22px] md:text-4xl font-bold text-gray-900 leading-snug">
             필요한 찬양악보를<br />
             지금 바로 검색하세요
           </h1>
         </div>
 
         {/* 검색바 + 양 캐릭터 */}
-        <div className="max-w-3xl mx-auto mb-8 md:mb-10 relative">
+        <div className="max-w-5xl mx-auto mb-8 md:mb-10 relative">
           {/* 양 캐릭터 - 검색창 왼쪽 위에 손만 살짝 걸치도록 */}
-          <div className="absolute -top-16 -left-2 md:-top-20 md:-left-4 w-20 h-20 md:w-24 md:h-24 z-10 pointer-events-none">
+          <div className="absolute -top-16 left-4 md:-top-[6.5rem] md:left-10 w-20 h-20 md:w-32 md:h-32 z-10 pointer-events-none">
             <Image
               src="/images/sheep-character.png"
               alt="WORSHEEP 양 캐릭터"
@@ -258,7 +258,7 @@ export default function HeroSection({
         </div>
 
         {/* 통계 카드 */}
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <StatsRow songs={songs} selectedSongs={selectedSongs} />
         </div>
       </div>
