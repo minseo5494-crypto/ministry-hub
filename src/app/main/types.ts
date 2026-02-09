@@ -61,6 +61,17 @@ export type SongWithNote = Song & {
   originalSongId?: string  // 원본 곡 ID (저장 시 사용)
 }
 
+export type TeamSetlistCard = {
+  id: string
+  title: string
+  service_date: string
+  service_type: string
+  team_id: string
+  team_name: string
+  song_count: number
+  songs: { id: string; song_name: string; team_name?: string }[]
+}
+
 export type MainPageProps = {
   // Props can be extended as needed
 }

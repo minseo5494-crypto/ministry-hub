@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase, Song, User, Folder, PageAnnotation, ThemeCount, fetchThemeCounts, SeasonCount, fetchSeasons, parseThemes } from '@/lib/supabase'
 import { SongFormStyle, PartTagStyle, PianoScoreElement, DrumScoreElement, EditorSong } from '@/components/SheetMusicEditor/types'
 import { getCurrentUser, signOut } from '@/lib/auth'
@@ -20,6 +20,8 @@ import {
   Header,
   MobileMenu,
   HeroSection,
+  TeamSharedSection,
+  RecommendedSection,
   SelectedSongsBar,
   SongListToolbar,
   SongList,
@@ -36,7 +38,7 @@ import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
 import OnboardingGuide from '@/components/OnboardingGuide'
 
 // Types
-import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote, SongWithNote } from './types'
+import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote, SongWithNote, TeamSetlistCard } from './types'
 
 declare global {
   interface Window {
@@ -246,6 +248,10 @@ export default function MainPage() {
   // Weekly popular song IDs for sorting (이번 주 많이 찾은 곡 정렬용)
   const [weeklyPopularSongIds, setWeeklyPopularSongIds] = useState<Map<string, number>>(new Map())
 
+  // Team setlists for shared section
+  const [teamSetlists, setTeamSetlists] = useState<TeamSetlistCard[]>([])
+  const [teamSetlistsLoading, setTeamSetlistsLoading] = useState(false)
+
   // Filter state
   const [filters, setFilters] = useState<Filters>(initialFilters)
 
@@ -411,6 +417,7 @@ export default function MainPage() {
 
   useEffect(() => {
     if (user !== null) fetchSongs()
+    fetchTeamSetlists()
   }, [user, userTeams])
 
   useEffect(() => {
@@ -827,6 +834,81 @@ export default function MainPage() {
       setUserTeams([])
     }
   }
+
+  const fetchTeamSetlists = async () => {
+    if (!user || userTeams.length === 0) {
+      setTeamSetlists([])
+      return
+    }
+    setTeamSetlistsLoading(true)
+    try {
+      const allSetlists: TeamSetlistCard[] = []
+
+      for (const team of userTeams) {
+        const { data, error } = await supabase
+          .from('team_setlists')
+          .select('id, title, service_date, service_type')
+          .eq('team_id', team.id)
+          .order('service_date', { ascending: false })
+          .limit(5)
+
+        if (error) continue
+
+        for (const setlist of data || []) {
+          const { data: songData } = await supabase
+            .from('team_setlist_songs')
+            .select('song_id, songs(id, song_name, team_name)')
+            .eq('setlist_id', setlist.id)
+            .order('order_number', { ascending: true })
+            .limit(3)
+
+          allSetlists.push({
+            id: setlist.id,
+            title: setlist.title,
+            service_date: setlist.service_date,
+            service_type: setlist.service_type,
+            team_id: team.id,
+            team_name: team.name,
+            song_count: songData?.length || 0,
+            songs: (songData || []).map((s: any) => ({
+              id: s.songs?.id || s.song_id,
+              song_name: s.songs?.song_name || '',
+              team_name: s.songs?.team_name
+            }))
+          })
+        }
+      }
+
+      // 날짜 최신순 정렬
+      allSetlists.sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
+      setTeamSetlists(allSetlists.slice(0, 10))
+    } catch (error) {
+      console.error('Error fetching team setlists:', error)
+    } finally {
+      setTeamSetlistsLoading(false)
+    }
+  }
+
+  // 추천 악보: 주간 인기곡 기반 상위 12곡
+  const recommendedSongs = useMemo(() => {
+    if (weeklyPopularSongIds.size === 0 || songs.length === 0) return []
+    const sorted = [...songs]
+      .filter(s => weeklyPopularSongIds.has(s.id))
+      .sort((a, b) => {
+        const aRank = weeklyPopularSongIds.get(a.id) ?? Infinity
+        const bRank = weeklyPopularSongIds.get(b.id) ?? Infinity
+        return aRank - bRank
+      })
+    return sorted.slice(0, 12)
+  }, [songs, weeklyPopularSongIds])
+
+  // 사용자 표시 이름
+  const userDisplayName = useMemo(() => {
+    if (!user) return ''
+    if (user.name) return user.name
+    if (user.email) return user.email.split('@')[0]
+    return ''
+  }, [user])
 
   const fetchLikeData = async () => {
     if (!user) return
@@ -1433,7 +1515,35 @@ export default function MainPage() {
         setAiSearchKeywords={setAiSearchKeywords}
         searchWithAI={searchWithAI}
         clearAIResult={clearAIResult}
+        userTeams={userTeams}
       />
+
+      {/* 팀 공유 세트리스트 섹션 */}
+      {(teamSetlistsLoading || teamSetlists.length > 0) && (
+        <TeamSharedSection
+          setlists={teamSetlists}
+          loading={teamSetlistsLoading}
+          onSetlistClick={(setlistId, teamId) => {
+            router.push(`/my-team/${teamId}?setlist=${setlistId}`)
+          }}
+        />
+      )}
+
+      {/* 추천 악보 섹션 */}
+      {recommendedSongs.length > 0 && (
+        <RecommendedSection
+          songs={recommendedSongs}
+          userName={userDisplayName}
+          likedSongs={likedSongs}
+          onToggleLike={toggleLike}
+          onSongSelect={(song) => {
+            if (song.file_url) {
+              setPreviewSong(song)
+            }
+          }}
+          onYoutubeClick={(song) => setYoutubeModalSong(song)}
+        />
+      )}
 
       <SelectedSongsBar
         user={user}

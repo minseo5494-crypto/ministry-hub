@@ -1,7 +1,9 @@
 'use client'
 
+import Image from 'next/image'
 import { Search } from 'lucide-react'
-import { Song, Filters } from '../types'
+import { Song, Filters, UserTeam } from '../types'
+import StatsRow from './StatsRow'
 
 type AISearchResult = {
   success: boolean
@@ -29,6 +31,7 @@ type HeroSectionProps = {
   setAiSearchKeywords: (keywords: string[]) => void
   searchWithAI: (query: string) => Promise<AISearchResult | null>
   clearAIResult: () => void
+  userTeams: UserTeam[]
 }
 
 export default function HeroSection({
@@ -43,36 +46,51 @@ export default function HeroSection({
   aiSearchKeywords,
   setAiSearchKeywords,
   searchWithAI,
-  clearAIResult
+  clearAIResult,
+  userTeams
 }: HeroSectionProps) {
   return (
-    <div
-      className="relative bg-cover bg-center py-16"
-      style={{
-        backgroundImage: `url('/images/church-hero.jpg')`
-      }}
-    >
+    <div className="relative bg-gradient-to-b from-gray-50 to-white pt-10 pb-6 md:pt-12 md:pb-8">
       <div className="max-w-7xl mx-auto px-4">
-        {/* 제목 */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 hero-title" style={{
-            color: '#FFFFFF',
-            textShadow: '0 2px 8px rgba(0,0,0,0.8)'
-          }}>
-            찬양으로 하나되는 예배
+        {/* 팀 배지 */}
+        {userTeams.length > 0 && (
+          <div className="flex justify-end mb-4">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {userTeams.map(team => (
+                <span
+                  key={team.id}
+                  className="text-xs font-medium text-violet-700 bg-violet-100 px-2.5 py-1 rounded-full"
+                >
+                  {team.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 제목 텍스트 - 두 줄 */}
+        <div className="text-center mb-3 md:mb-12 pl-16 md:pl-0">
+          <h1 className="text-[28px] md:text-4xl font-bold text-gray-900 leading-snug">
+            필요한 찬양악보를<br />
+            지금 바로 검색하세요
           </h1>
-          <p className="text-lg md:text-xl" style={{
-            color: '#FFFFFF',
-            opacity: 0.95,
-            textShadow: '0 2px 8px rgba(0,0,0,0.8)'
-          }}>
-            <span className="whitespace-nowrap">WORSHEEP과 함께 은혜로운</span>{' '}
-            <span className="whitespace-nowrap">예배를 준비하세요</span>
-          </p>
         </div>
 
-        {/* 검색바 */}
-        <div className="max-w-3xl mx-auto mb-8">
+        {/* 검색바 + 양 캐릭터 */}
+        <div className="max-w-3xl mx-auto mb-8 md:mb-10 relative">
+          {/* 양 캐릭터 - 검색창 왼쪽 위에 손만 살짝 걸치도록 */}
+          <div className="absolute -top-16 -left-2 md:-top-20 md:-left-4 w-20 h-20 md:w-24 md:h-24 z-10 pointer-events-none">
+            <Image
+              src="/images/sheep-character.png"
+              alt="WORSHEEP 양 캐릭터"
+              width={96}
+              height={96}
+              className="object-contain"
+              style={{ width: '100%', height: '100%' }}
+              priority
+            />
+          </div>
+
           <div className={`relative rounded-xl p-[2px] transition-all duration-300 ${isAISearchEnabled
             ? 'bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-500 shadow-lg shadow-purple-500/30'
             : 'bg-transparent'
@@ -82,9 +100,9 @@ export default function HeroSection({
               <input
                 type="text"
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : `찬양곡 제목, 아티스트${filters.includeLyrics ? ', 가사' : ''}로 검색...`}
-                className={`w-full pl-12 pr-36 py-4 text-lg text-gray-900 bg-white rounded-xl shadow-xl focus:outline-none ${isAISearchEnabled
+                className={`w-full pl-12 pr-36 py-4 text-base md:text-lg text-gray-900 bg-white rounded-xl shadow-lg focus:outline-none ${isAISearchEnabled
                   ? 'focus:ring-2 focus:ring-purple-400'
-                  : 'focus:ring-4 focus:ring-blue-500 border-2 border-white/50'
+                  : 'focus:ring-2 focus:ring-violet-400 border border-gray-200'
                   }`}
                 value={filters.searchText}
                 onChange={(e) => {
@@ -113,19 +131,15 @@ export default function HeroSection({
                     }
                   }
                 }}
-                style={{ backgroundColor: 'white' }}
+                style={{ backgroundColor: 'white', fontSize: '16px' }}
               />
               {/* 버튼 영역 */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                {/* 검색 버튼 - 항상 표시 */}
                 <button
                   onClick={async (e) => {
-                    // 키보드 닫기 위해 input blur
                     const input = (e.target as HTMLElement).closest('.relative')?.querySelector('input');
                     input?.blur();
-
                     if (isAISearchEnabled && filters.searchText.trim() && !isAISearching) {
-                      // AI 모드: AI 검색 실행
                       const result = await searchWithAI(filters.searchText)
                       if (result?.success && result.filters) {
                         const aiFilters = result.filters
@@ -142,7 +156,6 @@ export default function HeroSection({
                         })
                       }
                     }
-                    // 일반 모드: 실시간 검색이라 별도 동작 불필요 (키보드만 닫힘)
                   }}
                   disabled={isAISearchEnabled && (!filters.searchText.trim() || isAISearching)}
                   className={`p-2.5 rounded-xl transition-all ${
@@ -161,7 +174,6 @@ export default function HeroSection({
                     <Search size={20} />
                   )}
                 </button>
-                {/* AI 검색 토글 */}
                 <button
                   onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
                   className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 ${isAISearchEnabled
@@ -187,9 +199,10 @@ export default function HeroSection({
                   type="checkbox"
                   checked={filters.includeLyrics}
                   onChange={(e) => setFilters({ ...filters, includeLyrics: e.target.checked })}
-                  className="w-4 h-4 rounded border-white/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-white/20"
+                  className="w-3 h-3 rounded border-gray-300 text-violet-500 focus:ring-violet-500 focus:ring-offset-0"
+                  style={{ minHeight: '12px', minWidth: '12px', width: '12px', height: '12px' }}
                 />
-                <span className="text-sm font-medium" style={{ color: '#FFFFFF', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
+                <span className="text-sm font-medium text-gray-600">
                   가사 포함 검색
                 </span>
               </label>
@@ -198,42 +211,41 @@ export default function HeroSection({
 
           {/* AI 검색 결과 피드백 */}
           {aiSearchResult && aiSearchResult.success && (
-            <div className="mt-3 bg-white/10 backdrop-blur rounded-lg p-3 text-white text-sm">
+            <div className="mt-3 bg-violet-50 border border-violet-200 rounded-lg p-3 text-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-medium flex items-center gap-1">
+                <span className="font-medium text-violet-700 flex items-center gap-1">
                   ✨ AI 검색 해석 결과
                 </span>
                 <button
                   onClick={clearAIResult}
-                  className="text-white/60 hover:text-white text-xs"
+                  className="text-violet-400 hover:text-violet-600 text-xs"
                 >
                   닫기
                 </button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* 가사 검색 키워드 표시 (lyricsKeywords) */}
                 {aiSearchResult.filters.lyricsKeywords?.length && aiSearchResult.filters.lyricsKeywords.length > 0 && (
-                  <span className="px-2 py-1 bg-purple-100/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">
                     🔍 {aiSearchResult.filters.lyricsKeywords.slice(0, 5).join(', ')}{aiSearchResult.filters.lyricsKeywords.length > 5 ? ' ...' : ''}
                   </span>
                 )}
                 {aiSearchResult.filters.season && (
-                  <span className="px-2 py-1 bg-green-100/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
                     📅 {aiSearchResult.filters.season}
                   </span>
                 )}
                 {aiSearchResult.filters.tempo && (
-                  <span className="px-2 py-1 bg-orange-500/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
                     🎵 {aiSearchResult.filters.tempo === 'slow' ? '느린' : aiSearchResult.filters.tempo === 'fast' ? '빠른' : '보통'} 템포
                   </span>
                 )}
                 {aiSearchResult.filters.key && (
-                  <span className="px-2 py-1 bg-blue-100/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
                     🎹 {aiSearchResult.filters.key} Key
                   </span>
                 )}
                 {aiSearchResult.filters.mood && (
-                  <span className="px-2 py-1 bg-pink-500/30 rounded text-xs">
+                  <span className="px-2 py-1 bg-pink-100 text-pink-700 rounded text-xs">
                     💭 {aiSearchResult.filters.mood}
                   </span>
                 )}
@@ -243,25 +255,8 @@ export default function HeroSection({
         </div>
 
         {/* 통계 카드 */}
-        <div className="grid grid-cols-4 gap-2 md:gap-4">
-          <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
-            <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>{songs.length}+</div>
-            <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>찬양곡</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
-            <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>
-              {new Set(songs.map(s => s.team_name).filter(Boolean)).size}+
-            </div>
-            <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>아티스트</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
-            <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>{selectedSongs.length}</div>
-            <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>선택한 곡</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-2 md:p-4 text-center">
-            <div className="text-lg md:text-2xl font-semibold" style={{ color: '#ffffff' }}>12</div>
-            <div className="text-[10px] md:text-xs opacity-80" style={{ color: '#ffffff' }}>Key</div>
-          </div>
+        <div className="max-w-3xl mx-auto">
+          <StatsRow songs={songs} selectedSongs={selectedSongs} />
         </div>
       </div>
     </div>
