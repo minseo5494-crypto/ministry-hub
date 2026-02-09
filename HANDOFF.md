@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 6일
+**마지막 업데이트**: 2026년 2월 9일
 
 ---
 
@@ -19,45 +19,46 @@
 
 ---
 
-## 2. 최근 작업 (2026-02-06)
+## 2. 최근 작업 (2026-02-09)
 
 ### 완료된 작업
-- [x] **커스텀 역할 시스템 활성화**: `team_roles` DB 연동
-  - `getTeamRoles()`: 항상 기본값 반환 → DB 조회 + fallback
-  - `getTeamMembersWithRoles()`: `role_id` 기반 `team_roles` 조인 추가
-  - `fetchPermissions()`: `role_id` 우선 조회, 없으면 legacy `role` 필드 사용
-  - `updateMemberRole()`: `role_id` + legacy `role` 동시 업데이트
-- [x] **역할 변경 모달 동적화** (settings/page.tsx)
-  - 하드코딩 3개 역할 → DB에서 로드한 동적 역할 목록
-  - "새 역할 추가" 인라인 폼 (이름 입력 + 권한 수준 선택)
-  - 멤버 목록에 커스텀 역할 이름 표시
+- [x] **Agent Team으로 코드 리뷰 + iOS 호환성 검사 병렬 실행**
+- [x] **AI 검색 tempo 버그 수정**: HeroSection 버튼 클릭 시 `'빠른'` → `'빠름'` 통일
+- [x] **iOS Safari 호환성 개선**
+  - SheetMusicEditor 드래그 영역 `touch-action: none` 추가
+  - SongFormPositionModal 파트 태그 드래그 `touch-action: none` 추가
+  - SongFormModal 모바일 `h-[92vh]` → `h-[92dvh]` (주소바 대응)
+- [x] **코드 리뷰 기반 품질 개선**
+  - page.tsx: fetchSongs 중복 호출 제거
+  - page.tsx: normalizeText 컴포넌트 외부로 이동
+  - SongFormModal: deprecated `onKeyPress` → `onKeyDown`
+  - SetlistDevotionals: 삭제 실패 시 backup 배열로 안전한 롤백
+  - HeroSection: DOM 쿼리 → `useRef`로 React 패턴 준수
+- [x] **베타테스터 가이드 위치 변경** (마케팅 → 사용자가이드)
 
-### 커밋되지 않은 변경사항 (⚠️)
-- `src/hooks/useTeamPermissions.ts` — 커스텀 역할 시스템 활성화
-- `src/app/my-team/[id]/settings/page.tsx` — 역할 모달 동적화
-- `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` — (이전 세션 변경)
-- `src/components/SetlistDevotionals.tsx` — (이전 세션, 새 파일)
-- `supabase/migrations/20260206_setlist_devotional*.sql` — (이전 세션, 새 파일)
-- `docs/개발자_상담_질문지.md` — (이전 세션, 새 파일)
-- `docs/내부/교회_엔티티_구조_변경_계획.md` — (삭제됨)
+### 커밋 이력
+- `c2d67f8` refactor: 코드 리뷰 기반 품질 개선
+- `0b2e1af` docs: 베타테스터 가이드 위치 변경
+- `0dcd041` fix: AI 검색 tempo 버그 수정 및 iOS Safari 호환성 개선
 
-### 이전 작업 (1/30 이전)
-- 송폼 편집 모달 디자인 개선
-- 그리드 뷰 제거, 네비게이션 통일
-- 다크모드 제거, 아이패드 에디터 헤더 개선
+### 이전 작업 요약 (2/6 이전)
+- 커스텀 역할 시스템 활성화 + 역할 모달 동적화
+- 메인 페이지 히어로 섹션 리디자인
+- 송폼 설정 모바일 Preview 추가
 
 ---
 
 ## 3. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **커밋되지 않은 변경사항 정리/커밋** — 위 변경사항 검토 후 커밋
-2. [ ] **커스텀 역할 기능 실제 테스트** — 팀 설정에서 역할 추가/할당/표시 확인
-3. [ ] **세트리스트 묵상가이드 기능 완성** (setlist devotionals 관련 파일들)
+1. [ ] **page.tsx 거대 컴포넌트 분리** — 1839줄, useState 50개+, useEffect 20개+를 커스텀 훅으로 분리 (예: `useSongManagement`, `useFilterLogic`, `useLikeSystem`)
+2. [ ] **page.tsx `as any` 타입 개선** — Song 타입에 `like_count` 등 필드 추가, 6곳 수정
+3. [ ] **page.tsx 필터 useEffect 최적화** — 250줄 useEffect(의존성 8개)를 `useMemo`로 전환 또는 분리
 
 ### 단기 (베타 전 - 2월 20일까지)
 - [ ] 테스터 모집 및 피드백 수집 체계 구축
 - [ ] UI/UX 개선 (디자이너 합류 시)
+- [ ] 커스텀 역할 기능 실제 테스트
 
 ### 중기 (베타 기간)
 - [ ] 베타 피드백 반영
@@ -72,18 +73,20 @@
 | 기능 | 경로 |
 |------|------|
 | 메인 페이지 | `src/app/main/page.tsx` |
+| 히어로 섹션 | `src/app/main/components/HeroSection.tsx` |
 | AI 검색 API | `src/app/api/ai-search/route.ts` |
 | 팀 설정 페이지 | `src/app/my-team/[id]/settings/page.tsx` |
 | 팀 권한 훅 | `src/hooks/useTeamPermissions.ts` |
-| 직책 관리 컴포넌트 | `src/components/TeamRolesManager.tsx` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
 | 송폼 편집 모달 | `src/components/SongFormPositionModal.tsx` |
+| 송폼 모달 | `src/components/SongFormModal.tsx` |
+| 묵상 가이드 | `src/components/SetlistDevotionals.tsx` |
 
 ### 문서
 | 문서 | 경로 |
 |------|------|
-| 사업계획서 | `docs/사업계획서_WORSHEEP.md` |
-| 베타 테스터 가이드 | `docs/베타테스터_가이드.md` |
+| 사업계획서 | `docs/사업계획서/` |
+| 베타 테스터 가이드 | `docs/사용자가이드/베타테스터_가이드.md` |
 
 ---
 
@@ -131,9 +134,9 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 커스텀 역할 시스템 활성화 완료 (커밋 필요)
-- 커밋되지 않은 변경사항 여러 개 있음 — 다음 세션에서 정리 필요
-- 베타 테스트 준비에 집중 권장
+- 코드 리뷰 기반 버그 수정 + 품질 개선 완료
+- page.tsx 대규모 리팩토링 필요 (다음 세션 우선 과제)
+- 베타 테스트 준비에 집중 권장 (2/20 마감)
 
 ---
 
