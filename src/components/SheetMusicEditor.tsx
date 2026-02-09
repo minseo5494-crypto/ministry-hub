@@ -619,17 +619,29 @@ export default function SheetMusicEditor({
       const context = canvas.getContext('2d')
       if (!context) return
 
-      // PDF와 동일하게 2배 크기로 캔버스 설정 (고해상도)
-      const scaleFactor = 2
-      canvas.width = img.naturalWidth * scaleFactor
-      canvas.height = img.naturalHeight * scaleFactor
+      // 브라우저 캔버스 최대 크기 제한 (iOS Safari 등)
+      const MAX_DIM = 16384
+      const MAX_AREA = 268435456
+      let scaleFactor = 2
+      const w = img.naturalWidth
+      const h = img.naturalHeight
+      if (w * scaleFactor > MAX_DIM || h * scaleFactor > MAX_DIM) {
+        scaleFactor = Math.min(MAX_DIM / w, MAX_DIM / h, 2)
+      }
+      if (w * scaleFactor * h * scaleFactor > MAX_AREA) {
+        scaleFactor = Math.min(Math.sqrt(MAX_AREA / (w * h)), scaleFactor)
+      }
+      scaleFactor = Math.max(1, scaleFactor)
+
+      canvas.width = w * scaleFactor
+      canvas.height = h * scaleFactor
       context.scale(scaleFactor, scaleFactor)
       context.drawImage(img, 0, 0)
 
       // 드로잉 캔버스도 같은 크기로
       if (canvasRef.current) {
-        canvasRef.current.width = img.naturalWidth * scaleFactor
-        canvasRef.current.height = img.naturalHeight * scaleFactor
+        canvasRef.current.width = w * scaleFactor
+        canvasRef.current.height = h * scaleFactor
       }
 
       setTotalPages(1)
