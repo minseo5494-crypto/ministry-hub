@@ -3534,6 +3534,7 @@ export default function SheetMusicEditor({
         style={{
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
+          touchAction: 'none',
         }}
         onMouseMove={(e) => {
           if (isDraggingText) {

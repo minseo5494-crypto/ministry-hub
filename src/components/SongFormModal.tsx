@@ -453,7 +453,7 @@ export default function SongFormModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 md:p-4">
-      <div className="w-full md:max-w-6xl rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden border flex flex-col h-[92vh] md:h-[85vh] bg-white border-gray-200">
+      <div className="w-full md:max-w-6xl rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden border flex flex-col h-[92dvh] md:h-[85vh] bg-white border-gray-200">
         {/* 헤더 */}
         <div className="px-4 md:px-8 py-3 md:py-6 border-b flex justify-between items-center border-gray-100 flex-shrink-0">
           <div className="min-w-0 flex-1">

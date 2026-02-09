@@ -1025,7 +1025,8 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
                     style={{
                       WebkitTouchCallout: 'none',
                       WebkitUserSelect: 'none',
-                      userSelect: 'none'
+                      userSelect: 'none',
+                      touchAction: 'none'
                     }}
                   >
                     {AVAILABLE_PARTS.map(part => (

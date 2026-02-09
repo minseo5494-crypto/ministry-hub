@@ -151,7 +151,7 @@ export default function HeroSection({
                         setFilters({
                           ...filters,
                           season: aiFilters.season || filters.season,
-                          tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠른' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
+                          tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
                           key: aiFilters.key || filters.key,
                         })
                       }
