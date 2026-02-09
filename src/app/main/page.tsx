@@ -81,6 +81,14 @@ const isSpamContent = (text: string): boolean => {
   return false
 }
 
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/\([a-g][#b]?m?\)/gi, '')
+    .replace(/\s+/g, '')
+    .replace(/[^\w가-힣]/g, '')
+}
+
 // 업로드 속도 제한 체크
 const checkUploadRateLimit = async (
   supabaseClient: typeof supabase,
@@ -411,12 +419,11 @@ export default function MainPage() {
   }, [showMenu])
 
   useEffect(() => {
-    fetchSongs()
     fetchUserTeams()
   }, [user])
 
   useEffect(() => {
-    if (user !== null) fetchSongs()
+    fetchSongs()
     fetchTeamSetlists()
   }, [user, userTeams])
 
@@ -714,14 +721,6 @@ export default function MainPage() {
   }, [filteredSongs])
 
   // ===== Helper Functions =====
-
-  const normalizeText = (text: string): string => {
-    return text
-      .toLowerCase()
-      .replace(/\([a-g][#b]?m?\)/gi, '')
-      .replace(/\s+/g, '')
-      .replace(/[^\w가-힣]/g, '')
-  }
 
   const getYoutubeEmbedUrl = (url: string) => {
     if (!url) return null

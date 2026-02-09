@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import Image from 'next/image'
 import { Search } from 'lucide-react'
 import { Song, Filters, UserTeam } from '../types'
@@ -49,6 +50,8 @@ export default function HeroSection({
   clearAIResult,
   userTeams
 }: HeroSectionProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   return (
     <div className="relative bg-gradient-to-b from-gray-50 to-white pt-10 pb-6 md:pt-12 md:pb-8">
       <div className="max-w-7xl mx-auto px-4">
@@ -98,6 +101,7 @@ export default function HeroSection({
             <div className="relative">
               <Search className={`absolute left-4 top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : `찬양곡 제목, 아티스트${filters.includeLyrics ? ', 가사' : ''}로 검색...`}
                 className={`w-full pl-12 pr-36 py-4 text-base md:text-lg text-gray-900 bg-white rounded-xl shadow-lg focus:outline-none ${isAISearchEnabled
@@ -136,9 +140,8 @@ export default function HeroSection({
               {/* 버튼 영역 */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                 <button
-                  onClick={async (e) => {
-                    const input = (e.target as HTMLElement).closest('.relative')?.querySelector('input');
-                    input?.blur();
+                  onClick={async () => {
+                    searchInputRef.current?.blur();
                     if (isAISearchEnabled && filters.searchText.trim() && !isAISearching) {
                       const result = await searchWithAI(filters.searchText)
                       if (result?.success && result.filters) {

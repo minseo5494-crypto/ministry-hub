@@ -118,7 +118,8 @@ export default function SetlistDevotionals({ setlistId, teamId, currentUserId }:
   const handleDelete = async (id: string) => {
     if (!confirm('이 묵상을 삭제하시겠습니까?')) return
 
-    // Optimistic UI
+    // Optimistic UI with rollback backup
+    const backup = [...devotionals]
     setDevotionals(prev => prev.filter(d => d.id !== id))
 
     try {
@@ -131,7 +132,7 @@ export default function SetlistDevotionals({ setlistId, teamId, currentUserId }:
     } catch (err) {
       console.error('묵상 삭제 실패:', err)
       alert('삭제에 실패했습니다.')
-      await fetchDevotionals()
+      setDevotionals(backup)
     }
   }
 
