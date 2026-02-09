@@ -901,14 +901,6 @@ export default function MainPage() {
     return sorted.slice(0, 12)
   }, [songs, weeklyPopularSongIds])
 
-  // 사용자 표시 이름
-  const userDisplayName = useMemo(() => {
-    if (!user) return ''
-    if (user.name) return user.name
-    if (user.email) return user.email.split('@')[0]
-    return ''
-  }, [user])
-
   const fetchLikeData = async () => {
     if (!user) return
     try {
@@ -1532,7 +1524,6 @@ export default function MainPage() {
       {recommendedSongs.length > 0 && (
         <RecommendedSection
           songs={recommendedSongs}
-          userName={userDisplayName}
           likedSongs={likedSongs}
           onToggleLike={toggleLike}
           onSongSelect={(song) => {

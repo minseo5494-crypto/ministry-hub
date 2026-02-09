@@ -6,7 +6,6 @@ import { Song } from '../types'
 
 type RecommendedSectionProps = {
   songs: Song[]
-  userName: string
   likedSongs: Set<string>
   onToggleLike: (e: React.MouseEvent, songId: string) => void
   onSongSelect: (song: Song) => void
@@ -15,7 +14,6 @@ type RecommendedSectionProps = {
 
 export default function RecommendedSection({
   songs,
-  userName,
   likedSongs,
   onToggleLike,
   onSongSelect,
@@ -34,9 +32,7 @@ export default function RecommendedSection({
     })
   }
 
-  const sectionTitle = userName
-    ? `${userName}님의 맞춤 추천 악보`
-    : '이번 주 인기 악보'
+  const sectionTitle = '이번 주 많이 찾은 악보'
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
