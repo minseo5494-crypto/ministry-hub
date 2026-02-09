@@ -10,7 +10,7 @@ import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
   Users, Music, ChevronRight, Crown, Search, Edit, Trash2, Copy,
   Pin, Eye, Presentation, Youtube, Download, X, Check, Menu, Filter as FilterIcon, Pencil, Lock,
-  MoreHorizontal, Home, Heart, StickyNote, LayoutDashboard, Library
+  MoreHorizontal, Home, Heart, StickyNote, LayoutDashboard, Library, LogOut
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
@@ -27,6 +27,7 @@ interface TeamInfo {
   invite_code: string
   member_count: number
   my_role: string
+  is_demo?: boolean
 }
 
 interface Setlist {
@@ -136,6 +137,10 @@ export default function TeamDetailPage() {
   }[]>([])
   const [noteEditorSetlistTitle, setNoteEditorSetlistTitle] = useState('')
 
+  // 팀 나가기
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+
   // 모바일 상태
   const [showFilters, setShowFilters] = useState(false)
   const [activeFixedSongMenu, setActiveFixedSongMenu] = useState<string | null>(null)
@@ -228,6 +233,27 @@ export default function TeamDetailPage() {
     }
   }
 
+  const handleLeaveTeam = async () => {
+    if (!user || !teamId) return
+    setLeaving(true)
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .delete()
+        .eq('team_id', teamId)
+        .eq('user_id', user.id)
+
+      if (error) throw error
+      router.push('/my-team')
+    } catch (error) {
+      console.error('Error leaving team:', error)
+      alert('팀 나가기에 실패했습니다.')
+    } finally {
+      setLeaving(false)
+      setShowLeaveConfirm(false)
+    }
+  }
+
   const fetchTeamInfo = async () => {
     if (!teamId || teamId === 'undefined') {
       console.error('Invalid teamId:', teamId)
@@ -269,7 +295,8 @@ export default function TeamDetailPage() {
         church_name: teamData.church_name,
         invite_code: teamData.invite_code,
         member_count: teamData.member_count || 0,
-        my_role: memberData.role
+        my_role: memberData.role,
+        is_demo: teamData.is_demo || false
       })
     } catch (error) {
       console.error('Error fetching team info:', error)
@@ -1065,6 +1092,15 @@ export default function TeamDetailPage() {
             <Settings size={20} />
             팀 설정
           </button>
+          {team?.my_role !== 'leader' && (
+            <button
+              onClick={() => setShowLeaveConfirm(true)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-all text-red-500 hover:bg-red-50 w-full"
+            >
+              <LogOut size={20} />
+              팀 나가기
+            </button>
+          )}
           {user && (
             <button
               onClick={() => router.push('/my-page/settings')}
@@ -1105,6 +1141,16 @@ export default function TeamDetailPage() {
               <span className="hidden lg:inline text-base font-semibold text-slate-700">팀 관리</span>
             </div>
             <div className="flex items-center gap-2">
+              {/* 모바일: 팀 나가기 */}
+              {team?.my_role !== 'leader' && (
+                <button
+                  onClick={() => setShowLeaveConfirm(true)}
+                  className="lg:hidden p-2 text-red-400 hover:bg-red-50 rounded-full transition"
+                  title="팀 나가기"
+                >
+                  <LogOut size={20} />
+                </button>
+              )}
               {/* 모바일: 설정 버튼 */}
               <button
                 onClick={() => router.push(`/my-team/${teamId}/settings`)}
@@ -1449,9 +1495,9 @@ export default function TeamDetailPage() {
                         <h3 className="text-sm font-semibold text-slate-800 group-hover:text-blue-500 transition-colors line-clamp-1">
                           {setlist.title}
                         </h3>
-                        {(setlist.creator_name || setlist.creator_email) && (
+                        {(setlist.creator_name || setlist.creator_email || team?.is_demo) && (
                           <p className="text-xs text-slate-400 mt-0.5">
-                            by {setlist.creator_name || setlist.creator_email}
+                            by {setlist.creator_name || setlist.creator_email || (team?.is_demo ? '홍길동' : '')}
                           </p>
                         )}
                       </div>
@@ -1804,6 +1850,38 @@ export default function TeamDetailPage() {
                 className="flex-1 px-4 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:bg-slate-300 font-medium"
               >
                 {quickEditing ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 팀 나가기 확인 모달 */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4 text-red-600">팀 나가기</h2>
+            <p className="text-slate-700 mb-6">
+              정말로 <strong>"{team?.name}"</strong> 팀에서 나가시겠습니까?
+              <br />
+              <span className="text-sm text-slate-500">
+                나간 후에도 초대 코드로 다시 가입할 수 있습니다.
+              </span>
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium"
+                disabled={leaving}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleLeaveTeam}
+                disabled={leaving}
+                className="flex-1 px-4 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 disabled:bg-slate-300 font-medium"
+              >
+                {leaving ? '나가는 중...' : '나가기'}
               </button>
             </div>
           </div>

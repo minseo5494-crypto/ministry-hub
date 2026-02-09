@@ -29,9 +29,9 @@ BEGIN
   -- 가상 팀 생성
   INSERT INTO teams (name, type, church_name, description, invite_code, created_by, is_demo)
   VALUES (
-    '새소망 찬양팀',
+    'WORSHEEP 찬양팀',
     'church_internal',
-    '새소망교회',
+    'WORSHEEP 교회',
     '워십(WORSHEEP) 서비스 체험을 위한 데모 팀입니다.',
     'DEMO00',
     v_admin_id,
