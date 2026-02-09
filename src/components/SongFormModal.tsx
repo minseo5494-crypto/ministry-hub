@@ -264,6 +264,16 @@ export default function SongFormModal({
           </TouchButton>
         </div>
       </div>
+
+      {/* 모바일 미리보기 */}
+      {isMobile && tempSelectedForm.length > 0 && (
+        <div className="p-3 rounded-xl border bg-blue-50 border-blue-100 mt-4">
+          <span className="text-xs font-bold block mb-1 uppercase tracking-wider text-blue-600">Preview</span>
+          <p className="text-sm font-bold text-blue-900">
+            {tempSelectedForm.join(' — ')}
+          </p>
+        </div>
+      )}
     </div>
   )
 
