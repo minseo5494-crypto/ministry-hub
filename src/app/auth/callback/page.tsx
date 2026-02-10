@@ -4,20 +4,43 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { handleOAuthCallback } from '@/lib/auth'
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { joinDemoTeam } from '@/lib/demoTeam'
+import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
 
 export default function AuthCallbackPage() {
   const router = useRouter()
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'success' | 'verified' | 'error'>('loading')
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // URL 해시에서 토큰 타입 확인
+    const hash = window.location.hash
+    const params = new URLSearchParams(hash.replace('#', ''))
+    const type = params.get('type')
+    const isEmailVerification = type === 'signup' || type === 'email'
+
+    // onAuthStateChange로 새 세션 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         try {
-          await handleOAuthCallback()
-          setStatus('success')
-          setTimeout(() => router.push('/main'), 1000)
+          if (isEmailVerification) {
+            // 이메일 인증 완료: email_verified 업데이트
+            await supabase
+              .from('users')
+              .update({ email_verified: true })
+              .eq('id', session.user.id)
+
+            // 데모 팀 자동 가입 (회원가입 시 실패했을 수 있으므로 여기서 재시도)
+            await joinDemoTeam(session.user.id)
+
+            setStatus('verified')
+            setTimeout(() => router.push('/main'), 2000)
+          } else {
+            // OAuth 콜백 (Google 로그인 등)
+            await handleOAuthCallback()
+            setStatus('success')
+            setTimeout(() => router.push('/main'), 1000)
+          }
         } catch (err: any) {
           console.error('Callback processing error:', err)
           setStatus('error')
@@ -54,6 +77,20 @@ export default function AuthCallbackPage() {
               </h2>
               <p className="text-gray-600">
                 잠시만 기다려주세요
+              </p>
+            </>
+          )}
+
+          {status === 'verified' && (
+            <>
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Mail className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                이메일 인증 완료!
+              </h2>
+              <p className="text-gray-600">
+                메인 페이지로 이동합니다...
               </p>
             </>
           )}
