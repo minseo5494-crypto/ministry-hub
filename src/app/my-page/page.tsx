@@ -1115,7 +1115,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
             <p className="text-slate-500 mt-1">나의 악보와 필기 노트를 관리하세요.</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* 모바일: 로고 + 뒤로가기 */}
+            {/* 모바일: 로고 + 뒤로가기 + 설정 */}
             <div className="lg:hidden flex items-center gap-2">
               <button
                 onClick={() => router.push('/main')}
@@ -1127,6 +1127,13 @@ setNewSong({ ...newSong, tempo: tempoValue })
               <Link href="/main" className="text-lg font-logo text-slate-700">
                 WORSHEEP
               </Link>
+              <button
+                onClick={() => router.push('/my-page/settings')}
+                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition"
+                title="설정"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
             </div>
             <button
               onClick={() => setShowAddSongModal(true)}

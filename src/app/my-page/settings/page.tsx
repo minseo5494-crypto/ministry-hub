@@ -46,7 +46,7 @@ export default function MyPageSettingsPage() {
 
       if (userData) {
         setUserName(userData.name || '')
-        setUserEmail(userData.email || '')
+        setUserEmail(userData.email || currentUser.email || '')
       }
     } catch (error) {
       console.error('Error checking user:', error)
@@ -123,12 +123,16 @@ export default function MyPageSettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
+    // Auth에서 직접 이메일 가져오기 (users 테이블 스프레드로 덮어씌워질 수 있으므로)
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const accountEmail = authUser?.email || user?.email || userEmail
+
     const confirmation = prompt(
       '정말 계정을 삭제하시겠습니까?\n모든 데이터가 영구적으로 삭제됩니다.\n삭제하려면 이메일 주소를 입력하세요:',
       ''
     )
 
-    if (confirmation !== userEmail) {
+    if (!accountEmail || confirmation?.trim() !== accountEmail) {
       alert('이메일 주소가 일치하지 않습니다.')
       return
     }
