@@ -88,12 +88,23 @@ export const signInWithCaptcha = async (email: string, password: string, captcha
 
   if (error) throw error;
 
-  // last_login 업데이트
   if (data.user) {
+    // 이메일 인증 상태 동기화 (auth → public.users)
+    const isVerified = !!data.user.email_confirmed_at;
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
+      .update({
+        last_login: new Date().toISOString(),
+        email_verified: isVerified,
+      })
       .eq('id', data.user.id);
+
+    // 미인증 시 로그아웃 후 에러
+    if (!isVerified) {
+      await supabase.auth.signOut();
+      throw new Error('이메일 인증이 필요합니다. 가입 시 받은 인증 메일을 확인해주세요.');
+    }
+
     // 📊 로그인 로깅
     logActivity({
       actionType: 'user_login',
