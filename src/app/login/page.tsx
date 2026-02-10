@@ -53,7 +53,22 @@ function LoginForm() {
       if (err.message?.includes('Email not confirmed')) {
         setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
       } else if (err.message?.includes('Invalid login credentials')) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+        // 이메일 존재 여부 확인하여 에러 메시지 분기
+        try {
+          const res = await fetch('/api/auth/check-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: formData.email }),
+          })
+          const { exists } = await res.json()
+          if (!exists) {
+            setError('존재하지 않는 이메일입니다.')
+          } else {
+            setError('비밀번호가 올바르지 않습니다.')
+          }
+        } catch {
+          setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+        }
       } else if (err.message?.includes('captcha')) {
         setError('보안 확인에 실패했습니다. 다시 시도해주세요.')
       } else {
