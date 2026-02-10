@@ -29,7 +29,8 @@ export const signUp = async (email: string, password: string, name: string, chur
       .update({
         church_name: churchName || null,
         auth_provider: 'email',
-        email_verified: false
+        email_verified: false,
+        terms_agreed_at: new Date().toISOString()
       })
       .eq('id', data.user.id);
 
@@ -241,84 +242,83 @@ export const handleOAuthCallback = async () => {
       metadata: user.user_metadata
     });
 
-    // 2. users 테이블에서 사용자 확인
-    const { data: existingUser, error: checkError } = await supabase
+    // 2. users 테이블에서 사용자 확인 (id로 먼저, 없으면 email로)
+    let existingUser: any = null;
+
+    const { data: userById, error: checkError } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.id)
-      .maybeSingle(); // ⚠️ single() 대신 maybeSingle() 사용
+      .maybeSingle();
 
     if (checkError) {
       console.error('❌ User check error:', checkError);
       throw checkError;
     }
 
+    if (userById) {
+      existingUser = userById;
+    } else if (user.email) {
+      // id로 못 찾으면 email로 확인 (다른 인증 방식으로 가입한 경우)
+      const { data: userByEmail } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (userByEmail) {
+        console.log('🔗 같은 이메일의 기존 계정 발견:', userByEmail.id, '→', user.id);
+        existingUser = userByEmail;
+      }
+    }
+
     console.log('📊 Existing user check:', existingUser ? '기존 사용자' : '신규 사용자');
 
     // 3. 사용자 이름 및 프로필 이미지 추출
-    const userName = user.user_metadata?.full_name 
-      || user.user_metadata?.name 
-      || user.email?.split('@')[0] 
+    const userName = user.user_metadata?.full_name
+      || user.user_metadata?.name
+      || user.email?.split('@')[0]
       || 'User';
-    
-    const profileImageUrl = user.user_metadata?.avatar_url 
-      || user.user_metadata?.picture 
+
+    const profileImageUrl = user.user_metadata?.avatar_url
+      || user.user_metadata?.picture
       || null;
 
     console.log('👤 User info to save:', { userName, profileImageUrl });
 
-    // 4. 신규 사용자인 경우 users 테이블에 추가
-    if (!existingUser) {
-      console.log('➕ Creating new user record...');
-      
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: user.id,
-          email: user.email,
-          name: userName,
-          profile_image_url: profileImageUrl,
-          email_verified: true, // OAuth는 이메일이 자동 인증됨
-          auth_provider: 'google',
-          created_at: new Date().toISOString(),
-          last_login: new Date().toISOString()
-        });
+    // 4. 서버 API로 사용자 생성/업데이트 (RLS 우회)
+    // 신규 사용자, 이메일 매칭(id 병합), 기존 사용자 모두 서버에서 처리
+    const setupPayload: any = {
+      userId: user.id,
+      email: user.email,
+      name: userName,
+      profileImageUrl,
+      authProvider: 'google'
+    };
 
-      if (insertError) {
-        console.error('❌ Insert error:', JSON.stringify(insertError, null, 2));
-        throw insertError;
-      }
+    // 이메일로 찾은 기존 계정의 id가 다르면 병합 필요
+    if (existingUser && existingUser.id !== user.id) {
+      setupPayload.mergeFromId = existingUser.id;
+      console.log('🔗 Will merge from:', existingUser.id, '→', user.id);
+    }
 
-      console.log('✅ New user created successfully!');
+    const res = await fetch('/api/auth/setup-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(setupPayload)
+    });
 
-      // 🏠 데모 팀 자동 가입
-      await joinDemoTeam(user.id);
-    } else {
-      // 5. 기존 사용자인 경우 last_login 업데이트 & 프로필 이미지 동기화
-      console.log('🔄 Updating existing user...');
-      
-      const updateData: any = {
-        last_login: new Date().toISOString()
-      };
-
-      // Google 프로필 이미지가 있고, 기존에 없거나 다르면 업데이트
-      if (profileImageUrl && existingUser.profile_image_url !== profileImageUrl) {
-        updateData.profile_image_url = profileImageUrl;
-        console.log('🖼️ Updating profile image');
-      }
-
-      const { error: updateError } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', user.id);
-
-      if (updateError) {
-        console.error('❌ Update error:', JSON.stringify(updateError, null, 2));
-        // ⚠️ 업데이트 실패는 치명적이지 않으므로 경고만 표시
+    if (!res.ok) {
+      const err = await res.json();
+      console.error('❌ Setup user API error:', err);
+      // 기존 사용자 로그인 실패는 치명적이지 않으므로 경고만 표시
+      if (existingUser && existingUser.id === user.id) {
         console.warn('⚠️ Failed to update user, but login will proceed');
       } else {
-        console.log('✅ User updated successfully!');
+        throw new Error(err.error || '사용자 설정 실패');
       }
+    } else {
+      console.log('✅ User setup completed!');
     }
 
     console.log('✅ OAuth callback completed successfully');

@@ -85,12 +85,6 @@ export default function SignupPage() {
   const handleGoogleSignup = async () => {
     setError('')
 
-    // 약관 동의 검사
-    if (!agreeTerms || !agreeCopyright) {
-      setError('약관에 동의해주세요.')
-      return
-    }
-
     setGoogleLoading(true)
 
     try {

@@ -170,6 +170,9 @@ export default function MainPage() {
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [termsAgreed, setTermsAgreed] = useState({ terms: false, copyright: false })
+  const [termsSaving, setTermsSaving] = useState(false)
 
   // Data state
   const [songs, setSongs] = useState<Song[]>([])
@@ -738,10 +741,30 @@ export default function MainPage() {
     try {
       const currentUser = await getCurrentUser()
       setUser(currentUser)
+      // 약관 미동의 사용자 감지
+      if (currentUser && !currentUser.terms_agreed_at) {
+        setShowTermsModal(true)
+      }
     } catch (error) {
       console.error('Error checking user:', error)
     } finally {
       setCheckingAuth(false)
+    }
+  }
+
+  const handleTermsAgree = async () => {
+    if (!user || !termsAgreed.terms || !termsAgreed.copyright) return
+    setTermsSaving(true)
+    try {
+      await supabase
+        .from('users')
+        .update({ terms_agreed_at: new Date().toISOString() })
+        .eq('id', user.id)
+      setShowTermsModal(false)
+    } catch (error) {
+      console.error('Terms agree error:', error)
+    } finally {
+      setTermsSaving(false)
     }
   }
 
@@ -1820,6 +1843,68 @@ export default function MainPage() {
           onSaveAll={handleSaveMultiSongNotes}
           onClose={handleCloseMultiSongEditor}
         />
+      )}
+
+      {/* 약관 동의 모달 (신규 사용자) */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">약관 동의</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              WORSHEEP 서비스 이용을 위해 아래 약관에 동의해주세요.
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <div
+                className="flex items-start cursor-pointer"
+                onClick={() => setTermsAgreed(prev => ({ ...prev, terms: !prev.terms }))}
+              >
+                <div className={`w-5 h-5 mt-0.5 mr-3 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                  termsAgreed.terms ? 'bg-blue-100 border-blue-600' : 'bg-white border-gray-300'
+                }`}>
+                  {termsAgreed.terms && (
+                    <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">
+                  <a href="/terms" target="_blank" className="text-blue-600 hover:text-blue-700 underline">이용약관</a>
+                  {' '}및{' '}
+                  <a href="/privacy" target="_blank" className="text-blue-600 hover:text-blue-700 underline">개인정보처리방침</a>
+                  에 동의합니다.
+                </span>
+              </div>
+
+              <div
+                className="flex items-start cursor-pointer"
+                onClick={() => setTermsAgreed(prev => ({ ...prev, copyright: !prev.copyright }))}
+              >
+                <div className={`w-5 h-5 mt-0.5 mr-3 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                  termsAgreed.copyright ? 'bg-blue-100 border-blue-600' : 'bg-white border-gray-300'
+                }`}>
+                  {termsAgreed.copyright && (
+                    <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">
+                  <a href="/copyright" target="_blank" className="text-blue-600 hover:text-blue-700 underline">저작권 정책</a>
+                  을 읽었으며, 악보 업로드 시 저작권 관련 책임이 업로더에게 있음에 동의합니다.
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleTermsAgree}
+              disabled={!termsAgreed.terms || !termsAgreed.copyright || termsSaving}
+              className="w-full py-3 rounded-lg font-medium transition disabled:opacity-40 disabled:cursor-not-allowed bg-blue-500 text-white hover:bg-blue-600"
+            >
+              {termsSaving ? '처리 중...' : '동의하고 시작하기'}
+            </button>
+          </div>
+        </div>
       )}
 
       <OnboardingGuide />
