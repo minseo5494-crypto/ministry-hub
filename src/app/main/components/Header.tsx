@@ -34,7 +34,7 @@ export default function Header({
           <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             <button
               onClick={() => window.location.reload()}
-              className="text-2xl font-bold text-gray-900 hover:text-indigo-600 transition-colors"
+              className="text-2xl font-logo text-gray-900 hover:text-indigo-600 transition-colors"
               title="새로고침"
             >
               WORSHEEP

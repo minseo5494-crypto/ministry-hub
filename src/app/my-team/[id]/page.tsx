@@ -1005,7 +1005,7 @@ export default function TeamDetailPage() {
       {/* 사이드바 - 데스크톱 전용 */}
       <aside className="hidden lg:flex w-[260px] h-screen sticky top-0 bg-slate-50 border-r border-slate-200 flex-col shrink-0">
         <div className="p-6 pb-4">
-          <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700">
+          <Link href="/main" className="text-xl font-logo text-slate-700">
             WORSHEEP
           </Link>
         </div>
@@ -1134,7 +1134,7 @@ export default function TeamDetailPage() {
                 <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
               </button>
               {/* 모바일: 로고 */}
-              <Link href="/main" className="lg:hidden text-lg font-black tracking-tighter text-slate-700">
+              <Link href="/main" className="lg:hidden text-lg font-logo text-slate-700">
                 WORSHEEP
               </Link>
               {/* 데스크톱: 페이지 제목 */}

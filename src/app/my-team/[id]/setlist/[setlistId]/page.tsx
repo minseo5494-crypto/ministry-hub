@@ -1331,7 +1331,7 @@ const saveNote = async () => {
       <aside className="hidden lg:flex w-64 flex-shrink-0 bg-white border-r border-gray-200 flex-col sticky top-0 h-screen overflow-hidden">
         {/* 로고 */}
         <div className="p-6 pb-4">
-          <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+          <Link href="/main" className="text-xl font-logo text-slate-700 hover:text-indigo-600 transition-colors">
             WORSHEEP
           </Link>
         </div>
@@ -1408,7 +1408,7 @@ const saveNote = async () => {
                     <span className="material-symbols-outlined text-xl">arrow_back</span>
                   </button>
                   {/* 모바일: 로고 */}
-                  <Link href="/main" className="lg:hidden text-lg font-black tracking-tighter text-slate-700">
+                  <Link href="/main" className="lg:hidden text-lg font-logo text-slate-700">
                     WORSHEEP
                   </Link>
                   {isEditing ? (

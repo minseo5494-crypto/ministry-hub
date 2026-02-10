@@ -7,7 +7,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* 로고 및 설명 */}
           <div className="text-center md:text-left">
-            <h3 className="text-lg font-bold text-gray-900">WORSHEEP</h3>
+            <h3 className="text-lg font-logo text-gray-900">WORSHEEP</h3>
             <p className="text-sm text-gray-600 mt-1">예배팀을 위한 악보 관리 서비스</p>
           </div>
 

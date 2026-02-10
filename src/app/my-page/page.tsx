@@ -1029,7 +1029,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
       <aside className="w-64 bg-white border-r border-slate-200 flex-col h-screen sticky top-0 hidden lg:flex">
         {/* 로고 */}
         <div className="p-6 pb-4">
-          <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+          <Link href="/main" className="text-xl font-logo text-slate-700 hover:text-indigo-600 transition-colors">
             WORSHEEP
           </Link>
         </div>
@@ -1124,7 +1124,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
               >
                 <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
               </button>
-              <Link href="/main" className="text-lg font-black tracking-tighter text-slate-700">
+              <Link href="/main" className="text-lg font-logo text-slate-700">
                 WORSHEEP
               </Link>
             </div>

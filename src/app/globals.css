@@ -6,6 +6,12 @@
   --foreground: #171717;
 }
 
+/* ===== WORSHEEP 로고 폰트 ===== */
+.font-logo {
+  font-family: var(--font-fredoka), sans-serif;
+  font-weight: 700;
+}
+
 /* ===== 기본 스타일 - WORSHEEP용 (검은색) ===== */
 body {
   background: #ffffff;

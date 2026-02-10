@@ -116,7 +116,7 @@ export default function PersonalPage() {
                 <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
               </button>
               {/* 로고 */}
-              <Link href="/main" className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors">
+              <Link href="/main" className="text-xl font-logo text-slate-700 hover:text-indigo-600 transition-colors">
                 WORSHEEP
               </Link>
               <span className="text-slate-300 hidden sm:inline">|</span>

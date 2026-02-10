@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Fredoka } from 'next/font/google'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import Footer from '@/components/Footer'
@@ -8,6 +8,7 @@ import FeedbackButtonWrapper from '@/components/FeedbackButtonWrapper'
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
 const inter = Inter({ subsets: ['latin'] })
+const fredoka = Fredoka({ subsets: ['latin'], weight: ['700'], variable: '--font-fredoka' })
 
 export const metadata: Metadata = {
   title: 'WORSHEEP',
@@ -62,7 +63,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
-      <body className={`${inter.className} flex flex-col min-h-screen`}>
+      <body className={`${inter.className} ${fredoka.variable} flex flex-col min-h-screen`}>
         <main className="flex-grow">{children}</main>
         <Footer />
         <FeedbackButtonWrapper />

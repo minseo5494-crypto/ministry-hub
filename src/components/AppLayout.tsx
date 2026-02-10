@@ -53,7 +53,7 @@ export default function AppLayout({
           <div className="p-6 pb-4">
             <Link
               href="/main"
-              className="text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors"
+              className="text-xl font-logo text-slate-700 hover:text-indigo-600 transition-colors"
             >
               WORSHEEP
             </Link>
@@ -104,7 +104,7 @@ export default function AppLayout({
               {/* 로고 */}
               <Link
                 href="/main"
-                className="text-lg font-black tracking-tighter text-slate-700"
+                className="text-lg font-logo text-slate-700"
               >
                 WORSHEEP
               </Link>
@@ -162,7 +162,7 @@ export function SimpleAppLayout({
             {/* 로고 */}
             <Link
               href="/main"
-              className="text-lg lg:text-xl font-black tracking-tighter text-slate-700 hover:text-indigo-600 transition-colors"
+              className="text-lg lg:text-xl font-logo text-slate-700 hover:text-indigo-600 transition-colors"
             >
               WORSHEEP
             </Link>
