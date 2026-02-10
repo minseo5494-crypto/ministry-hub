@@ -50,9 +50,7 @@ function LoginForm() {
       turnstileRef.current?.reset()
       setCaptchaToken(null)
 
-      if (err.message?.includes('Email not confirmed')) {
-        setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
-      } else if (err.message?.includes('Invalid login credentials')) {
+      if (err.message?.includes('Invalid login credentials')) {
         setError('이메일 또는 비밀번호가 올바르지 않습니다.')
       } else if (err.message?.includes('captcha')) {
         setError('보안 확인에 실패했습니다. 다시 시도해주세요.')

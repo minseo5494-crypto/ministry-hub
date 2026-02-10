@@ -60,8 +60,8 @@ export default function SignupPage() {
     try {
       await signUp(formData.email, formData.password, formData.name, formData.churchName, captchaToken)
       trackSignUp('email')
-      // 회원가입 성공 시 이메일 인증 안내 페이지로 이동
-      router.push('/login?message=회원가입이 완료되었습니다. 이메일로 발송된 인증 링크를 클릭해주세요.')
+      // 회원가입 성공 → 로그인 페이지로 이동
+      router.push('/login?message=회원가입이 완료되었습니다. 로그인해주세요.')
     } catch (err: any) {
       console.error('Signup error:', err)
       const errorMsg = err.message || ''
