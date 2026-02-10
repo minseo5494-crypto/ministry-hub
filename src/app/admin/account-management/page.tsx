@@ -399,16 +399,35 @@ export default function AccountManagementPage() {
         supabase.from('verified_publishers').update({ created_by: null }).eq('created_by', userId),
       ])
 
+      // public.users 삭제
       const { error } = await supabase.from('users').delete().eq('id', userId)
-
-      if (!error) {
-        showToast('사용자가 삭제되었습니다.', 'success')
-        setConfirmDelete(null)
-        loadUsers()
-      } else {
+      if (error) {
         console.error('User delete error:', error)
         showToast(`삭제 실패: ${error.message}`, 'error')
+        return
       }
+
+      // auth.users 삭제 (service_role API)
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ userId }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        console.error('Auth delete error:', data.error)
+        showToast(`계정 데이터는 삭제되었으나 인증 정보 삭제 실패: ${data.error}`, 'error')
+      } else {
+        showToast('사용자가 완전히 삭제되었습니다.', 'success')
+      }
+
+      setConfirmDelete(null)
+      loadUsers()
     } catch (err: any) {
       console.error('User delete error:', err)
       showToast(`삭제 중 오류: ${err.message}`, 'error')
