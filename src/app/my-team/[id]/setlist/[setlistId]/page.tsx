@@ -1039,110 +1039,147 @@ const removeSongForm = (index: number) => {
   const generatePPTFile = async () => {
   setDownloadingPPT(true)
   try {
-    // 🆕 동적 import
     const pptxgen = (await import('pptxgenjs')).default
     const ppt = new pptxgen()
+    const koreanFont = 'NanumGothic'
+
+      // 가사 섹션 파싱 헬퍼
+      const parseLyricsToSections = (lyrics: string): { [section: string]: string } => {
+        const sections: { [section: string]: string } = {}
+        if (!lyrics) return sections
+        const sectionPattern = /\[(Intro|Verse\s?\d?|PreChorus\s?\d?|Pre-Chorus\s?\d?|Chorus\s?\d?|Bridge\s?\d?|Interlude|Outro|Tag)\]/gi
+        const parts = lyrics.split(sectionPattern)
+        let currentSection = ''
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i].trim()
+          if (!part) continue
+          if (sectionPattern.test(`[${part}]`)) {
+            currentSection = part.replace(/\s+/g, '')
+            sectionPattern.lastIndex = 0
+          } else if (currentSection) {
+            sections[currentSection] = part
+            currentSection = ''
+          } else {
+            if (!sections['Verse1']) sections['Verse1'] = part
+          }
+        }
+        return sections
+      }
+
+      // 섹션 약어 → 전체 이름 매핑
+      const getFullSectionName = (abbr: string): string[] => {
+        const mapping: { [key: string]: string[] } = {
+          'I': ['Intro'], 'Intro': ['Intro'],
+          'V': ['Verse', 'Verse1'], 'V1': ['Verse1', 'Verse'], 'V2': ['Verse2'], 'V3': ['Verse3'],
+          'Pc': ['PreChorus', 'Pre-Chorus', 'PreChorus1'], 'Pc1': ['PreChorus', 'PreChorus1'], 'Pc2': ['PreChorus2'],
+          'C': ['Chorus', 'Chorus1'], 'C1': ['Chorus', 'Chorus1'], 'C2': ['Chorus2'],
+          'B': ['Bridge', 'Bridge1'], 'Bridge': ['Bridge', 'Bridge1'],
+          '간주': ['Interlude'], 'Interlude': ['Interlude'], 'Int': ['Interlude'],
+          'T': ['Tag'], 'Out': ['Outro'], 'Outro': ['Outro'], 'Ending': ['Outro']
+        }
+        return mapping[abbr] || [abbr]
+      }
 
       // 표지 슬라이드
       const coverSlide = ppt.addSlide()
       coverSlide.background = { color: '1F2937' }
       coverSlide.addText(setlist.title, {
-        x: 0.5,
-        y: 2.5,
-        w: 9,
-        h: 1.5,
-        fontSize: 44,
-        bold: true,
-        color: 'FFFFFF',
-        align: 'center'
+        x: 0.5, y: 2.0, w: 9, h: 1.5,
+        fontSize: 60, bold: true, color: 'FFFFFF', align: 'center', fontFace: koreanFont
       })
       coverSlide.addText(
         `${new Date(setlist.service_date).toLocaleDateString('ko-KR')} • ${setlist.service_type || ''}`,
         {
-          x: 0.5,
-          y: 4.2,
-          w: 9,
-          h: 0.5,
-          fontSize: 20,
-          color: 'D1D5DB',
-          align: 'center'
+          x: 0.5, y: 3.8, w: 9, h: 0.5,
+          fontSize: 24, color: '9CA3AF', align: 'center', fontFace: koreanFont
         }
       )
 
-      // 각 곡 슬라이드
+      // 각 곡 처리
       songs.forEach((setlistSong, index) => {
         const song = setlistSong.songs
-        const slide = ppt.addSlide()
-        
-        // 배경색
-        slide.background = { color: 'FFFFFF' }
 
-        // 곡 번호 및 제목
-        slide.addText(`${index + 1}. ${song.song_name}`, {
-          x: 0.5,
-          y: 0.5,
-          w: 9,
-          h: 0.8,
-          fontSize: 32,
-          bold: true,
-          color: '1F2937'
+        // 1. 곡 제목 슬라이드 (어두운 배경)
+        const titleSlide = ppt.addSlide()
+        titleSlide.background = { color: '374151' }
+        titleSlide.addText(`${index + 1}`, {
+          x: 0.5, y: 1.5, w: 9, h: 1,
+          fontSize: 48, bold: true, color: '9CA3AF', align: 'center', fontFace: koreanFont
         })
-
-        // 아티스트
-        if (song.team_name) {
-          slide.addText(song.team_name, {
-            x: 0.5,
-            y: 1.4,
-            w: 9,
-            h: 0.4,
-            fontSize: 18,
-            color: '6B7280'
-          })
+        titleSlide.addText(song.song_name, {
+          x: 0.5, y: 2.5, w: 9, h: 1.5,
+          fontSize: 48, bold: true, color: 'FFFFFF', align: 'center', fontFace: koreanFont
+        })
+        // 2. 가사 슬라이드 (2줄씩)
+        let lyricsData: { [section: string]: string } = {}
+        if (song.song_structure && Object.keys(song.song_structure).length > 0) {
+          lyricsData = song.song_structure
+        } else if (song.lyrics) {
+          lyricsData = parseLyricsToSections(song.lyrics)
         }
 
-        // Key & 송폼
-        let infoText = ''
-        if (setlistSong.key_transposed || song.key) {
-          infoText += `Key: ${setlistSong.key_transposed || song.key}`
-        }
-        if (setlistSong.selected_form && setlistSong.selected_form.length > 0) {
-          infoText += `  |  송폼: ${setlistSong.selected_form.join(' - ')}`
-        }
-        if (infoText) {
-          slide.addText(infoText, {
-            x: 0.5,
-            y: 1.9,
-            w: 9,
-            h: 0.4,
-            fontSize: 14,
-            color: '9CA3AF'
-          })
-        }
+        // 송폼이 설정되어 있고 가사 데이터가 있으면 송폼 순서로
+        if (setlistSong.selected_form && setlistSong.selected_form.length > 0 && Object.keys(lyricsData).length > 0) {
+          for (const abbr of setlistSong.selected_form) {
+            const possibleNames = getFullSectionName(abbr)
+            let sectionLyrics = ''
+            for (const name of possibleNames) {
+              const foundKey = Object.keys(lyricsData).find(k => k.toLowerCase() === name.toLowerCase())
+              if (foundKey && lyricsData[foundKey]) {
+                sectionLyrics = lyricsData[foundKey]
+                break
+              }
+            }
+            if (sectionLyrics) {
+              const processedLines = sectionLyrics
+                .replace(/\s*\/\s*/g, '\n')
+                .split('\n')
+                .map((line: string) => line.trim())
+                .filter((line: string) => line.length > 0)
 
-        // 가사
-        if (song.lyrics) {
-          slide.addText(song.lyrics, {
-            x: 0.5,
-            y: 2.5,
-            w: 9,
-            h: 4.5,
-            fontSize: 16,
-            color: '374151',
-            valign: 'top'
-          })
-        }
+              const LINES_PER_SLIDE = 2
+              for (let i = 0; i < processedLines.length; i += LINES_PER_SLIDE) {
+                const slideLines = processedLines.slice(i, i + LINES_PER_SLIDE)
+                const slide = ppt.addSlide()
+                slide.background = { color: 'FFFFFF' }
 
-        // 노트
-        if (setlistSong.notes) {
-          slide.addText(`메모: ${setlistSong.notes}`, {
-            x: 0.5,
-            y: 7.2,
-            w: 9,
-            h: 0.3,
-            fontSize: 12,
-            color: 'EF4444',
-            italic: true
-          })
+                slide.addText(slideLines.join('\n'), {
+                  x: 0.5, y: 2, w: 9, h: 3,
+                  fontSize: 36, color: '111827', align: 'center', valign: 'middle', fontFace: koreanFont
+                })
+
+                slide.addText(song.song_name, {
+                  x: 0.5, y: 6.5, w: 9, h: 0.3,
+                  fontSize: 14, color: '9CA3AF', align: 'center', fontFace: koreanFont
+                })
+              }
+            }
+          }
+        } else if (song.lyrics) {
+          // 송폼 없으면 전체 가사를 2줄씩
+          const processedLines = song.lyrics
+            .replace(/\[.*?\]/g, '')
+            .replace(/\s*\/\s*/g, '\n')
+            .split('\n')
+            .map((line: string) => line.trim())
+            .filter((line: string) => line.length > 0)
+
+          const LINES_PER_SLIDE = 2
+          for (let i = 0; i < processedLines.length; i += LINES_PER_SLIDE) {
+            const slideLines = processedLines.slice(i, i + LINES_PER_SLIDE)
+            const slide = ppt.addSlide()
+            slide.background = { color: 'FFFFFF' }
+
+            slide.addText(slideLines.join('\n'), {
+              x: 0.5, y: 2, w: 9, h: 3,
+              fontSize: 36, color: '111827', align: 'center', valign: 'middle', fontFace: koreanFont
+            })
+
+            slide.addText(song.song_name, {
+              x: 0.5, y: 6.5, w: 9, h: 0.3,
+              fontSize: 14, color: '9CA3AF', align: 'center', fontFace: koreanFont
+            })
+          }
         }
       })
 
