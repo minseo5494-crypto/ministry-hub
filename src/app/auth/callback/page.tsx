@@ -22,18 +22,18 @@ export default function AuthCallbackPage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         try {
+          // 모든 신규 가입에 대해 데모 팀 자동 가입 (중복 가입은 서버에서 스킵)
+          await fetch('/api/teams/join-demo', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session.access_token}` },
+          }).catch(err => console.error('데모 팀 가입 실패:', err))
+
           if (isEmailVerification) {
             // 이메일 인증 완료: email_verified 업데이트
             await supabase
               .from('users')
               .update({ email_verified: true })
               .eq('id', session.user.id)
-
-            // 데모 팀 자동 가입 (서버 API로 RLS 우회)
-            await fetch('/api/teams/join-demo', {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${session.access_token}` },
-            }).catch(err => console.error('데모 팀 가입 실패:', err))
 
             setStatus('verified')
             setTimeout(() => router.push('/main'), 2000)

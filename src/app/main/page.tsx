@@ -338,34 +338,21 @@ export default function MainPage() {
     loadSeasons()
   }, [])
 
-  // 이번 주 많이 찾은 곡 ID 로드 (정렬용)
+  // 이번 주 많이 찾은 곡 ID 로드 (서버 API — activity_logs RLS 우회)
   useEffect(() => {
     const loadWeeklyPopularIds = async () => {
       if (songs.length === 0) return
 
       try {
-        const oneWeekAgo = new Date()
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+        const res = await fetch('/api/songs/weekly-popular')
+        const { data } = await res.json()
 
-        const { data: activityData } = await supabase
-          .from('activity_logs')
-          .select('song_id')
-          .not('song_id', 'is', null)
-          .gte('created_at', oneWeekAgo.toISOString())
-
-        const songUsageMap = new Map<string, number>()
-        activityData?.forEach(log => {
-          if (log.song_id) {
-            songUsageMap.set(log.song_id, (songUsageMap.get(log.song_id) || 0) + 1)
-          }
+        const rankMap = new Map<string, number>()
+        data?.forEach((item: { id: string; rank: number }) => {
+          rankMap.set(item.id, item.rank)
         })
 
-        // 사용량 순으로 정렬하여 순위 맵 생성
-        const sortedIds = [...songUsageMap.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([id], index) => [id, index] as [string, number])
-
-        setWeeklyPopularSongIds(new Map(sortedIds))
+        setWeeklyPopularSongIds(rankMap)
       } catch (error) {
         console.error('Error loading weekly popular ids:', error)
       }
