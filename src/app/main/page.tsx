@@ -742,8 +742,8 @@ export default function MainPage() {
     try {
       const currentUser = await getCurrentUser()
       setUser(currentUser)
-      // 약관 미동의 사용자 감지
-      if (currentUser && !currentUser.terms_agreed_at) {
+      // 약관 미동의 사용자 감지 (Google OAuth만 — 이메일 가입은 가입 시 동의 완료)
+      if (currentUser && !currentUser.terms_agreed_at && currentUser.auth_provider !== 'email') {
         setShowTermsModal(true)
       }
     } catch (error) {
