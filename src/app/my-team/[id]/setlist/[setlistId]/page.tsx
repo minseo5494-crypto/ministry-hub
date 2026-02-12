@@ -138,155 +138,148 @@ function SortableSongItem({
       style={style}
       className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group print-song ${isDragging ? 'shadow-2xl z-50 ring-2 ring-indigo-500' : ''}`}
     >
-      <div className="p-6 flex flex-col md:flex-row gap-6">
-        {/* 왼쪽: 드래그 핸들 + 번호 */}
-        <div className="flex items-start gap-3">
+      <div className="px-2 py-3 md:p-6 space-y-2.5 md:space-y-4">
+        {/* 번호 + 제목 */}
+        <div className="flex items-center gap-3 md:gap-4 pl-4 md:pl-0">
           {canEdit && (
             <div
               {...attributes}
               {...listeners}
-              className="mt-1 cursor-grab active:cursor-grabbing text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="hidden md:block cursor-grab active:cursor-grabbing text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               style={{ touchAction: 'none' }}
               title="드래그하여 순서 변경"
             >
               <span className="material-symbols-outlined">drag_indicator</span>
             </div>
           )}
-          <span className="text-2xl font-bold text-gray-400">{String(index + 1).padStart(2, '0')}</span>
-        </div>
-
-        {/* 메인 콘텐츠 */}
-        <div className="flex-grow space-y-4">
-          {/* 제목 + 버튼 행 */}
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold mb-1 hover:text-indigo-600 cursor-pointer transition-colors">
-                {song.songs.song_name}
-              </h3>
-              <p className="text-sm text-gray-500">
-                {song.songs.team_name} • <span className="text-indigo-600 font-semibold">Key: {song.key_transposed || song.songs.key || '-'}</span>
-              </p>
-            </div>
-
-            {/* 아이콘 버튼들 */}
-            <div className="flex items-center gap-3 flex-wrap">
-              {(song.songs.lyrics || song.songs.file_url) && (
-                <button
-                  onClick={() => onTogglePreview(song.id)}
-                  className={`p-2 rounded-full transition-colors ${isPreviewOpen ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-gray-100 text-gray-500'}`}
-                  title={isPreviewOpen ? '접기' : '펼치기'}
-                >
-                  <span className="material-symbols-outlined">{isPreviewOpen ? 'visibility_off' : 'visibility'}</span>
-                </button>
-              )}
-              {song.songs.file_url && (
-                <button
-                  onClick={() => onOpenSheetViewer(song)}
-                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
-                  title="악보 에디터"
-                >
-                  <span className="material-symbols-outlined">tv</span>
-                </button>
-              )}
-              <button
-                onClick={() => song.songs.youtube_url && onOpenYoutubeModal(song.songs)}
-                disabled={!song.songs.youtube_url}
-                className={`p-2 rounded-full transition-colors ${song.songs.youtube_url ? 'hover:bg-rose-50 text-rose-500' : 'text-gray-300 cursor-not-allowed'}`}
-                title={song.songs.youtube_url ? '유튜브' : '유튜브 링크 없음'}
-              >
-                <span className="material-symbols-outlined">play_circle</span>
-              </button>
-              {canEdit && (
-                <>
-                  <button
-                    onClick={() => onOpenSongForm(song)}
-                    className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
-                    title="송폼 편집"
-                  >
-                    <span className="material-symbols-outlined">edit_note</span>
-                  </button>
-                  <div className="w-px h-4 bg-gray-200 mx-1 hidden md:block"></div>
-                  <button
-                    onClick={() => onMoveUp(index)}
-                    disabled={index === 0}
-                    className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                    title="위로"
-                  >
-                    <span className="material-symbols-outlined">keyboard_arrow_up</span>
-                  </button>
-                  <button
-                    onClick={() => onMoveDown(index)}
-                    disabled={index === totalSongs - 1}
-                    className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                    title="아래로"
-                  >
-                    <span className="material-symbols-outlined">keyboard_arrow_down</span>
-                  </button>
-                  <button
-                    onClick={() => onRemove(song.id)}
-                    className="p-2 rounded-full hover:bg-red-50 text-red-400 transition-colors"
-                    title="삭제"
-                  >
-                    <span className="material-symbols-outlined">delete</span>
-                  </button>
-                </>
-              )}
-            </div>
+          <span className="text-xl md:text-2xl font-bold text-gray-400 shrink-0">{String(index + 1).padStart(2, '0')}</span>
+          <div className="min-w-0">
+            <h3 className="text-lg md:text-xl font-bold hover:text-indigo-600 cursor-pointer transition-colors truncate">
+              {song.songs.song_name}
+            </h3>
+            <p className="text-xs md:text-sm text-gray-500 truncate">
+              {song.songs.team_name} • <span className="text-indigo-600 font-semibold">Key: {song.key_transposed || song.songs.key || '-'}</span>
+            </p>
           </div>
+        </div>
 
-          {/* 송폼 */}
-          {song.selected_form && song.selected_form.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-3 text-sm font-mono text-gray-600 border border-gray-100">
-              <span className="text-gray-400 mr-2 uppercase text-[10px] font-sans font-bold">Song Form:</span>
-              {song.selected_form.join(' - ')}
-            </div>
+        {/* 아이콘 버튼들 - 전체 너비 */}
+        <div className="flex items-center gap-1.5 md:gap-3">
+          {(song.songs.lyrics || song.songs.file_url) && (
+            <button
+              onClick={() => onTogglePreview(song.id)}
+              className={`p-1.5 md:p-2 rounded-full transition-colors ${isPreviewOpen ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-gray-100 text-gray-500'}`}
+              title={isPreviewOpen ? '접기' : '펼치기'}
+            >
+              <span className="material-symbols-outlined text-xl md:text-2xl">{isPreviewOpen ? 'visibility_off' : 'visibility'}</span>
+            </button>
           )}
+          {song.songs.file_url && (
+            <button
+              onClick={() => onOpenSheetViewer(song)}
+              className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+              title="악보 에디터"
+            >
+              <span className="material-symbols-outlined text-xl md:text-2xl">tv</span>
+            </button>
+          )}
+          <button
+            onClick={() => song.songs.youtube_url && onOpenYoutubeModal(song.songs)}
+            disabled={!song.songs.youtube_url}
+            className={`p-1.5 md:p-2 rounded-full transition-colors ${song.songs.youtube_url ? 'hover:bg-rose-50 text-rose-500' : 'text-gray-300 cursor-not-allowed'}`}
+            title={song.songs.youtube_url ? '유튜브' : '유튜브 링크 없음'}
+          >
+            <span className="material-symbols-outlined text-xl md:text-2xl">play_circle</span>
+          </button>
+          {canEdit && (
+            <>
+              <button
+                onClick={() => onOpenSongForm(song)}
+                className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+                title="송폼 편집"
+              >
+                <span className="material-symbols-outlined text-xl md:text-2xl">edit_note</span>
+              </button>
+              <div className="w-px h-4 bg-gray-200 mx-1 hidden md:block"></div>
+              <button
+                onClick={() => onMoveUp(index)}
+                disabled={index === 0}
+                className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                title="위로"
+              >
+                <span className="material-symbols-outlined">keyboard_arrow_up</span>
+              </button>
+              <button
+                onClick={() => onMoveDown(index)}
+                disabled={index === totalSongs - 1}
+                className="hidden md:block p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                title="아래로"
+              >
+                <span className="material-symbols-outlined">keyboard_arrow_down</span>
+              </button>
+              <button
+                onClick={() => onRemove(song.id)}
+                className="p-1.5 md:p-2 rounded-full hover:bg-red-50 text-red-400 transition-colors"
+                title="삭제"
+              >
+                <span className="material-symbols-outlined text-xl md:text-2xl">delete</span>
+              </button>
+            </>
+          )}
+        </div>
 
-          {/* 메모 */}
-          {song.notes ? (
-            <div className="bg-amber-50/30 border border-amber-100/50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">sticky_note_2</span> MEMO
-                </span>
-                {canEdit && (
-                  <button
-                    onClick={() => onOpenNoteModal(song)}
-                    className="text-[10px] font-bold text-amber-600/60 hover:text-amber-600 uppercase"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              <div className="text-sm text-amber-900/80 leading-relaxed">
-                <pre className="whitespace-pre-wrap font-sans">
-                  {song.notes.length > 150 && !isNoteExpanded
-                    ? `${song.notes.slice(0, 150)}...`
-                    : song.notes
-                  }
-                </pre>
-              </div>
-              {song.notes.length > 150 && (
+        {/* 송폼 - 전체 너비 */}
+        {song.selected_form && song.selected_form.length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-3 text-sm font-mono text-gray-600 border border-gray-100">
+            <span className="text-gray-400 mr-2 uppercase text-[10px] font-sans font-bold">Song Form:</span>
+            {song.selected_form.join(' - ')}
+          </div>
+        )}
+
+        {/* 메모 - 전체 너비 */}
+        {song.notes ? (
+          <div className="bg-amber-50/30 border border-amber-100/50 rounded-lg p-3 md:p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">sticky_note_2</span> MEMO
+              </span>
+              {canEdit && (
                 <button
-                  onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-                  className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-medium flex items-center gap-1"
+                  onClick={() => onOpenNoteModal(song)}
+                  className="text-[10px] font-bold text-amber-600/60 hover:text-amber-600 uppercase"
                 >
-                  <span className="material-symbols-outlined text-sm">{isNoteExpanded ? 'expand_less' : 'expand_more'}</span>
-                  {isNoteExpanded ? '접기' : '더보기'}
+                  Edit
                 </button>
               )}
             </div>
-          ) : (
-            canEdit && (
+            <div className="text-sm text-amber-900/80 leading-relaxed">
+              <pre className="whitespace-pre-wrap font-sans">
+                {song.notes.length > 150 && !isNoteExpanded
+                  ? `${song.notes.slice(0, 150)}...`
+                  : song.notes
+                }
+              </pre>
+            </div>
+            {song.notes.length > 150 && (
               <button
-                onClick={() => onOpenNoteModal(song)}
-                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors font-medium"
+                onClick={() => setIsNoteExpanded(!isNoteExpanded)}
+                className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-medium flex items-center gap-1"
               >
-                <span className="material-symbols-outlined text-sm">add</span> 메모 추가
+                <span className="material-symbols-outlined text-sm">{isNoteExpanded ? 'expand_less' : 'expand_more'}</span>
+                {isNoteExpanded ? '접기' : '더보기'}
               </button>
-            )
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          canEdit && (
+            <button
+              onClick={() => onOpenNoteModal(song)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors font-medium"
+            >
+              <span className="material-symbols-outlined text-sm">add</span> 메모 추가
+            </button>
+          )
+        )}
       </div>
 
       {/* 미리보기 영역 */}
@@ -1434,22 +1427,27 @@ const saveNote = async () => {
       {/* 메인 영역 */}
       <div className="flex-grow flex flex-col min-w-0">
         {/* 헤더 */}
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200">
+        {/* 모바일 상단 고정 바: 뒤로가기 + WORSHEEP 로고 */}
+        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 lg:hidden">
+          <div className="max-w-5xl mx-auto px-6 py-2 flex items-center gap-1">
+            <button
+              onClick={() => router.push(`/my-team/${teamId}`)}
+              className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
+              title="뒤로가기 (팀 페이지)"
+            >
+              <span className="material-symbols-outlined text-xl">arrow_back</span>
+            </button>
+            <Link href="/main" className="text-lg font-logo text-slate-700">
+              WORSHEEP
+            </Link>
+          </div>
+        </div>
+
+        <header className="bg-white border-b border-gray-200">
           <div className="max-w-5xl mx-auto px-6 py-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <button
-                    onClick={() => router.push(`/my-team/${teamId}`)}
-                    className="lg:hidden p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
-                    title="뒤로가기 (팀 페이지)"
-                  >
-                    <span className="material-symbols-outlined text-xl">arrow_back</span>
-                  </button>
-                  {/* 모바일: 로고 */}
-                  <Link href="/main" className="lg:hidden text-lg font-logo text-slate-700">
-                    WORSHEEP
-                  </Link>
                   {isEditing ? (
                     <input
                       type="text"
@@ -1462,7 +1460,7 @@ const saveNote = async () => {
                   )}
                 </div>
                 {!isEditing && (
-                  <div className="flex items-center gap-3 text-xs text-gray-500 ml-0 lg:ml-0">
+                  <div className="flex items-center gap-3 text-xs text-gray-500 ml-0 lg:ml-0 mt-2 md:mt-0">
                     <span className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-sm">calendar_today</span>
                       {new Date(setlist.service_date).toLocaleDateString('ko-KR')}

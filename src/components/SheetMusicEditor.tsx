@@ -339,6 +339,45 @@ export default function SheetMusicEditor({
   const [draggingFormItem, setDraggingFormItem] = useState<{ type: 'songForm' | 'partTag' | 'pianoScore' | 'drumScore', id?: string } | null>(null)
   const [draggingNewPartTag, setDraggingNewPartTag] = useState<string | null>(null)
 
+  // 바텀시트 드래그 상태
+  const panelDragRef = useRef<{ startY: number; startHeight: number } | null>(null)
+
+  const handleSheetDragStart = useCallback((e: React.TouchEvent) => {
+    const panel = e.currentTarget.closest('[data-bottomsheet]') as HTMLElement
+    if (!panel) return
+    panelDragRef.current = {
+      startY: e.touches[0].clientY,
+      startHeight: panel.getBoundingClientRect().height
+    }
+  }, [])
+
+  const handleSheetDragMove = useCallback((e: React.TouchEvent) => {
+    if (!panelDragRef.current) return
+    e.preventDefault()
+    const deltaY = panelDragRef.current.startY - e.touches[0].clientY
+    const newHeight = panelDragRef.current.startHeight + deltaY
+    const clampedHeight = Math.min(window.innerHeight * 0.92, Math.max(window.innerHeight * 0.15, newHeight))
+    const panel = e.currentTarget.closest('[data-bottomsheet]') as HTMLElement
+    if (panel) {
+      panel.style.height = `${clampedHeight}px`
+      panel.style.maxHeight = 'none'
+    }
+  }, [])
+
+  const handleSheetDragEnd = useCallback((e: React.TouchEvent, setShow: (show: boolean) => void) => {
+    if (!panelDragRef.current) return
+    const panel = e.currentTarget.closest('[data-bottomsheet]') as HTMLElement
+    const currentH = panel ? panel.getBoundingClientRect().height : 0
+    panelDragRef.current = null
+    if (currentH < window.innerHeight * 0.2) {
+      setShow(false)
+      if (panel) {
+        panel.style.height = ''
+        panel.style.maxHeight = ''
+      }
+    }
+  }, [])
+
   // 피아노 악보 상태
   const [pianoScores, setPianoScores] = useState<PianoScoreElement[]>(initialPianoScores)
   const [showPianoModal, setShowPianoModal] = useState(false)
@@ -3075,18 +3114,18 @@ export default function SheetMusicEditor({
   return (
     <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden ${'editor-light'} ${'bg-slate-100'}`}>
       {/* ===== 헤더 (새 디자인) ===== */}
-      <header className={`h-11 md:h-16 border-b px-2 md:px-6 flex items-center justify-between z-50 ${
+      <header className={`h-9 md:h-16 border-b px-1.5 md:px-6 flex items-center justify-between z-50 overflow-hidden ${
         'bg-white/80 border-slate-200'
       } backdrop-blur-md ${isViewMode && hideToolbar ? 'hidden' : ''}`}>
         {/* 왼쪽: 닫기 + 페이지 네비게이션 */}
-        <div className="flex items-center gap-1 md:gap-4">
+        <div className="flex items-center gap-0.5 md:gap-4 shrink-0">
           <button
             onClick={handleCloseRequest}
-            className={`p-1 md:p-2 rounded-full transition-colors ${
+            className={`${isMobile ? 'w-6 h-6 flex items-center justify-center' : 'p-2'} rounded-full transition-colors ${
               'hover:bg-slate-100'
             }`}
           >
-            <span className={`material-symbols-outlined ${isMobile ? 'text-base' : 'text-xl'}`}>close</span>
+            <span className={`material-symbols-outlined ${isMobile ? 'text-sm' : 'text-xl'}`}>close</span>
           </button>
 
           <div className={`h-5 md:h-8 w-px ${'bg-slate-200'}`} />
@@ -3161,12 +3200,12 @@ export default function SheetMusicEditor({
         </div>
 
         {/* 오른쪽: 모드 전환 + 버튼 */}
-        <div className="flex items-center gap-1 md:gap-1.5 lg:gap-3">
+        <div className="flex items-center gap-0.5 md:gap-1.5 lg:gap-3 shrink-0">
           {/* 모드 전환 */}
-          <div className={`flex p-0.5 md:p-0.5 lg:p-1 rounded md:rounded-lg lg:rounded-xl ${'bg-slate-100'}`}>
+          <div className={`flex ${isMobile ? 'p-px gap-px' : 'p-0.5 lg:p-1'} rounded md:rounded-lg lg:rounded-xl ${'bg-slate-100'}`}>
             <button
               onClick={() => setEditorMode('view')}
-              className={`px-1.5 md:px-2 lg:px-4 py-0.5 md:py-1 lg:py-1.5 font-semibold rounded md:rounded-md lg:rounded-lg transition-all ${
+              className={`${isMobile ? 'w-6 h-6' : 'px-2 lg:px-4 py-1 lg:py-1.5'} flex items-center justify-center font-semibold rounded md:rounded-md lg:rounded-lg transition-all ${
                 isViewMode
                   ? `shadow-sm ${'bg-white text-slate-900'}`
                   : `${'text-slate-500'}`
@@ -3176,7 +3215,7 @@ export default function SheetMusicEditor({
             </button>
             <button
               onClick={() => setEditorMode('edit')}
-              className={`px-1.5 md:px-2 lg:px-4 py-0.5 md:py-1 lg:py-1.5 font-semibold rounded md:rounded-md lg:rounded-lg transition-all ${
+              className={`${isMobile ? 'w-6 h-6' : 'px-2 lg:px-4 py-1 lg:py-1.5'} flex items-center justify-center font-semibold rounded md:rounded-md lg:rounded-lg transition-all ${
                 !isViewMode
                   ? `shadow-sm ${'bg-white text-slate-900'}`
                   : `${'text-slate-500'}`
@@ -3193,7 +3232,7 @@ export default function SheetMusicEditor({
             onClick={() => setShowExportModal(true)}
             disabled={exporting}
             className={`flex items-center justify-center border rounded md:rounded-lg lg:rounded-xl transition-colors ${
-              isMobile ? 'w-7 h-7' : 'w-8 h-8 lg:w-auto lg:h-auto lg:gap-2 lg:px-4 lg:py-2'
+              isMobile ? 'w-6 h-6' : 'w-8 h-8 lg:w-auto lg:h-auto lg:gap-2 lg:px-4 lg:py-2'
             } ${
               'border-slate-200 hover:bg-slate-50'
             }`}
@@ -3206,7 +3245,7 @@ export default function SheetMusicEditor({
           <button
             onClick={handleSave}
             className={`bg-[#ff6b00] text-white rounded md:rounded-lg lg:rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/20 ${
-              isMobile ? 'w-7 h-7 flex items-center justify-center' : 'w-8 h-8 flex items-center justify-center lg:w-auto lg:h-auto lg:px-5 lg:py-2'
+              isMobile ? 'w-6 h-6 flex items-center justify-center' : 'w-8 h-8 flex items-center justify-center lg:w-auto lg:h-auto lg:px-5 lg:py-2'
             }`}
           >
             {isMobile
@@ -3252,34 +3291,36 @@ export default function SheetMusicEditor({
         {/* ===== 왼쪽 도구 사이드바 (새 디자인) ===== */}
         <aside className={`absolute z-40 transition-all duration-300 ${
           isViewMode ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        } ${isTouchDevice ? 'bottom-4 left-1/2 -translate-x-1/2' : 'left-6 top-1/2 -translate-y-1/2'}`}>
-          <div className={`p-1.5 rounded-2xl shadow-xl flex gap-1.5 border ${
+        } ${isTouchDevice ? 'bottom-6 left-1/2 -translate-x-1/2 w-[calc(100vw-1.5rem)]' : 'left-6 top-1/2 -translate-y-1/2'}`}
+          style={isTouchDevice ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}>
+          <div className={`p-1 md:p-1.5 rounded-2xl shadow-xl flex gap-1 md:gap-1.5 border ${
             'bg-white border-slate-200'
-          } ${isTouchDevice ? 'flex-row' : 'flex-col'}`}>
+          } ${isTouchDevice ? 'flex-row overflow-x-auto' : 'flex-col'}`}
+            style={isTouchDevice ? { scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } : undefined}>
             {/* 손 모드 */}
             <button
               onClick={() => { switchTool('pan'); setShowPenPopover(false); setShowHighlighterPopover(false); setShowEraserPopover(false); setShowTextPopover(false); }}
               className={`flex items-center justify-center rounded-xl transition-colors ${
-                isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
               } ${
                 tool === 'pan' ? 'editor-active-tool' : `${'hover:bg-slate-100'}`
               }`}
               title="이동"
             >
-              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>pan_tool</span>
+              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>pan_tool</span>
             </button>
 
             {/* 올가미 */}
             <button
               onClick={() => { switchTool('lasso'); setShowPenPopover(false); setShowHighlighterPopover(false); setShowEraserPopover(false); setShowTextPopover(false); }}
               className={`flex items-center justify-center rounded-xl transition-colors ${
-                isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
               } ${
                 tool === 'lasso' ? 'editor-active-tool' : `${'hover:bg-slate-100'}`
               }`}
               title="올가미 선택"
             >
-              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>lasso_select</span>
+              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>lasso_select</span>
             </button>
 
             <div className={`${isTouchDevice ? 'w-px h-8' : 'h-px w-auto mx-2'} ${'bg-slate-200'}`} />
@@ -3295,13 +3336,13 @@ export default function SheetMusicEditor({
                   setShowTextPopover(false)
                 }}
                 className={`flex items-center justify-center rounded-xl transition-colors ${
-                  isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                  isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
                 } ${
                   tool === 'pen' ? 'editor-active-tool shadow-md' : `${'hover:bg-slate-100'}`
                 }`}
                 title="펜"
               >
-                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>edit</span>
+                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>edit</span>
               </button>
               {/* 펜 팝오버 */}
               {showPenPopover && tool === 'pen' && (
@@ -3351,13 +3392,13 @@ export default function SheetMusicEditor({
                   setShowTextPopover(false)
                 }}
                 className={`flex items-center justify-center rounded-xl transition-colors ${
-                  isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                  isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
                 } ${
                   tool === 'highlighter' ? 'editor-active-tool shadow-md' : `${'hover:bg-slate-100'}`
                 }`}
                 title="형광펜"
               >
-                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>ink_highlighter</span>
+                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>ink_highlighter</span>
               </button>
               {/* 형광펜 팝오버 */}
               {showHighlighterPopover && tool === 'highlighter' && (
@@ -3407,13 +3448,13 @@ export default function SheetMusicEditor({
                   setShowEraserPopover(false)
                 }}
                 className={`flex items-center justify-center rounded-xl transition-colors ${
-                  isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                  isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
                 } ${
                   tool === 'text' ? 'editor-active-tool shadow-md' : `${'hover:bg-slate-100'}`
                 }`}
                 title="텍스트"
               >
-                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>title</span>
+                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>title</span>
               </button>
               {/* 텍스트 팝오버 */}
               {showTextPopover && tool === 'text' && (
@@ -3464,13 +3505,13 @@ export default function SheetMusicEditor({
                   setShowTextPopover(false)
                 }}
                 className={`flex items-center justify-center rounded-xl transition-colors ${
-                  isTouchDevice ? 'w-11 h-11' : 'w-10 h-10'
+                  isTouchDevice ? 'w-10 h-10' : 'w-10 h-10'
                 } ${
                   tool === 'eraser' ? 'editor-active-tool shadow-md' : `${'hover:bg-slate-100'}`
                 }`}
                 title="지우개"
               >
-                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-2xl' : ''}`}>ink_eraser</span>
+                <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>ink_eraser</span>
               </button>
               {/* 지우개 팝오버 */}
               {showEraserPopover && tool === 'eraser' && (
@@ -3496,7 +3537,7 @@ export default function SheetMusicEditor({
               )}
             </div>
 
-            <div className={`mx-2 ${isTouchDevice ? 'w-px h-auto' : 'h-px w-auto'} ${'bg-slate-100'}`} />
+            <div className={`${isTouchDevice ? 'mx-0.5' : 'mx-2'} ${isTouchDevice ? 'w-px h-auto' : 'h-px w-auto'} ${'bg-slate-100'}`} />
 
             {/* Undo */}
             <button
@@ -3507,7 +3548,7 @@ export default function SheetMusicEditor({
               }`}
               title="실행 취소"
             >
-              <span className="material-symbols-outlined">undo</span>
+              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>undo</span>
             </button>
 
             {/* Redo */}
@@ -3519,10 +3560,10 @@ export default function SheetMusicEditor({
               }`}
               title="다시 실행"
             >
-              <span className="material-symbols-outlined">redo</span>
+              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>redo</span>
             </button>
 
-            <div className={`mx-2 ${isTouchDevice ? 'w-px h-auto' : 'h-px w-auto'} ${'bg-slate-100'}`} />
+            <div className={`${isTouchDevice ? 'mx-0.5' : 'mx-2'} ${isTouchDevice ? 'w-px h-auto' : 'h-px w-auto'} ${'bg-slate-100'}`} />
 
             {/* 전체 지우기 */}
             <button
@@ -3532,7 +3573,7 @@ export default function SheetMusicEditor({
               }`}
               title="전체 지우기"
             >
-              <span className="material-symbols-outlined">delete</span>
+              <span className={`material-symbols-outlined ${isTouchDevice ? 'text-xl' : ''}`}>delete</span>
             </button>
           </div>
         </aside>
@@ -3898,7 +3939,7 @@ export default function SheetMusicEditor({
         {/* ===== 하단 우측 플로팅 버튼들 (새 디자인) - View 모드에서 숨김 ===== */}
         {!isViewMode && (
         <div className={`absolute flex flex-col gap-2 md:gap-4 items-end z-40 transition-all duration-300 ${
-          isMobile ? 'bottom-28 right-4' : 'bottom-8 right-8'
+          isMobile ? 'bottom-32 right-4' : 'bottom-8 right-8'
         }`}>
           {/* Piano / Drums / Parts / Song Form 버튼 그룹 - 모바일에서는 2x2 그리드 */}
           <div className={`backdrop-blur-md border rounded-2xl shadow-xl ${
@@ -4038,20 +4079,27 @@ export default function SheetMusicEditor({
 
       {/* ===== 송폼 설정 사이드 패널 (새 디자인) ===== */}
       {showSongFormPanel && !isViewMode && (
-        <div className={`overflow-y-auto z-30 shadow-2xl border editor-slide-up ${
-          'bg-white border-slate-200'
-        } ${
-          isMobile
-            ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
-            : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh]'
-        }`}>
+        <div
+          data-bottomsheet
+          className={`z-30 shadow-2xl border editor-slide-up flex flex-col ${
+            'bg-white border-slate-200'
+          } ${
+            isMobile
+              ? 'fixed bottom-0 left-0 right-0 h-[60vh] rounded-t-2xl'
+              : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh] overflow-y-auto'
+          }`}>
           {/* 모바일 드래그 핸들 */}
           {isMobile && (
-            <div className="flex justify-center pt-2 pb-1">
-              <div className={`w-10 h-1 rounded-full ${'bg-slate-300'}`} />
+            <div
+              className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0"
+              onTouchStart={handleSheetDragStart}
+              onTouchMove={handleSheetDragMove}
+              onTouchEnd={(e) => handleSheetDragEnd(e, setShowSongFormPanel)}
+            >
+              <div className={`w-10 h-1.5 rounded-full ${'bg-slate-300'}`} />
             </div>
           )}
-          <div className={`border-b p-4 ${'bg-purple-50 border-slate-200'}`}>
+          <div className={`border-b p-4 shrink-0 ${'bg-purple-50 border-slate-200'}`}>
             <div className="flex items-center justify-between">
               <h3 className={`font-bold flex items-center gap-2 ${'text-purple-700'}`}>
                 <span className="material-symbols-outlined">music_note</span>
@@ -4066,6 +4114,8 @@ export default function SheetMusicEditor({
             </div>
           </div>
 
+          {/* 스크롤 가능한 콘텐츠 영역 */}
+          <div className={isMobile ? 'flex-1 overflow-y-auto overscroll-contain' : ''}>
           {/* 송폼 추가 입력 */}
           <div className={`border-b p-4 ${'border-slate-200'}`}>
             <h4 className={`font-semibold mb-2 text-sm ${'text-slate-700'}`}>송폼 추가</h4>
@@ -4202,25 +4252,33 @@ export default function SheetMusicEditor({
               </div>
             </div>
           )}
+          </div>{/* 스크롤 wrapper 닫기 */}
         </div>
       )}
 
       {/* ===== 파트태그 설정 사이드 패널 (새 디자인) ===== */}
       {showPartTagPanel && !isViewMode && (
-        <div className={`overflow-y-auto z-30 shadow-2xl border editor-slide-up ${
-          'bg-white border-slate-200'
-        } ${
-          isMobile
-            ? 'fixed bottom-0 left-0 right-0 max-h-[60vh] rounded-t-2xl'
-            : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh]'
-        }`}>
+        <div
+          data-bottomsheet
+          className={`z-30 shadow-2xl border editor-slide-up flex flex-col ${
+            'bg-white border-slate-200'
+          } ${
+            isMobile
+              ? 'fixed bottom-0 left-0 right-0 h-[60vh] rounded-t-2xl'
+              : 'fixed top-24 right-4 w-72 rounded-2xl max-h-[70vh] overflow-y-auto'
+          }`}>
           {/* 모바일 드래그 핸들 */}
           {isMobile && (
-            <div className="flex justify-center pt-2 pb-1">
-              <div className={`w-10 h-1 rounded-full ${'bg-slate-300'}`} />
+            <div
+              className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0"
+              onTouchStart={handleSheetDragStart}
+              onTouchMove={handleSheetDragMove}
+              onTouchEnd={(e) => handleSheetDragEnd(e, setShowPartTagPanel)}
+            >
+              <div className={`w-10 h-1.5 rounded-full ${'bg-slate-300'}`} />
             </div>
           )}
-          <div className={`border-b p-4 ${'bg-emerald-50 border-slate-200'}`}>
+          <div className={`border-b p-4 shrink-0 ${'bg-emerald-50 border-slate-200'}`}>
             <div className="flex items-center justify-between">
               <h3 className={`font-bold flex items-center gap-2 ${'text-emerald-700'}`}>
                 <span className="material-symbols-outlined">sell</span>
@@ -4235,6 +4293,8 @@ export default function SheetMusicEditor({
             </div>
           </div>
 
+          {/* 스크롤 가능한 콘텐츠 영역 */}
+          <div className={isMobile ? 'flex-1 overflow-y-auto overscroll-contain' : ''}>
           {/* 파트 태그 팔레트 */}
           <div className={`border-b p-4 ${'border-slate-200'}`}>
             <h4 className={`font-semibold mb-2 text-sm ${'text-slate-700'}`}>파트 태그 추가</h4>
@@ -4321,6 +4381,7 @@ export default function SheetMusicEditor({
               </div>
             </div>
           )}
+          </div>{/* 스크롤 wrapper 닫기 */}
         </div>
       )}
 
