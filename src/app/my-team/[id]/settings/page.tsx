@@ -359,55 +359,20 @@ export default function TeamSettingsPage() {
   }
 
   try {
-    console.log('팀 삭제 시작:', teamId)
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/teams/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+      },
+      body: JSON.stringify({ teamId }),
+    })
+    const result = await res.json()
 
-    // 1. 팀 콘티의 곡들 먼저 가져오기
-    const { data: teamSetlists } = await supabase
-      .from('team_setlists')
-      .select('id')
-      .eq('team_id', teamId)
-
-    if (teamSetlists && teamSetlists.length > 0) {
-      const setlistIds = teamSetlists.map(s => s.id)
-      
-      // 팀 콘티의 곡들 삭제
-      const { error: teamSongError } = await supabase
-        .from('team_setlist_songs')
-        .delete()
-        .in('setlist_id', setlistIds)
-
-      if (teamSongError) {
-        console.error('Error deleting team songs:', teamSongError)
-      }
+    if (!res.ok) {
+      throw new Error(result.error || '팀 삭제에 실패했습니다.')
     }
-
-    // 2. 팀 콘티 삭제
-    const { error: teamSetlistError } = await supabase
-      .from('team_setlists')
-      .delete()
-      .eq('team_id', teamId)
-
-    if (teamSetlistError) {
-      console.error('Error deleting team setlists:', teamSetlistError)
-    }
-
-    // 3. 팀 멤버 삭제
-    const { error: memberError } = await supabase
-      .from('team_members')
-      .delete()
-      .eq('team_id', teamId)
-
-    if (memberError) {
-      console.error('Error deleting members:', memberError)
-    }
-
-    // 4. 팀 삭제
-    const { error: teamError } = await supabase
-      .from('teams')
-      .delete()
-      .eq('id', teamId)
-
-    if (teamError) throw teamError
 
     alert('✅ 팀이 삭제되었습니다.')
     router.push('/my-team')
