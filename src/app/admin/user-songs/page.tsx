@@ -832,9 +832,9 @@ export default function UserSongsPage() {
                 </div>
               </div>
 
-              {/* 절기 선택 */}
+              {/* 시즌 선택 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">시즌</label>
                 <select
                   value={editSong.season}
                   onChange={(e) => setEditSong({ ...editSong, season: e.target.value })}

@@ -363,13 +363,13 @@ export interface ThemeCount {
   count: number
 }
 
-// ===== 절기 타입 =====
+// ===== 시즌 타입 =====
 export interface SeasonCount {
   name: string
   count: number
 }
 
-// songs 테이블에서 사용된 절기 목록과 곡 개수 가져오기
+// songs 테이블에서 사용된 시즌 목록과 곡 개수 가져오기
 export async function fetchSeasons(): Promise<SeasonCount[]> {
   try {
     const { data, error } = await supabase
@@ -381,7 +381,7 @@ export async function fetchSeasons(): Promise<SeasonCount[]> {
       return []
     }
 
-    // 절기별 카운트 집계
+    // 시즌별 카운트 집계
     const seasonCounts: { [key: string]: number } = {}
     data?.forEach(song => {
       if (song.season && song.season.trim()) {

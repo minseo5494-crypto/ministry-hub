@@ -28,7 +28,7 @@ interface FilterPanelProps {
   // 동적 테마 목록
   themeCounts?: ThemeCount[]
   themesLoading?: boolean
-  // 동적 절기 목록
+  // 동적 시즌 목록
   seasonsList?: SeasonCount[]
   seasonsLoading?: boolean
 }
@@ -88,16 +88,16 @@ export default function FilterPanel({
         </button>
       </div>
 
-      {/* 절기 필터 */}
+      {/* 시즌 필터 */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Calendar className="inline w-4 h-4 mr-1" />
-          절기
+          시즌
         </label>
         {seasonsLoading ? (
-          <div className="text-sm text-gray-500 py-2">절기 로딩 중...</div>
+          <div className="text-sm text-gray-500 py-2">시즌 로딩 중...</div>
         ) : seasonsList.length === 0 ? (
-          <div className="text-sm text-gray-500 py-2">등록된 절기가 없습니다</div>
+          <div className="text-sm text-gray-500 py-2">등록된 시즌이 없습니다</div>
         ) : (
           <div className="flex flex-wrap gap-2">
             <button

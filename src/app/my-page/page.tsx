@@ -2349,9 +2349,9 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
 </div>
               </div>
 
-              {/* 절기 선택 */}
+              {/* 시즌 선택 */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">절기</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">시즌</label>
                 <select
                   value={newSong.season}
                   onChange={(e) => setNewSong({ ...newSong, season: e.target.value })}
@@ -3130,9 +3130,9 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 </div>
               </div>
 
-              {/* 절기 선택 */}
+              {/* 시즌 선택 */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">절기</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">시즌</label>
                 <select
                   value={editSong.season}
                   onChange={(e) => setEditSong({ ...editSong, season: e.target.value })}

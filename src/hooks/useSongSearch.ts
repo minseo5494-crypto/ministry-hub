@@ -106,7 +106,7 @@ export function useSongSearch() {
       })
     }
 
-    // 절기 필터
+    // 시즌 필터
     if (filters.season && filters.season !== '전체') {
       result = result.filter(song => song.season === filters.season)
     }

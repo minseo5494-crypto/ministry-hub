@@ -309,9 +309,9 @@ export default function AddSongModal({
             </div>
           </div>
 
-          {/* 절기 */}
+          {/* 시즌 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">절기</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">시즌</label>
             <select
               value={newSong.season}
               onChange={(e) => setNewSong({ ...newSong, season: e.target.value })}
