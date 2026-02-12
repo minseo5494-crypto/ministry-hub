@@ -46,6 +46,18 @@ export default function JoinTeamPage() {
     setJoining(true)
 
     try {
+      // 0. 팀 개수 제한 체크 (최대 10개)
+      const { count: teamCount } = await supabase
+        .from('team_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['active', 'pending'])
+      if ((teamCount ?? 0) >= 10) {
+        alert('팀은 최대 10개까지 참여할 수 있습니다.')
+        setJoining(false)
+        return
+      }
+
       // 1. 초대 코드로 팀 찾기
       const { data: teamData, error: teamError } = await supabase
         .from('teams')

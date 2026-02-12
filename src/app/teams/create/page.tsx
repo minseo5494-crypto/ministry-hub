@@ -54,6 +54,18 @@ export default function CreateTeamPage() {
     setCreating(true)
 
     try {
+      // 0. 팀 개수 제한 체크 (최대 10개)
+      const { count } = await supabase
+        .from('team_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['active', 'pending'])
+      if ((count ?? 0) >= 10) {
+        alert('팀은 최대 10개까지 참여할 수 있습니다.')
+        setCreating(false)
+        return
+      }
+
       // 1. 초대 코드 생성 (6자리 랜덤 영숫자)
       const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
 
