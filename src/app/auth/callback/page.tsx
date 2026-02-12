@@ -30,13 +30,10 @@ export default function AuthCallbackPage() {
               .eq('id', session.user.id)
 
             // 데모 팀 자동 가입 (서버 API로 RLS 우회)
-            const accessToken = (await supabase.auth.getSession()).data.session?.access_token
-            if (accessToken) {
-              await fetch('/api/teams/join-demo', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}` },
-              }).catch(err => console.error('데모 팀 가입 실패:', err))
-            }
+            await fetch('/api/teams/join-demo', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${session.access_token}` },
+            }).catch(err => console.error('데모 팀 가입 실패:', err))
 
             setStatus('verified')
             setTimeout(() => router.push('/main'), 2000)
