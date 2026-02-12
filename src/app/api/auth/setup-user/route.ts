@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, email, name, profileImageUrl, authProvider, mergeFromId } = await request.json()
+    const { userId, email, name, profileImageUrl, authProvider, mergeFromId, termsAgreedAt } = await request.json()
 
     if (!userId || !email) {
       return NextResponse.json({ error: 'userId와 email은 필수입니다.' }, { status: 400 })
@@ -33,17 +33,22 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. users 테이블에 upsert
+    const upsertData: any = {
+      id: userId,
+      email,
+      name: name || email.split('@')[0],
+      profile_image_url: profileImageUrl || null,
+      email_verified: true,
+      auth_provider: authProvider || 'google',
+      last_login: new Date().toISOString()
+    }
+    if (termsAgreedAt) {
+      upsertData.terms_agreed_at = termsAgreedAt
+    }
+
     const { error: upsertError } = await adminClient
       .from('users')
-      .upsert({
-        id: userId,
-        email,
-        name: name || email.split('@')[0],
-        profile_image_url: profileImageUrl || null,
-        email_verified: true,
-        auth_provider: authProvider || 'google',
-        last_login: new Date().toISOString()
-      }, { onConflict: 'id' })
+      .upsert(upsertData, { onConflict: 'id' })
 
     if (upsertError) {
       console.error('setup-user upsert error:', upsertError)

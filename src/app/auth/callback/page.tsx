@@ -12,28 +12,30 @@ export default function AuthCallbackPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // URL 해시에서 토큰 타입 확인
-    const hash = window.location.hash
-    const params = new URLSearchParams(hash.replace('#', ''))
-    const type = params.get('type')
-    const isEmailVerification = type === 'signup' || type === 'email'
-
     // onAuthStateChange로 새 세션 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         try {
-          // 모든 신규 가입에 대해 데모 팀 자동 가입 (중복 가입은 서버에서 스킵)
-          await fetch('/api/teams/join-demo', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${session.access_token}` },
-          }).catch(err => console.error('데모 팀 가입 실패:', err))
+          // 세션 메타데이터로 인증 제공자 감지 (PKCE 호환)
+          const provider = session.user.app_metadata?.provider
+          const isEmailUser = provider === 'email'
 
-          if (isEmailVerification) {
-            // 이메일 인증 완료: email_verified 업데이트
-            await supabase
-              .from('users')
-              .update({ email_verified: true })
-              .eq('id', session.user.id)
+          if (isEmailUser) {
+            // 이메일 인증 완료: setup-user API로 프로필 설정 + 데모 팀 가입
+            const res = await fetch('/api/auth/setup-user', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: session.user.id,
+                email: session.user.email,
+                name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
+                authProvider: 'email',
+                termsAgreedAt: new Date().toISOString()
+              })
+            })
+            if (!res.ok) {
+              console.error('이메일 인증 setup-user 실패:', await res.text())
+            }
 
             setStatus('verified')
             setTimeout(() => router.push('/main'), 2000)
