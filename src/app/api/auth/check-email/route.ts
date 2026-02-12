@@ -15,13 +15,14 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { data: user } = await adminClient
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
+    // auth.users에서 직접 확인 (퍼블릭 users 테이블은 불완전할 수 있음)
+    const { data: { users } } = await adminClient.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    const exists = users?.some(u => u.email === email) ?? false
 
-    return NextResponse.json({ exists: !!user })
+    return NextResponse.json({ exists })
   } catch {
     return NextResponse.json({ exists: false })
   }
