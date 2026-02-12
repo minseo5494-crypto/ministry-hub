@@ -238,16 +238,20 @@ export default function SheetMusicViewer({
       if (!context) return
 
       // 브라우저 캔버스 최대 크기 제한 (iOS Safari 등)
-      const MAX_DIM = 16384
-      const MAX_AREA = 268435456
-      let scaleFactor = 2
+      // iOS Safari는 기기에 따라 16M~268M 픽셀 제한
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      const isTouchDev = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      const MAX_DIM = isIOS ? 4096 : 16384
+      const MAX_AREA = isIOS ? 16777216 : 268435456
+      let scaleFactor = isTouchDev ? 1 : 2
       if (img.width * scaleFactor > MAX_DIM || img.height * scaleFactor > MAX_DIM) {
-        scaleFactor = Math.min(MAX_DIM / img.width, MAX_DIM / img.height, 2)
+        scaleFactor = Math.min(MAX_DIM / img.width, MAX_DIM / img.height, scaleFactor)
       }
       if (img.width * scaleFactor * img.height * scaleFactor > MAX_AREA) {
         scaleFactor = Math.min(Math.sqrt(MAX_AREA / (img.width * img.height)), scaleFactor)
       }
-      scaleFactor = Math.max(1, scaleFactor)
+      scaleFactor = Math.max(0.5, scaleFactor)
 
       canvas.width = img.width * scaleFactor
       canvas.height = img.height * scaleFactor
