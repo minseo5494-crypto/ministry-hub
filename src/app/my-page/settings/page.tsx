@@ -123,12 +123,16 @@ export default function MyPageSettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
-    // Auth에서 직접 이메일 가져오기 (users 테이블 스프레드로 덮어씌워질 수 있으므로)
+    // Auth에서 직접 이메일 가져오기
     const { data: { user: authUser } } = await supabase.auth.getUser()
     const accountEmail = authUser?.email || user?.email || userEmail
 
     const confirmation = prompt(
-      '정말 계정을 삭제하시겠습니까?\n모든 데이터가 영구적으로 삭제됩니다.\n삭제하려면 이메일 주소를 입력하세요:',
+      '정말 계정을 삭제하시겠습니까?\n\n' +
+      '• 전체공개/팀공유 곡은 유지됩니다\n' +
+      '• 나만보기 곡은 영구 삭제됩니다\n' +
+      '• 개인 필기, 좋아요, 팀 멤버십은 삭제됩니다\n\n' +
+      '삭제하려면 이메일 주소를 입력하세요:',
       ''
     )
 
@@ -138,18 +142,29 @@ export default function MyPageSettingsPage() {
     }
 
     try {
-      // 사용자 삭제 (Supabase의 ON DELETE CASCADE로 관련 데이터 자동 삭제)
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', user.id)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('세션이 만료되었습니다. 다시 로그인 해주세요.')
+        router.push('/login')
+        return
+      }
 
-      if (error) throw error
+      const response = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      })
 
-      // 로그아웃
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '계정 삭제에 실패했습니다.')
+      }
+
       await supabase.auth.signOut()
-
-      alert('✅ 계정이 삭제되었습니다.')
+      alert('계정이 삭제되었습니다.')
       router.push('/')
     } catch (error: any) {
       console.error('Error deleting account:', error)
@@ -302,9 +317,15 @@ export default function MyPageSettingsPage() {
         {/* 위험 구역 */}
         <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
           <h2 className="text-xl font-bold text-red-900 mb-4">위험 구역</h2>
-          <p className="text-sm text-red-700 mb-4">
-            ⚠️ 계정을 삭제하면 모든 콘티, 폴더, 업로드한 곡이 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
-          </p>
+          <div className="mb-4 space-y-2">
+            <p className="text-sm font-medium text-red-800">계정 삭제 시 데이터 처리 안내:</p>
+            <ul className="text-sm text-red-700 space-y-1 ml-4 list-disc">
+              <li>전체공개/팀공유 곡은 <strong>유지</strong>됩니다 (업로더 정보만 제거)</li>
+              <li>나만보기 곡은 <strong>영구 삭제</strong>됩니다</li>
+              <li>개인 필기, 좋아요, 팀 멤버십은 <strong>삭제</strong>됩니다</li>
+            </ul>
+            <p className="text-xs text-red-600 mt-2">이 작업은 되돌릴 수 없습니다.</p>
+          </div>
           <button
             onClick={handleDeleteAccount}
             className="px-6 py-3 bg-[#E26559] text-white rounded-lg hover:bg-[#D14E42] font-medium flex items-center"

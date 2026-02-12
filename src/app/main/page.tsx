@@ -221,6 +221,7 @@ export default function MainPage() {
 
   // Simple viewer
   const [simpleViewerSong, setSimpleViewerSong] = useState<Song | SongWithNote | null>(null)
+  const [previewFromRecommended, setPreviewFromRecommended] = useState(false)
 
   // Lyrics modal state
   const [showLyricsModal, setShowLyricsModal] = useState(false)
@@ -1551,6 +1552,7 @@ export default function MainPage() {
           onToggleLike={toggleLike}
           onSongSelect={(song) => {
             if (song.file_url) {
+              setPreviewFromRecommended(true)
               setPreviewSong(song)
             }
           }}
@@ -1711,9 +1713,17 @@ export default function MainPage() {
       <PreviewModal
         song={previewSong}
         filteredSongs={filteredSongs}
-        onClose={() => setPreviewSong(null)}
+        onClose={() => {
+          setPreviewSong(null)
+          setPreviewFromRecommended(false)
+        }}
         onPrevious={showPreviousSong}
         onNext={showNextSong}
+        onOpenFullScreen={previewFromRecommended ? (song) => {
+          setPreviewSong(null)
+          setPreviewFromRecommended(false)
+          openSimpleViewer(song)
+        } : undefined}
       />
 
       <PPTModal
