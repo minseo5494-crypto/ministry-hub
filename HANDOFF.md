@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 10일 (저녁)
+**마지막 업데이트**: 2026년 2월 12일 (저녁)
 
 ---
 
@@ -20,29 +20,32 @@
 
 ---
 
-## 2. 최근 작업 (2026-02-10 저녁)
+## 2. 최근 작업 (2026-02-12)
 
 ### 완료된 작업
-- [x] **팀 설정 멤버 관리 통합** — "기본정보" 탭의 멤버 관리를 "직책/권한 관리" 탭(`TeamRolesManager`)으로 이동, 기존 멤버별 직책 섹션 제거
-- [x] **곡 검색 개선** — 콘티 곡 추가 검색에서 띄어쓰기 무시 검색 지원, 모달 높이 고정(`h-[80vh]`)으로 UI 점핑 방지
-- [x] **콘티 PPT 다운로드 리팩토링** — 표지 슬라이드 + 곡별 타이틀 + 가사 2줄/슬라이드 방식으로 전면 개편. 팀명/송폼/키/섹션 라벨 제거
-- [x] **Google OAuth 로그인 개선** — 중복 이메일 에러(23505) 수정, 사용자 생성/업데이트를 서버 API(`/api/auth/setup-user`)로 통합 (RLS 우회)
-- [x] **Google OAuth 데모 팀 자동 가입** — 신규 Google 사용자도 데모 WORSHEEP 팀에 자동 가입되도록 setup-user API에서 처리
-- [x] **신규 사용자 약관 동의 모달** — `terms_agreed_at` 컬럼 추가, 메인 페이지에서 미동의 사용자에게 이용약관/저작권 동의 모달 표시
+- [x] **악보 에디터 모바일 레이아웃 개선** — 상단바 버튼/아이콘 크기 통일(w-6 h-6), 하단 도구 막대 가로 스크롤 지원
+- [x] **송폼/파트태그 바텀시트 드래그** — 모바일에서 드래그로 리사이즈 가능, 스크롤 분리(overscroll-contain)
+- [x] **콘티 카드 모바일 레이아웃** — 번호+제목 한줄, 아이콘/송폼/메모 전체 너비 활용
+- [x] **콘티 헤더 개선** — 모바일에서 WORSHEEP만 sticky, 제목은 별도 줄, 날짜와 간격 조정
+- [x] **iOS Safari 대용량 악보 캔버스 수정** — iOS 기기 감지 후 보수적 캔버스 제한(4096px/16M), 모바일 scaleFactor 1x
+- [x] **악보 에디터 내보내기 모바일 수정** — 내보내기에도 동일 캔버스 제한 적용, 모바일 오류 해결
+- [x] **앱 아이콘 양 캐릭터로 변경** — PWA 아이콘(72~512px), favicon.ico, 브라우저 탭 아이콘 교체
+- [x] **모바일 메뉴 헤더 스타일** — 보라-파랑 그라데이션 → 연한 보라색(bg-purple-50)
+- [x] **로그인 에러 메시지 수정** — check-email API가 auth.users 직접 조회하도록 변경
+- [x] **팀 생성 RLS 오류 수정** — teams INSERT에 created_by 누락 → 추가
+- [x] **팀 최대 10개 제한** — 팀 생성/참여 시 team_members 기준 10개 제한 체크
 
-### 이전 작업 요약 (2/10 오전~오후)
-- 로그인 에러 메시지 개선, 회원가입 체크박스 색상 수정
-- Resend SMTP 연동, activity_logs RLS 수정
-- 데모 팀 자동 가입 기능, 서비스 인프라 현황 문서 작성
+### 이전 작업 요약 (2/10)
+- 팀 설정 멤버 관리 통합, 곡 검색 개선, 콘티 PPT 리팩토링
+- Google OAuth 로그인/데모 팀 자동 가입, 약관 동의 모달
 
 ---
 
 ## 3. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **Supabase SQL 실행 필요** — `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS terms_agreed_at timestamptz; UPDATE public.users SET terms_agreed_at = created_at WHERE terms_agreed_at IS NULL;` (Dashboard SQL Editor에서 실행)
-2. [ ] **모바일 my-team/[id] 설정 버튼 확인** — 사용자가 모바일에서 설정 아이콘이 안 보인다고 보고. 코드상 `lg:hidden`으로 보여야 하는데 원인 조사 필요
-3. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
+1. [ ] **Supabase SQL 실행 필요** — `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS terms_agreed_at timestamptz; UPDATE public.users SET terms_agreed_at = created_at WHERE terms_agreed_at IS NULL;`
+2. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
 
 ### 단기 (베타 전 - 2월 20일까지)
 - [ ] 테스터 모집 및 피드백 수집 체계 구축
@@ -70,6 +73,11 @@
 | 데모 팀 가입 | `src/lib/demoTeam.ts` |
 | 직책/권한 관리 | `src/components/TeamRolesManager.tsx` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
+| 악보 뷰어 | `src/components/SheetMusicViewer.tsx` |
+| 팀 생성 | `src/app/teams/create/page.tsx` |
+| 팀 참여 | `src/app/teams/join/page.tsx` |
+| 콘티 상세 | `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` |
+| 모바일 메뉴 | `src/app/main/components/MobileMenu.tsx` |
 | 팀 설정 | `src/app/my-team/[id]/settings/page.tsx` |
 
 ### 문서
@@ -86,9 +94,11 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-12 | 앱 아이콘 양 캐릭터로 교체 (PWA + favicon) |
+| 2026-02-12 | iOS Safari 캔버스 제한 적용 (뷰어 + 에디터 + 내보내기) |
+| 2026-02-12 | check-email API → auth.users 직접 조회로 변경 |
+| 2026-02-12 | 팀 생성/참여 최대 10개 제한 추가 |
 | 2026-02-10 | Resend SMTP 연동 (도메인 인증 완료, Tokyo 리전) |
-| 2026-02-10 | activity_logs RLS 정책 수정 (전체 인증 사용자 SELECT 허용) |
-| 2026-02-10 | 이메일 인증 활성화 (Resend 통해 발송) |
 | 2026-02-10 | Google OAuth setup-user API 추가 (RLS 우회, 데모 팀 자동 가입) |
 | 2026-02-10 | users 테이블 terms_agreed_at 컬럼 추가 (DB SQL 실행 필요) |
 
@@ -127,9 +137,11 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- Google OAuth + 데모 팀 자동 가입 정상 동작
+- 모바일 레이아웃 대폭 개선 (악보 에디터 + 콘티 페이지)
+- iOS Safari 캔버스 제한 적용 완료 (뷰어/에디터/내보내기)
+- 앱 아이콘 양 캐릭터로 통일
+- 팀 생성 RLS 수정 + 10개 제한 적용
 - 약관 동의 모달 코드 완료 (DB SQL 실행 필요 — 위 "즉시" 항목 참조)
-- 모바일 my-team 설정 버튼 이슈 미해결 (조사 필요)
 - 모든 변경사항 커밋/푸시 완료
 
 ---
