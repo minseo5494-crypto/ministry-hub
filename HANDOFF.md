@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 12일 (저녁)
+**마지막 업데이트**: 2026년 2월 13일 (새벽)
 
 ---
 
@@ -20,37 +20,37 @@
 
 ---
 
-## 2. 최근 작업 (2026-02-12)
+## 2. 최근 작업 (2026-02-13)
 
 ### 완료된 작업
-- [x] **악보 에디터 모바일 레이아웃 개선** — 상단바 버튼/아이콘 크기 통일(w-6 h-6), 하단 도구 막대 가로 스크롤 지원
-- [x] **송폼/파트태그 바텀시트 드래그** — 모바일에서 드래그로 리사이즈 가능, 스크롤 분리(overscroll-contain)
-- [x] **콘티 카드 모바일 레이아웃** — 번호+제목 한줄, 아이콘/송폼/메모 전체 너비 활용
-- [x] **콘티 헤더 개선** — 모바일에서 WORSHEEP만 sticky, 제목은 별도 줄, 날짜와 간격 조정
-- [x] **iOS Safari 대용량 악보 캔버스 수정** — iOS 기기 감지 후 보수적 캔버스 제한(4096px/16M), 모바일 scaleFactor 1x
-- [x] **악보 에디터 내보내기 모바일 수정** — 내보내기에도 동일 캔버스 제한 적용, 모바일 오류 해결
-- [x] **앱 아이콘 양 캐릭터로 변경** — PWA 아이콘(72~512px), favicon.ico, 브라우저 탭 아이콘 교체
-- [x] **모바일 메뉴 헤더 스타일** — 보라-파랑 그라데이션 → 연한 보라색(bg-purple-50)
-- [x] **로그인 에러 메시지 수정** — check-email API가 auth.users 직접 조회하도록 변경
-- [x] **팀 생성 RLS 오류 수정** — teams INSERT에 created_by 누락 → 추가
-- [x] **팀 최대 10개 제한** — 팀 생성/참여 시 team_members 기준 10개 제한 체크
+- [x] **팀 생성 서버 API 전환** — `/api/teams/create` (service role key로 RLS 우회, team_roles 트리거 문제 해결)
+- [x] **팀 삭제 서버 API 전환** — `/api/teams/delete` (RLS 우회, 연관 데이터 전체 정리)
+- [x] **계정 삭제 외래키 오류 수정** — `teams.created_by`를 null로 설정 후 users 삭제
+- [x] **데모 팀 자동 가입 서버 API** — `/api/teams/join-demo` (이메일/OAuth 모두 지원)
+- [x] **이메일 가입 약관 팝업 제거** — `auth_provider !== 'email'`일 때만 약관 모달 표시
+- [x] **추천 악보(주간 인기곡) RLS 수정** — `/api/songs/weekly-popular` API로 activity_logs 조회
+- [x] **콜백 세션 토큰 버그 수정** — `getSession()` 대신 `session.access_token` 직접 사용
+- [x] **Vercel SUPABASE_SERVICE_ROLE_KEY 환경변수 추가**
 
-### 이전 작업 요약 (2/10)
-- 팀 설정 멤버 관리 통합, 곡 검색 개선, 콘티 PPT 리팩토링
-- Google OAuth 로그인/데모 팀 자동 가입, 약관 동의 모달
+### 이전 작업 요약 (2/12)
+- 악보 에디터/콘티 모바일 레이아웃 개선, iOS Safari 캔버스 제한
+- 앱 아이콘 양 캐릭터 교체, 모바일 메뉴 스타일 변경
+- 로그인 에러 메시지 수정, 팀 최대 10개 제한
 
 ---
 
 ## 3. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **Supabase SQL 실행 필요** — `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS terms_agreed_at timestamptz; UPDATE public.users SET terms_agreed_at = created_at WHERE terms_agreed_at IS NULL;`
-2. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
+1. [ ] **RLS 정책 전면 점검** — 현재 많은 테이블에서 클라이언트(anon key) SELECT/INSERT/DELETE가 RLS에 의해 차단됨. 서버 API로 우회 중이지만, 근본적으로 RLS 정책을 정리하거나 더 많은 작업을 서버 API로 전환 필요
+2. [ ] **Supabase SQL 실행 필요** — `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS terms_agreed_at timestamptz; UPDATE public.users SET terms_agreed_at = created_at WHERE terms_agreed_at IS NULL;`
+3. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
 
 ### 단기 (베타 전 - 2월 20일까지)
 - [ ] 테스터 모집 및 피드백 수집 체계 구축
 - [ ] UI/UX 개선 (디자이너 합류 시)
 - [ ] 커스텀 역할 기능 실제 테스트
+- [ ] 이메일 회원가입 → 데모 팀 자동 가입 실제 동작 확인 (배포 후 테스트)
 
 ### 중기 (베타 기간)
 - [ ] 베타 피드백 반영
@@ -70,15 +70,18 @@
 | 이메일 확인 API | `src/app/api/auth/check-email/route.ts` |
 | 사용자 설정 API | `src/app/api/auth/setup-user/route.ts` |
 | 인증 함수 | `src/lib/auth.ts` |
-| 데모 팀 가입 | `src/lib/demoTeam.ts` |
-| 직책/권한 관리 | `src/components/TeamRolesManager.tsx` |
+| 인증 콜백 | `src/app/auth/callback/page.tsx` |
+| 데모 팀 가입 (클라이언트) | `src/lib/demoTeam.ts` (현재 미사용, 서버 API로 대체) |
+| 데모 팀 가입 API | `src/app/api/teams/join-demo/route.ts` |
+| 팀 생성 API | `src/app/api/teams/create/route.ts` |
+| 팀 삭제 API | `src/app/api/teams/delete/route.ts` |
+| 계정 삭제 API | `src/app/api/account/delete/route.ts` |
+| 주간 인기곡 API | `src/app/api/songs/weekly-popular/route.ts` |
+| 팀 참여 | `src/app/teams/join/page.tsx` |
+| 팀 설정 | `src/app/my-team/[id]/settings/page.tsx` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
 | 악보 뷰어 | `src/components/SheetMusicViewer.tsx` |
-| 팀 생성 | `src/app/teams/create/page.tsx` |
-| 팀 참여 | `src/app/teams/join/page.tsx` |
 | 콘티 상세 | `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` |
-| 모바일 메뉴 | `src/app/main/components/MobileMenu.tsx` |
-| 팀 설정 | `src/app/my-team/[id]/settings/page.tsx` |
 
 ### 문서
 | 문서 | 경로 |
@@ -94,13 +97,17 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-13 | 팀 생성/삭제 서버 API 전환 (RLS 우회) |
+| 2026-02-13 | 계정 삭제 시 teams.created_by FK 해제 추가 |
+| 2026-02-13 | 데모 팀 가입 서버 API 전환 (/api/teams/join-demo) |
+| 2026-02-13 | 주간 인기곡 서버 API 추가 (/api/songs/weekly-popular) |
+| 2026-02-13 | Vercel에 SUPABASE_SERVICE_ROLE_KEY 환경변수 추가 |
 | 2026-02-12 | 앱 아이콘 양 캐릭터로 교체 (PWA + favicon) |
 | 2026-02-12 | iOS Safari 캔버스 제한 적용 (뷰어 + 에디터 + 내보내기) |
 | 2026-02-12 | check-email API → auth.users 직접 조회로 변경 |
 | 2026-02-12 | 팀 생성/참여 최대 10개 제한 추가 |
 | 2026-02-10 | Resend SMTP 연동 (도메인 인증 완료, Tokyo 리전) |
 | 2026-02-10 | Google OAuth setup-user API 추가 (RLS 우회, 데모 팀 자동 가입) |
-| 2026-02-10 | users 테이블 terms_agreed_at 컬럼 추가 (DB SQL 실행 필요) |
 
 ---
 
@@ -130,19 +137,34 @@
 
 ---
 
-## 7. 새 대화 시작 시
+## 7. 알려진 이슈: RLS 문제
+
+현재 많은 Supabase 테이블에서 **클라이언트(anon key)의 CRUD가 RLS에 의해 차단**됨. 서버 API(service role key)로 우회 중:
+
+| 테이블 | 문제 | 우회 방법 |
+|--------|------|-----------|
+| teams | INSERT/DELETE 차단 | `/api/teams/create`, `/api/teams/delete` |
+| team_members | INSERT 차단 | `/api/teams/join-demo` |
+| team_roles | INSERT/DELETE 차단 (트리거 포함) | service role 사용 |
+| activity_logs | SELECT 차단 | `/api/songs/weekly-popular` |
+
+근본적 해결: RLS 정책 전면 점검 또는 모든 DB 작업을 서버 API로 전환
+
+---
+
+## 8. 새 대화 시작 시
 
 ```
 HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 모바일 레이아웃 대폭 개선 (악보 에디터 + 콘티 페이지)
-- iOS Safari 캔버스 제한 적용 완료 (뷰어/에디터/내보내기)
-- 앱 아이콘 양 캐릭터로 통일
-- 팀 생성 RLS 수정 + 10개 제한 적용
-- 약관 동의 모달 코드 완료 (DB SQL 실행 필요 — 위 "즉시" 항목 참조)
+- 팀 생성/삭제/데모 팀 가입 모두 서버 API로 전환 완료
+- 계정 삭제 FK 오류 수정 완료
+- 추천 악보 RLS 우회 완료
+- 이메일 가입 시 약관 팝업 미표시 수정
 - 모든 변경사항 커밋/푸시 완료
+- 배포 후 이메일 가입 → 데모 팀 자동 가입 테스트 필요
 
 ---
 
