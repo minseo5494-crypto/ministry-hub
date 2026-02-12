@@ -37,11 +37,11 @@ export default function MobileMenu({
       {/* 사이드바 메뉴 */}
       <div className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 overflow-y-auto">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-500 to-blue-500">
-          <h2 className="text-xl font-bold text-white">메뉴</h2>
+        <div className="flex items-center justify-between p-4 border-b bg-purple-50">
+          <h2 className="text-xl font-bold text-purple-700">메뉴</h2>
           <button
             onClick={onClose}
-            className="p-2 text-white hover:bg-white/20 rounded-lg transition"
+            className="p-2 text-purple-500 hover:bg-purple-100 rounded-lg transition"
           >
             <X size={24} />
           </button>
