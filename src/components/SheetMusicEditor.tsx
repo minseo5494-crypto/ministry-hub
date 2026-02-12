@@ -2054,9 +2054,27 @@ export default function SheetMusicEditor({
           let baseHeight = 0
 
           // 1. 원본 이미지/PDF 렌더링
+          // 캔버스 크기 제한 (iOS Safari 등)
+          const isIOSExport = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+          const isTouchExport = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+          const EXPORT_MAX_DIM = isIOSExport ? 4096 : 16384
+          const EXPORT_MAX_AREA = isIOSExport ? 16777216 : 268435456
+
           if (song.file_type === 'pdf' && pdfDoc) {
+            let pdfScale = isTouchExport ? 1.5 : 2
             const page = await pdfDoc.getPage(pageNum)
-            const viewport = page.getViewport({ scale: 2 })
+            let viewport = page.getViewport({ scale: pdfScale })
+            // 캔버스 제한 체크
+            if (viewport.width > EXPORT_MAX_DIM || viewport.height > EXPORT_MAX_DIM) {
+              pdfScale = Math.min(EXPORT_MAX_DIM / (viewport.width / pdfScale), EXPORT_MAX_DIM / (viewport.height / pdfScale), pdfScale)
+            }
+            if (viewport.width * viewport.height > EXPORT_MAX_AREA) {
+              const pageW = viewport.width / pdfScale
+              const pageH = viewport.height / pdfScale
+              pdfScale = Math.min(Math.sqrt(EXPORT_MAX_AREA / (pageW * pageH)), pdfScale)
+            }
+            viewport = page.getViewport({ scale: Math.max(1, pdfScale) })
             baseWidth = viewport.width
             baseHeight = viewport.height
             exportCanvas.width = baseWidth
@@ -2078,8 +2096,18 @@ export default function SheetMusicEditor({
               img.onerror = reject
               img.src = song.file_url
             })
-            baseWidth = img.width * 2
-            baseHeight = img.height * 2
+            let exportScale = isTouchExport ? 1 : 2
+            const w = img.naturalWidth || img.width
+            const h = img.naturalHeight || img.height
+            if (w * exportScale > EXPORT_MAX_DIM || h * exportScale > EXPORT_MAX_DIM) {
+              exportScale = Math.min(EXPORT_MAX_DIM / w, EXPORT_MAX_DIM / h, exportScale)
+            }
+            if (w * exportScale * h * exportScale > EXPORT_MAX_AREA) {
+              exportScale = Math.min(Math.sqrt(EXPORT_MAX_AREA / (w * h)), exportScale)
+            }
+            exportScale = Math.max(0.5, exportScale)
+            baseWidth = Math.round(w * exportScale)
+            baseHeight = Math.round(h * exportScale)
             exportCanvas.width = baseWidth
             exportCanvas.height = baseHeight
 
