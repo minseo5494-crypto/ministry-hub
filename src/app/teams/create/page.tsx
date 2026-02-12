@@ -54,61 +54,37 @@ export default function CreateTeamPage() {
     setCreating(true)
 
     try {
-      // 0. 팀 개수 제한 체크 (최대 10개)
-      const { count } = await supabase
-        .from('team_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .in('status', ['active', 'pending'])
-      if ((count ?? 0) >= 10) {
-        alert('팀은 최대 10개까지 참여할 수 있습니다.')
-        setCreating(false)
-        return
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/teams/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          teamName: teamName.trim(),
+          teamType,
+          churchName: churchName.trim(),
+        }),
+      })
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || '팀 생성에 실패했습니다.')
       }
-
-      // 1. 초대 코드 생성 (6자리 랜덤 영숫자)
-      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
-
-      // 2. 팀 생성
-      const { data: teamData, error: teamError } = await supabase
-        .from('teams')
-        .insert({
-          name: teamName.trim(),
-          type: teamType,
-          church_name: teamType === 'church_internal' ? churchName.trim() : null,
-          invite_code: inviteCode,
-          member_count: 1,
-          created_by: user.id
-        })
-        .select()
-        .single()
-
-      if (teamError) throw teamError
-
-      // 3. 생성자를 리더로 추가
-      const { error: memberError } = await supabase
-        .from('team_members')
-        .insert({
-          team_id: teamData.id,
-          user_id: user.id,
-          role: 'leader',
-          status: 'active'
-        })
-
-      if (memberError) throw memberError
 
       // 📊 팀 생성 로깅
       logActivity({
         actionType: 'team_create',
         userId: user.id,
-        teamId: teamData.id
+        teamId: result.team.id
       }).catch(err => console.error('팀 생성 로깅 실패:', err))
 
       // GA4 트래킹
       trackTeamCreate()
 
       alert('✅ 팀이 생성되었습니다!')
-      router.push(`/my-team/${teamData.id}`)
+      router.push(`/my-team/${result.team.id}`)
     } catch (error: any) {
       console.error('Error creating team:', error)
       alert(`팀 생성 실패: ${error.message}`)
