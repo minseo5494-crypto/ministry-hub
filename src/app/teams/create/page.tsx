@@ -65,7 +65,8 @@ export default function CreateTeamPage() {
           type: teamType,
           church_name: teamType === 'church_internal' ? churchName.trim() : null,
           invite_code: inviteCode,
-          member_count: 1
+          member_count: 1,
+          created_by: user.id
         })
         .select()
         .single()
