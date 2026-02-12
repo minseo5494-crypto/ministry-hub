@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { logActivity } from './activityLogger';
-import { joinDemoTeam } from './demoTeam';
+
 
 // ============================================
 // 기존 함수들 (그대로 유지)
@@ -44,8 +44,7 @@ export const signUp = async (email: string, password: string, name: string, chur
       userId: data.user.id
     }).catch(err => console.error('회원가입 로깅 실패:', err));
 
-    // 🏠 데모 팀 자동 가입
-    joinDemoTeam(data.user.id).catch(err => console.error('데모 팀 가입 실패:', err));
+    // 🏠 데모 팀 자동 가입은 이메일 인증 후 콜백에서 서버 API로 처리
   }
 
   return data;

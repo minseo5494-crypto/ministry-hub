@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { handleOAuthCallback } from '@/lib/auth'
-import { joinDemoTeam } from '@/lib/demoTeam'
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
 
 export default function AuthCallbackPage() {
@@ -30,8 +29,14 @@ export default function AuthCallbackPage() {
               .update({ email_verified: true })
               .eq('id', session.user.id)
 
-            // 데모 팀 자동 가입 (회원가입 시 실패했을 수 있으므로 여기서 재시도)
-            await joinDemoTeam(session.user.id)
+            // 데모 팀 자동 가입 (서버 API로 RLS 우회)
+            const accessToken = (await supabase.auth.getSession()).data.session?.access_token
+            if (accessToken) {
+              await fetch('/api/teams/join-demo', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+              }).catch(err => console.error('데모 팀 가입 실패:', err))
+            }
 
             setStatus('verified')
             setTimeout(() => router.push('/main'), 2000)
