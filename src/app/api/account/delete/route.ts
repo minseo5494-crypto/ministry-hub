@@ -74,7 +74,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 6. users 테이블에서 삭제 (CASCADE로 관련 데이터 정리)
+    // 6. teams.created_by를 null로 (외래키 제약조건 해제)
+    await adminClient
+      .from('teams')
+      .update({ created_by: null })
+      .eq('created_by', userId)
+
+    // 7. users 테이블에서 삭제 (CASCADE로 관련 데이터 정리)
     const { error: deleteUserError } = await adminClient
       .from('users')
       .delete()
