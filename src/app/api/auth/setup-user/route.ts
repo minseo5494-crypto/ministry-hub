@@ -32,7 +32,14 @@ export async function POST(request: NextRequest) {
         .eq('id', mergeFromId)
     }
 
-    // 1. users 테이블에 upsert
+    // 1. 같은 이메일의 orphaned 데이터 정리 (탈퇴 후 재가입 시 이전 ID의 행이 남아있을 수 있음)
+    await adminClient
+      .from('users')
+      .delete()
+      .eq('email', email)
+      .neq('id', userId)
+
+    // 2. users 테이블에 upsert
     const upsertData: any = {
       id: userId,
       email,
