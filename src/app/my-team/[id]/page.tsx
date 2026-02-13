@@ -546,6 +546,11 @@ export default function TeamDetailPage() {
   }
 
   const handleCreateSetlist = async () => {
+    if (!canCreateSetlist) {
+      alert('콘티 생성 권한이 없습니다.')
+      return
+    }
+
     if (!newSetlist.title.trim()) {
       alert('콘티 제목을 입력하세요.')
       return

@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
-import { 
-  ArrowLeft, Plus, Calendar, FileText, Settings, 
-  Users, Music, ChevronRight, Crown, User, Search, Filter 
+import { useTeamPermissions } from '@/hooks/useTeamPermissions'
+import {
+  ArrowLeft, Plus, Calendar, FileText, Settings,
+  Users, Music, ChevronRight, Crown, User, Search, Filter
 } from 'lucide-react'
 
 interface TeamInfo {
@@ -47,6 +48,10 @@ export default function TeamDetailPage() {
     custom_service_type: ''
   })
   const [creating, setCreating] = useState(false)
+
+  // 권한 훅 사용
+  const { hasPermission } = useTeamPermissions(teamId, user?.id)
+  const canCreateSetlist = hasPermission('create_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
 
   // 🆕 검색 및 필터 상태
   const [searchTerm, setSearchTerm] = useState('')
@@ -170,6 +175,11 @@ export default function TeamDetailPage() {
   }
 
   const handleCreateSetlist = async () => {
+    if (!canCreateSetlist) {
+      alert('콘티 생성 권한이 없습니다.')
+      return
+    }
+
     if (!newSetlist.title.trim()) {
       alert('콘티 제목을 입력하세요.')
       return
@@ -189,8 +199,8 @@ export default function TeamDetailPage() {
           team_id: teamId,
           title: newSetlist.title.trim(),
           service_date: newSetlist.service_date,
-          service_type: newSetlist.service_type === '직접입력' 
-            ? newSetlist.custom_service_type.trim() 
+          service_type: newSetlist.service_type === '직접입력'
+            ? newSetlist.custom_service_type.trim()
             : newSetlist.service_type,
           created_by: user.id
         })
@@ -338,13 +348,15 @@ export default function TeamDetailPage() {
           <div className="p-6 border-b">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">콘티 목록</h2>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
-              >
-                <Plus className="mr-2" size={18} />
-                새 콘티 만들기
-              </button>
+              {canCreateSetlist && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-4 py-2 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8] flex items-center"
+                >
+                  <Plus className="mr-2" size={18} />
+                  새 콘티 만들기
+                </button>
+              )}
             </div>
 
             {/* 🆕 검색 및 필터 */}
@@ -396,7 +408,7 @@ export default function TeamDetailPage() {
                   ? '검색 결과가 없습니다.'
                   : '아직 생성된 콘티가 없습니다.'}
               </p>
-              {!searchTerm && serviceTypeFilter === 'all' && (
+              {!searchTerm && serviceTypeFilter === 'all' && canCreateSetlist && (
                 <button
                   onClick={() => setShowCreateModal(true)}
                   className="px-6 py-3 bg-[#C5D7F2] text-white rounded-lg hover:bg-[#A8C4E8]"
