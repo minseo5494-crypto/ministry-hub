@@ -89,8 +89,8 @@ export default function AppLayout({
       {/* 메인 콘텐츠 영역 */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* 모바일 헤더 */}
-        <header className="lg:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-sm border-b border-slate-200">
-          <div className="flex items-center justify-between px-4 py-3">
+        <header className="lg:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 py-1.5">
             <div className="flex items-center gap-3">
               {/* 모바일 뒤로가기 */}
               {backInfo && (

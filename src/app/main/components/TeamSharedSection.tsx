@@ -72,13 +72,15 @@ export default function TeamSharedSection({ setlists, loading, onSetlistClick }:
         style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
       >
         {setlists.map(setlist => (
-          <button
+          <div
             key={setlist.id}
             onClick={() => onSetlistClick(setlist.id, setlist.team_id)}
-            className="flex-shrink-0 w-64 md:w-72 snap-start text-left group"
+            className="flex-shrink-0 w-56 md:w-60 snap-start text-left group cursor-pointer"
+            style={{ padding: 0, minHeight: 'auto' }}
           >
-            <div className="relative bg-violet-300 rounded-xl p-4 h-36 flex flex-col justify-between
-              shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+            <div className="relative rounded-xl p-4 h-36 flex flex-col justify-between
+              shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+              style={{ backgroundColor: '#d8cefd' }}>
               {/* 팀명 배지 */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium bg-white/30 px-2 py-0.5 rounded-full truncate max-w-[140px]"
@@ -113,7 +115,7 @@ export default function TeamSharedSection({ setlists, loading, onSetlistClick }:
                 )}
               </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>

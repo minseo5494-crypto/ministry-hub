@@ -57,12 +57,13 @@ export default function HeroSection({
       <div className="max-w-7xl mx-auto px-4">
         {/* 팀 배지 */}
         {userTeams.length > 0 && (
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end mb-8 -mt-4 md:-mt-4">
             <div className="flex items-center gap-1.5 flex-wrap justify-end">
               {userTeams.map(team => (
                 <span
                   key={team.id}
-                  className="text-xs font-medium text-violet-700 bg-violet-100 px-2.5 py-1 rounded-full"
+                  className="text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={{ color: '#ffffff', backgroundColor: '#b2a5c4' }}
                 >
                   {team.name}
                 </span>
@@ -72,9 +73,9 @@ export default function HeroSection({
         )}
 
         {/* 제목 텍스트 - 두 줄 */}
-        <div className="text-center mb-8 md:mb-12 mt-3 md:mt-0 pl-16 md:pl-0">
-          <h1 className="text-[28px] md:text-4xl font-bold text-gray-900 leading-relaxed md:leading-snug">
-            필요한 찬양악보를<br />
+        <div className="text-center mb-8 md:mb-12 mt-3 md:mt-0 pl-[114px] md:pl-0 pt-[2px] md:pt-0">
+          <h1 className="text-[21px] md:text-4xl font-normal text-gray-900 leading-tight md:leading-snug">
+            <span className="font-bold">필요한 찬양악보</span>를<br />
             지금 바로 검색하세요
           </h1>
         </div>
@@ -82,7 +83,7 @@ export default function HeroSection({
         {/* 검색바 + 양 캐릭터 */}
         <div className="max-w-5xl mx-auto mb-8 md:mb-10 relative">
           {/* 양 캐릭터 - 검색창 바로 위에 딱 붙어서 손만 살짝 걸침 */}
-          <div className="absolute -top-[6.15rem] left-2 md:-top-[9rem] md:left-6 w-28 h-28 md:w-40 md:h-40 z-10 pointer-events-none">
+          <div className="absolute -top-[7.56rem] left-0 md:-top-[9rem] md:left-6 w-[8.5rem] h-[8.5rem] md:w-40 md:h-40 z-10 pointer-events-none">
             <Image
               src="/images/inside.png"
               alt="WORSHEEP 양 캐릭터"
@@ -99,12 +100,12 @@ export default function HeroSection({
             : 'bg-transparent'
             }`}>
             <div className="relative">
-              <Search className={`absolute left-4 top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
+              <Search className={`absolute left-4 top-5 md:top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder={isAISearchEnabled ? "자연어로 검색해보세요 (예: 부활절에 부르기 좋은 빠른 찬양)" : `찬양곡 제목, 아티스트${filters.includeLyrics ? ', 가사' : ''}로 검색...`}
-                className={`w-full pl-12 pr-36 py-4 text-base md:text-lg text-gray-900 bg-white rounded-xl shadow-lg focus:outline-none ${isAISearchEnabled
+                className={`w-full pl-12 pr-36 py-5 md:py-4 text-base md:text-lg text-gray-900 bg-white rounded-xl shadow-lg focus:outline-none ${isAISearchEnabled
                   ? 'focus:ring-2 focus:ring-purple-400'
                   : 'focus:ring-2 focus:ring-violet-400 border border-gray-200'
                   }`}
