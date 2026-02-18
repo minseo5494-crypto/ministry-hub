@@ -1246,7 +1246,7 @@ const removeSongForm = (index: number) => {
             song_name: personalNote.song_name,
             team_name: personalNote.team_name,
             file_url: personalNote.file_url,
-            file_type: (personalNote.file_type || 'image') as 'pdf' | 'image',
+            file_type: personalNote.file_type === 'pdf' ? 'pdf' as const : 'image' as const,
             selected_form: s.selected_form,
             annotations: personalNote.annotations,
             songForms: personalNote.songForms,
@@ -1263,7 +1263,7 @@ const removeSongForm = (index: number) => {
           song_name: s.songs.song_name,
           team_name: s.songs.team_name,
           file_url: s.songs.file_url!,
-          file_type: (s.songs.file_type || 'image') as 'pdf' | 'image',
+          file_type: s.songs.file_type === 'pdf' ? 'pdf' as const : 'image' as const,
           selected_form: s.selected_form,
         }
       })
