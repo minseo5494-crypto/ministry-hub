@@ -71,6 +71,30 @@ interface SongFormPosition {
   size?: 'small' | 'medium' | 'large'
 }
 
+// 유튜브 URL을 임베드 형식으로 변환 (SortableSongItem에서도 사용)
+const getYoutubeEmbedUrl = (url: string) => {
+  if (!url) return null
+
+  // https://www.youtube.com/watch?v=VIDEO_ID 형식
+  const watchMatch = url.match(/[?&]v=([^&]+)/)
+  if (watchMatch) {
+    return `https://www.youtube.com/embed/${watchMatch[1]}`
+  }
+
+  // https://youtu.be/VIDEO_ID 형식
+  const shortMatch = url.match(/youtu\.be\/([^?]+)/)
+  if (shortMatch) {
+    return `https://www.youtube.com/embed/${shortMatch[1]}`
+  }
+
+  // 이미 embed 형식인 경우
+  if (url.includes('/embed/')) {
+    return url
+  }
+
+  return null
+}
+
 // 🆕 드래그 가능한 곡 아이템 컴포넌트
 interface SortableSongItemProps {
   song: SetlistSong
@@ -82,8 +106,9 @@ interface SortableSongItemProps {
   onTogglePreview: (id: string) => void
   onOpenSongForm: (song: SetlistSong) => void
   onOpenSheetViewer: (song: SetlistSong) => void
-  onOpenYoutubeModal: (song: Song) => void
-  onOpenNoteModal: (song: SetlistSong) => void  // ✅ 추가
+  onToggleYoutube: (id: string) => void
+  isYoutubeOpen: boolean
+  onOpenNoteModal: (song: SetlistSong) => void
   onOpenSheetFullscreen: (song: Song) => void
   isPreviewOpen: boolean
   totalSongs: number
@@ -103,8 +128,9 @@ function SortableSongItem({
   onTogglePreview,
   onOpenSongForm,
   onOpenSheetViewer,
-  onOpenYoutubeModal,
-  onOpenNoteModal,  // ✅ 추가
+  onToggleYoutube,
+  isYoutubeOpen,
+  onOpenNoteModal,
   onOpenSheetFullscreen,
   isPreviewOpen,
   totalSongs,
@@ -184,10 +210,10 @@ function SortableSongItem({
             </button>
           )}
           <button
-            onClick={() => song.songs.youtube_url && onOpenYoutubeModal(song.songs)}
+            onClick={() => song.songs.youtube_url && onToggleYoutube(song.id)}
             disabled={!song.songs.youtube_url}
-            className={`p-1.5 md:p-2 rounded-full transition-colors ${song.songs.youtube_url ? 'hover:bg-rose-50 text-rose-500' : 'text-gray-300 cursor-not-allowed'}`}
-            title={song.songs.youtube_url ? '유튜브' : '유튜브 링크 없음'}
+            className={`p-1.5 md:p-2 rounded-full transition-colors ${!song.songs.youtube_url ? 'text-gray-300 cursor-not-allowed' : isYoutubeOpen ? 'bg-rose-100 text-rose-600' : 'hover:bg-rose-50 text-rose-500'}`}
+            title={song.songs.youtube_url ? (isYoutubeOpen ? '유튜브 접기' : '유튜브') : '유튜브 링크 없음'}
           >
             <span className="material-symbols-outlined text-xl md:text-2xl">play_circle</span>
           </button>
@@ -332,6 +358,27 @@ function SortableSongItem({
           )}
         </div>
       )}
+
+      {/* 유튜브 인라인 영역 */}
+      {isYoutubeOpen && song.songs.youtube_url && (
+        <div className="border-t border-gray-100 bg-gray-50/50 p-6">
+          <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1">
+            <span className="material-symbols-outlined text-base text-rose-500">play_circle</span> YouTube
+          </h4>
+          {getYoutubeEmbedUrl(song.songs.youtube_url) ? (
+            <div className="relative w-full max-w-3xl" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src={getYoutubeEmbedUrl(song.songs.youtube_url) || ''}
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">유효하지 않은 유튜브 링크입니다.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -407,8 +454,6 @@ export default function TeamSetlistDetailPage() {
   }[]>([])
   const [startingSongIndex, setStartingSongIndex] = useState(0)
 
-  // 🎵 유튜브 모달 상태 추가
-  const [youtubeModalSong, setYoutubeModalSong] = useState<Song | null>(null)
 
   // 🔍 전체화면 뷰어 상태
   const [simpleViewerSong, setSimpleViewerSong] = useState<Song | null>(null)
@@ -941,30 +986,6 @@ const canEdit = () => {
       ...prev,
       [songId]: !prev[songId]
     }))
-  }
-
-  // 유튜브 URL을 임베드 형식으로 변환
-  const getYoutubeEmbedUrl = (url: string) => {
-    if (!url) return null
-    
-    // https://www.youtube.com/watch?v=VIDEO_ID 형식
-    const watchMatch = url.match(/[?&]v=([^&]+)/)
-    if (watchMatch) {
-      return `https://www.youtube.com/embed/${watchMatch[1]}`
-    }
-    
-    // https://youtu.be/VIDEO_ID 형식
-    const shortMatch = url.match(/youtu\.be\/([^?]+)/)
-    if (shortMatch) {
-      return `https://www.youtube.com/embed/${shortMatch[1]}`
-    }
-    
-    // 이미 embed 형식인 경우
-    if (url.includes('/embed/')) {
-      return url
-    }
-    
-    return null
   }
 
   // 송폼 편집 열기
@@ -1624,7 +1645,8 @@ const saveNote = async () => {
             onTogglePreview={togglePreview}
             onOpenSongForm={openSongFormModal}
             onOpenSheetViewer={openSheetViewerForSong}
-            onOpenYoutubeModal={setYoutubeModalSong}
+            onToggleYoutube={toggleYoutube}
+            isYoutubeOpen={youtubeStates[song.id] || false}
             onOpenNoteModal={openNoteModal}
             onOpenSheetFullscreen={openSimpleViewer}
             isPreviewOpen={previewStates[song.id] || false}
@@ -1956,47 +1978,6 @@ const saveNote = async () => {
   />
 )}
       
-      {/* 🎵 유튜브 모달 */}
-      {youtubeModalSong && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{youtubeModalSong.song_name}</h2>
-                <p className="text-sm text-gray-600">
-                  {youtubeModalSong.team_name} | Key: {youtubeModalSong.key || '-'}
-                </p>
-              </div>
-              <button
-                onClick={() => setYoutubeModalSong(null)}
-                className="text-gray-500 hover:text-gray-700 p-2"
-                title="닫기"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4 bg-gray-100">
-              {getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') ? (
-                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    src={getYoutubeEmbedUrl(youtubeModalSong.youtube_url || '') || ''}
-                    className="absolute top-0 left-0 w-full h-full rounded-lg"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <Youtube size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p>유효하지 않은 유튜브 링크입니다.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 📝 메모 수정 모달 */}
 {noteModal.show && (
   <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">

@@ -210,7 +210,8 @@ export default function SongFormModal({
   }
 
   // --- 섹션 패널 (모바일/데스크톱 공용) ---
-  const SectionsPanel = ({ isMobile = false }: { isMobile?: boolean }) => (
+  // ⚠️ render helper function (not component) - input이 포커스 유지되도록
+  const renderSectionsPanel = (isMobile = false) => (
     <div className={isMobile ? 'flex flex-col h-full' : ''}>
       <div className={isMobile ? 'flex-1 overflow-y-auto' : ''}>
         {!isMobile && (
@@ -278,7 +279,7 @@ export default function SongFormModal({
   )
 
   // --- 순서 패널 (모바일/데스크톱 공용) ---
-  const OrderPanel = ({ isMobile = false }: { isMobile?: boolean }) => (
+  const renderOrderPanel = (isMobile = false) => (
     <div className={`flex flex-col ${isMobile ? 'h-full' : 'gap-4 overflow-hidden'}`}>
       <div className="flex justify-between items-center mb-2">
         {!isMobile && (
@@ -372,7 +373,7 @@ export default function SongFormModal({
   )
 
   // --- 즐겨찾기 패널 (모바일/데스크톱 공용) ---
-  const FavoritesPanel = ({ isMobile = false }: { isMobile?: boolean }) => (
+  const renderFavoritesPanel = (isMobile = false) => (
     <div className={`flex flex-col ${isMobile ? 'h-full' : 'gap-4'}`}>
       {!isMobile && (
         <h2 className="text-sm font-bold flex items-center gap-2 text-gray-700">
@@ -535,9 +536,9 @@ export default function SongFormModal({
         {/* 모바일 탭 패널 */}
         <div className="flex-1 overflow-hidden md:hidden">
           <div className="h-full overflow-y-auto p-4">
-            {mobileTab === 'sections' && <SectionsPanel isMobile />}
-            {mobileTab === 'order' && <OrderPanel isMobile />}
-            {mobileTab === 'favorites' && <FavoritesPanel isMobile />}
+            {mobileTab === 'sections' && renderSectionsPanel(true)}
+            {mobileTab === 'order' && renderOrderPanel(true)}
+            {mobileTab === 'favorites' && renderFavoritesPanel(true)}
           </div>
         </div>
 
@@ -545,18 +546,18 @@ export default function SongFormModal({
         <div className="flex-1 hidden md:flex overflow-hidden">
           {/* 왼쪽: 사용 가능한 섹션 */}
           <div className="w-1/4 border-r p-6 flex flex-col gap-6 border-gray-100 bg-slate-50/50">
-            <SectionsPanel />
+            {renderSectionsPanel(false)}
           </div>
 
           {/* 가운데: 선택된 순서 */}
           <div className="flex-1 p-6 flex flex-col gap-4 overflow-hidden">
-            <OrderPanel />
+            {renderOrderPanel(false)}
           </div>
 
           {/* 오른쪽: 즐겨찾기 */}
           {userId && (
             <div className="w-1/4 p-6 flex flex-col gap-4 bg-slate-50/30">
-              <FavoritesPanel />
+              {renderFavoritesPanel(false)}
             </div>
           )}
         </div>
