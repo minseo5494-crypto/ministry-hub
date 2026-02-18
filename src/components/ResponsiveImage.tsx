@@ -69,7 +69,7 @@ export default function ResponsiveImage({
   return (
     <div
       className={className}
-      onClick={onDoubleClick as any}
+      onDoubleClick={onDoubleClick}
       onTouchEnd={onTouchEnd}
       style={{
         width: '100%',
