@@ -18,7 +18,6 @@ export interface AISearchResult {
   success: boolean
   query: string
   filters: AISearchFilters
-  rawResponse?: string
   error?: string
 }
 
@@ -61,7 +60,6 @@ export function useAISearch() {
         success: true,
         query: data.query,
         filters: data.filters,
-        rawResponse: data.rawResponse,
       }
 
       setLastResult(result)
