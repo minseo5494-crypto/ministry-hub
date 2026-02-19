@@ -916,19 +916,26 @@ export default function TeamDetailPage() {
 
     setDeleting(true)
     try {
-      const { error: songsError } = await supabase
-        .from('team_setlist_songs')
-        .delete()
-        .eq('setlist_id', deleteConfirm.setlistId)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('로그인이 필요합니다.')
+        return
+      }
 
-      if (songsError) throw songsError
+      const res = await fetch('/api/setlists/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          setlistId: deleteConfirm.setlistId,
+          teamId,
+        }),
+      })
 
-      const { error: setlistError } = await supabase
-        .from('team_setlists')
-        .delete()
-        .eq('id', deleteConfirm.setlistId)
-
-      if (setlistError) throw setlistError
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || '콘티 삭제에 실패했습니다.')
 
       alert('✅ 콘티가 삭제되었습니다.')
       setDeleteConfirm({ show: false, setlistId: '', title: '' })
