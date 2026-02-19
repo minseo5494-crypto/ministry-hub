@@ -173,21 +173,6 @@ export default function TeamDetailPage() {
   const canManageMembers = !permissionsLoading && (hasPermission('manage_members') || team?.my_role === 'leader')
   const canEditTeamSettings = !permissionsLoading && (hasPermission('edit_team_settings') || isTeamLeaderOrAdmin)
 
-  // 디버그 로그 (권한 확인용)
-  useEffect(() => {
-    if (!permissionsLoading && team) {
-      console.log('🔐 권한 상태:', {
-        my_role: team.my_role,
-        isTeamLeaderOrAdmin,
-        isLeader,
-        isAdmin,
-        permissionsLoading,
-        canCreateSetlist,
-        hasCreatePerm: hasPermission('create_setlist'),
-      })
-    }
-  }, [permissionsLoading, team, isLeader, isAdmin, canCreateSetlist])
-
   const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉헌찬양', '직접입력']
 
   useEffect(() => {

@@ -17,6 +17,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   'permission denied': '접근 권한이 없습니다.',
   'Forbidden': '접근 권한이 없습니다.',
   'Unauthorized': '로그인이 필요합니다.',
+  '권한이 없습니다': '권한이 없습니다. 팀 리더에게 문의하세요.',
   
   // 데이터 에러
   'duplicate key': '이미 존재하는 데이터입니다.',
@@ -47,11 +48,16 @@ export const getErrorMessage = (error: any): string => {
     }
   }
 
-  // 매핑되지 않은 경우 원본 반환 (개발 환경) 또는 기본 메시지 (프로덕션)
+  // 한국어 메시지는 서버 API에서 이미 사용자 친화적으로 작성된 것이므로 그대로 반환
+  if (/[가-힣]/.test(errorMessage)) {
+    return errorMessage;
+  }
+
+  // 영문 에러: 개발 환경에서는 원본 반환, 프로덕션에서는 기본 메시지
   if (process.env.NODE_ENV === 'development') {
     return errorMessage;
   }
-  
+
   return '오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
 };
 
