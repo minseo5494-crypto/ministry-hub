@@ -372,18 +372,27 @@ export interface SeasonCount {
 // songs 테이블에서 사용된 시즌 목록과 곡 개수 가져오기
 export async function fetchSeasons(): Promise<SeasonCount[]> {
   try {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('season')
-      .not('season', 'is', null)
+    // PostgREST max_rows=1000 제한 우회
+    let allData: any[] = []
+    let from = 0
+    const PAGE_SIZE = 1000
+    while (true) {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('season')
+        .not('season', 'is', null)
+        .range(from, from + PAGE_SIZE - 1)
 
-    if (error) {
-      return []
+      if (error) return []
+      if (!data || data.length === 0) break
+      allData = allData.concat(data)
+      if (data.length < PAGE_SIZE) break
+      from += PAGE_SIZE
     }
 
     // 시즌별 카운트 집계
     const seasonCounts: { [key: string]: number } = {}
-    data?.forEach(song => {
+    allData.forEach(song => {
       if (song.season && song.season.trim()) {
         const season = song.season.trim()
         seasonCounts[season] = (seasonCounts[season] || 0) + 1
@@ -434,29 +443,44 @@ export function parseThemes(themes: unknown): string[] {
 
 // 곡들의 테마를 집계하는 함수
 export async function fetchThemeCounts(): Promise<ThemeCount[]> {
-  const { data, error } = await supabase
-    .from('songs')
-    .select('themes')
-    .not('themes', 'is', null)
+  try {
+    // PostgREST max_rows=1000 제한 우회
+    let allData: any[] = []
+    let from = 0
+    const PAGE_SIZE = 1000
+    while (true) {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('themes')
+        .not('themes', 'is', null)
+        .range(from, from + PAGE_SIZE - 1)
 
-  if (error) {
-    console.error('Error fetching themes:', error)
+      if (error) {
+        console.error('Error fetching themes:', error)
+        return []
+      }
+      if (!data || data.length === 0) break
+      allData = allData.concat(data)
+      if (data.length < PAGE_SIZE) break
+      from += PAGE_SIZE
+    }
+
+    // 테마별 카운트 집계
+    const themeCounts: { [key: string]: number } = {}
+
+    allData.forEach(song => {
+      const themeList = parseThemes(song.themes)
+      themeList.forEach((theme: string) => {
+        themeCounts[theme] = (themeCounts[theme] || 0) + 1
+      })
+    })
+
+    // 배열로 변환하고 카운트 내림차순 정렬
+    return Object.entries(themeCounts)
+      .map(([theme, count]) => ({ theme, count }))
+      .sort((a, b) => b.count - a.count)
+  } catch {
     return []
   }
-
-  // 테마별 카운트 집계
-  const themeCounts: { [key: string]: number } = {}
-
-  data?.forEach(song => {
-    const themeList = parseThemes(song.themes)
-    themeList.forEach((theme: string) => {
-      themeCounts[theme] = (themeCounts[theme] || 0) + 1
-    })
-  })
-
-  // 배열로 변환하고 카운트 내림차순 정렬
-  return Object.entries(themeCounts)
-    .map(([theme, count]) => ({ theme, count }))
-    .sort((a, b) => b.count - a.count)
 }
 

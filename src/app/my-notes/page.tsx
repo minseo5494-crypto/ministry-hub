@@ -73,14 +73,21 @@ export default function MyNotesPage() {
 
       const songIds = [...new Set(notes.map((n) => n.song_id))]
 
-      const { data } = await supabase
-        .from('songs')
-        .select('*')
-        .in('id', songIds)
+      // PostgREST max_rows=1000 제한 우회: 배치 조회
+      let allData: any[] = []
+      const BATCH_SIZE = 500
+      for (let i = 0; i < songIds.length; i += BATCH_SIZE) {
+        const batchIds = songIds.slice(i, i + BATCH_SIZE)
+        const { data } = await supabase
+          .from('songs')
+          .select('*')
+          .in('id', batchIds)
+        if (data) allData = allData.concat(data)
+      }
 
-      if (data) {
+      if (allData.length > 0) {
         const songMap: { [key: string]: Song } = {}
-        data.forEach((song) => {
+        allData.forEach((song) => {
           songMap[song.id] = song
         })
         setSongs(songMap)

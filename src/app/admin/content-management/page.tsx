@@ -145,13 +145,23 @@ export default function ContentManagementPage() {
 
   const loadUploaders = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email')
-        .order('email')
-      if (!error && data) {
-        setUploaders(data)
+      // PostgREST max_rows=1000 제한 우회
+      let allData: any[] = []
+      let from = 0
+      const PAGE_SIZE = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, email')
+          .order('email')
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) break
+        if (!data || data.length === 0) break
+        allData = allData.concat(data)
+        if (data.length < PAGE_SIZE) break
+        from += PAGE_SIZE
       }
+      setUploaders(allData)
     } catch (err) {
       console.error('Failed to load uploaders:', err)
     }
