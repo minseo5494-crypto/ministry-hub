@@ -182,7 +182,7 @@ export default function MainPage() {
 
   // Like state
   const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set())
-  const [sortBy, setSortBy] = useState<SortBy>('recent')
+  const [sortBy, setSortBy] = useState<SortBy>('likes')
   const [songFilter, setSongFilter] = useState<SongFilter>('all')
 
   // Pagination
