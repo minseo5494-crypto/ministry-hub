@@ -159,18 +159,34 @@ export default function TeamDetailPage() {
     loading: permissionsLoading
   } = useTeamPermissions(teamId, user?.id)
 
-  // 권한 체크
-  const canCreateSetlist = hasPermission('create_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
-  const canEditSetlistPerm = hasPermission('edit_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
-  const canDeleteSetlist = hasPermission('delete_setlist') || team?.my_role === 'leader' || team?.my_role === 'admin'
+  // 권한 체크 (권한 로딩 중에는 최소 권한만 허용)
+  const isTeamLeaderOrAdmin = team?.my_role === 'leader' || team?.my_role === 'admin'
+  const canCreateSetlist = !permissionsLoading && (hasPermission('create_setlist') || isTeamLeaderOrAdmin)
+  const canEditSetlistPerm = !permissionsLoading && (hasPermission('edit_setlist') || isTeamLeaderOrAdmin)
+  const canDeleteSetlist = !permissionsLoading && (hasPermission('delete_setlist') || isTeamLeaderOrAdmin)
   const canCopySetlist = hasPermission('copy_setlist') || true
-  const canAddFixedSong = hasPermission('add_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
-  const canEditFixedSong = hasPermission('edit_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
-  const canDeleteFixedSong = hasPermission('delete_fixed_song') || team?.my_role === 'leader' || team?.my_role === 'admin'
+  const canAddFixedSong = !permissionsLoading && (hasPermission('add_fixed_song') || isTeamLeaderOrAdmin)
+  const canEditFixedSong = !permissionsLoading && (hasPermission('edit_fixed_song') || isTeamLeaderOrAdmin)
+  const canDeleteFixedSong = !permissionsLoading && (hasPermission('delete_fixed_song') || isTeamLeaderOrAdmin)
   const canViewSheet = hasPermission('view_sheet') || true
   const canDownloadSheet = hasPermission('download_sheet') || true
-  const canManageMembers = hasPermission('manage_members') || team?.my_role === 'leader'
-  const canEditTeamSettings = hasPermission('edit_team_settings') || team?.my_role === 'leader' || team?.my_role === 'admin'
+  const canManageMembers = !permissionsLoading && (hasPermission('manage_members') || team?.my_role === 'leader')
+  const canEditTeamSettings = !permissionsLoading && (hasPermission('edit_team_settings') || isTeamLeaderOrAdmin)
+
+  // 디버그 로그 (권한 확인용)
+  useEffect(() => {
+    if (!permissionsLoading && team) {
+      console.log('🔐 권한 상태:', {
+        my_role: team.my_role,
+        isTeamLeaderOrAdmin,
+        isLeader,
+        isAdmin,
+        permissionsLoading,
+        canCreateSetlist,
+        hasCreatePerm: hasPermission('create_setlist'),
+      })
+    }
+  }, [permissionsLoading, team, isLeader, isAdmin, canCreateSetlist])
 
   const fixedSongCategories = ['여는찬양', '축복송', '마침찬양', '봉헌찬양', '직접입력']
 
