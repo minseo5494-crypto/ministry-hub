@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
-    const { teamId, title, serviceDate, serviceType } = await request.json()
+    const { teamId, title, serviceDate, serviceType, songs } = await request.json()
 
     if (!teamId || !title?.trim() || !serviceDate || !serviceType?.trim()) {
       return NextResponse.json({ error: '필수 항목을 모두 입력하세요.' }, { status: 400 })
@@ -80,6 +80,24 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // 곡 목록이 있으면 함께 저장
+    if (songs && Array.isArray(songs) && songs.length > 0) {
+      const setlistSongs = songs.map((song: any, index: number) => ({
+        setlist_id: data.id,
+        song_id: song.song_id,
+        order_number: index + 1,
+        selected_form: song.selected_form || null,
+      }))
+
+      const { error: songsError } = await adminClient
+        .from('team_setlist_songs')
+        .insert(setlistSongs)
+
+      if (songsError) {
+        console.error('콘티 곡 추가 실패:', songsError)
+      }
+    }
 
     return NextResponse.json({ setlist: data })
   } catch (error: any) {

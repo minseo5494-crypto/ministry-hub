@@ -1453,33 +1453,34 @@ export default function MainPage() {
     }
 
     try {
-      const { data: setlist, error: setlistError } = await supabase
-        .from('team_setlists')
-        .insert({
-          team_id: selectedTeamId,
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('로그인이 필요합니다.')
+        return
+      }
+
+      const serviceType = setlistType === '직접입력' ? customSetlistType : setlistType
+
+      const res = await fetch('/api/setlists/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          teamId: selectedTeamId,
           title: setlistTitle,
-          service_date: setlistDate,
-          service_type: setlistType === '직접입력' ? customSetlistType : setlistType,
-          created_by: user!.id,
-          notes: ''
-        })
-        .select()
-        .single()
+          serviceDate: setlistDate,
+          serviceType,
+          songs: selectedSongs.map((song, index) => ({
+            song_id: song.id,
+            selected_form: songForms[song.id] || null,
+          })),
+        }),
+      })
 
-      if (setlistError) throw setlistError
-
-      const setlistSongs = selectedSongs.map((song, index) => ({
-        setlist_id: setlist.id,
-        song_id: song.id,
-        order_number: index + 1,
-        selected_form: songForms[song.id] || null
-      }))
-
-      const { error: songsError } = await supabase
-        .from('team_setlist_songs')
-        .insert(setlistSongs as any)
-
-      if (songsError) throw songsError
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || '콘티 저장에 실패했습니다.')
 
       trackSetlistCreate(selectedSongs.length)
 
