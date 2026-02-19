@@ -20,70 +20,56 @@
 
 ---
 
-## 2. 긴급 보안 수정 필요
+## 2. 보안 수정 현황
 
 > 2026-02-17 보안 점검에서 치명적/높은 취약점이 발견되었습니다.
 > 상세 보고서: `docs/내부/보안_점검_보고서.md`
 
-### 즉시 조치 (Critical) - 다음 세션 최우선
+### 완료된 보안 수정
 
-| 순위 | 항목 | 위험도 | 예상 작업량 |
-|------|------|--------|-----------|
-| 1 | **`/api/auth/setup-user` 인증 추가** | **치명적** | 30분 |
-| 2 | **`/api/auth/check-email` 인증 추가 + 쿼리 최적화** | **높음** | 1시간 |
-| 3 | `/api/songs/weekly-popular` 인증 추가 또는 anon key 전환 | 낮음 | 15분 |
-
-**#1 setup-user 취약점 (치명적)**:
-- 인증 체크 없이 누구나 호출 가능
-- `userId`를 클라이언트에서 받아 임의 사용자 프로필 생성/수정 가능
-- `mergeFromId`로 타인의 team_members 데이터를 자신에게 이전 가능
-- 이메일 기반 기존 users 레코드 삭제 가능
-- 수정: Bearer token 검증 추가, userId를 토큰에서 추출
-
-**#2 check-email 취약점 (높음)**:
-- 인증 없이 이메일 존재 여부 확인 가능 (사용자 열거 공격)
-- `listUsers({ perPage: 1000 })`로 전체 사용자 목록을 메모리에 로드
-- 수정: 인증 추가, 이메일 기반 단건 쿼리로 변경, Rate Limiting 적용
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| **`/api/auth/setup-user` 인증 추가** | **치명적** | ✅ 완료 (2026-02-19) |
+| **`/api/auth/check-email` 쿼리 최적화** | **높음** | ✅ 완료 (2026-02-19) |
 
 ### 단기 조치 (1-2주 내)
 
 | 순위 | 항목 | 위험도 | 예상 작업량 |
 |------|------|--------|-----------|
-| 4 | **RLS 미적용 7개 핵심 테이블 정책 추가** (teams, team_members, team_setlists, team_setlist_songs, team_fixed_songs, songs, users) | **높음** | 5-8시간 |
-| 5 | **Next.js 미들웨어 추가** (전역 인증 가드) | 중간 | 2시간 |
-| 6 | **관리자 페이지 서버 API 전환** (클라이언트 anon key로 RLS 없는 테이블 직접 조작 중) | 높음 | 3-4시간 |
+| 1 | `/api/songs/weekly-popular` 인증 추가 또는 anon key 전환 | 낮음 | 15분 |
+| 2 | **RLS 미적용 7개 핵심 테이블 정책 추가** (teams, team_members, team_setlists, team_setlist_songs, team_fixed_songs, songs, users) | **높음** | 5-8시간 |
+| 3 | **Next.js 미들웨어 추가** (전역 인증 가드) | 중간 | 2시간 |
+| 4 | **관리자 페이지 서버 API 전환** (클라이언트 anon key로 RLS 없는 테이블 직접 조작 중) | 높음 | 3-4시간 |
 
 ### 중기 조치 (3-4주)
 
 | 순위 | 항목 | 예상 작업량 |
 |------|------|-----------|
-| 7 | 중간 우선순위 6개 테이블 RLS 적용 (feedbacks, song_likes 등) | 3-4시간 |
-| 8 | Rate Limiting 적용 (인증 관련 API) | 2-3시간 |
-| 9 | invite_code 암호학적 난수로 변경 (`Math.random()` -> `crypto.randomBytes()`) | 30분 |
+| 5 | 중간 우선순위 6개 테이블 RLS 적용 (feedbacks, song_likes 등) | 3-4시간 |
+| 6 | Rate Limiting 적용 (인증 관련 API) | 2-3시간 |
+| 7 | invite_code 암호학적 난수로 변경 (`Math.random()` -> `crypto.randomBytes()`) | 30분 |
 
 ### 현재 보안 상태 요약
 - RLS 적용: 8/34 테이블 (23.5%) - 기존 정책은 잘 구현됨
-- API 인증: 9개 중 2개 미적용 (check-email, setup-user)
+- API 인증: 모든 API 인증 적용 완료 (setup-user, check-email 수정됨)
 - 환경변수 관리: 양호 (service_role_key 서버 전용)
 - 미들웨어: 없음 (전역 인증 가드 부재)
 
 ---
 
-## 3. 최근 작업 (2026-02-19)
+## 3. 최근 작업 (2026-02-19 오후)
 
 ### 완료된 작업
-- [x] **콘티 삭제 서버 API** — RLS가 삭제를 차단하던 문제 해결 (`/api/setlists/delete`)
-- [x] **콘티 생성 권한 제한** — 리더/관리자/명시적 권한자만 생성 가능 (`/api/setlists/create`)
-- [x] **메인페이지 콘티 저장도 서버 API 전환** — 메인 → 팀 콘티 저장 시에도 권한 체크 적용
-- [x] **Supabase PostgREST 1000행 제한 수정** — my-page, supabase.ts, my-notes, admin 전체 페이지네이션 적용
-- [x] **메인페이지 '최신순' 정렬 수정** — 실제 created_at desc 정렬 로직 추가
-- [x] **메인페이지 기본 정렬 '좋아요순' 변경**
-- [x] **콘티 페이지 악보 에디터 빈 화면 수정** — file_type `as` 캐스팅 → 런타임 값 변환
-- [x] **권한 에러 메시지 개선** — 한국어 서버 API 에러를 제네릭 메시지로 치환하지 않고 그대로 표시
+- [x] **setup-user API 인증 추가** — Bearer 토큰 검증, userId/email 토큰에서 추출, mergeFromId 이메일 검증
+- [x] **check-email API 쿼리 최적화** — listUsers 1000명 로드 → users 테이블 단건 조회
+- [x] **미사용 패키지 4개 제거** — @react-pdf/renderer, jszip, jspdf-autotable, @supabase/auth-helpers-nextjs
 
 ---
 
 ## 4. 이전 작업 요약
+
+### 2026-02-19 오전
+- 콘티 생성/삭제 서버 API 전환, PostgREST 1000행 제한 수정, 정렬/에러 메시지 개선
 
 ### 2026-02-17
 - 보안 점검 보고서 작성, 빌드 최적화 분석, iOS Safari 호환성 검사
@@ -99,10 +85,8 @@
 
 ## 5. 다음에 할 일
 
-### 즉시 (다음 세션) — 보안 수정 우선!
-1. [ ] **setup-user, check-email API 인증 추가** (섹션 2 참조)
-2. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
-3. [ ] **미사용 패키지 제거** — @react-pdf/renderer, jszip, jspdf-autotable, @supabase/auth-helpers-nextjs
+### 즉시 (다음 세션)
+1. [ ] **page.tsx 거대 컴포넌트 분리** — 1900줄+, useState 50개+를 커스텀 훅으로 분리
 
 ### 단기 (베타 전 - 2월 20일까지)
 - [ ] 핵심 7개 테이블 RLS 적용 (섹션 2 참조)
@@ -154,6 +138,9 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-19 | setup-user API 인증 추가 (Bearer 토큰 검증) |
+| 2026-02-19 | check-email API 쿼리 최적화 (단건 조회) |
+| 2026-02-19 | 미사용 패키지 4개 제거 |
 | 2026-02-19 | 콘티 생성/삭제 서버 API 추가 (권한 체크 포함) |
 | 2026-02-19 | 메인페이지 콘티 저장 서버 API 전환 |
 | 2026-02-19 | Supabase PostgREST 1000행 제한 전체 수정 (페이지네이션) |
@@ -218,12 +205,11 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 콘티 생성/삭제 서버 API로 전환 완료 (권한 체크 포함)
-- 팀원은 콘티 추가/삭제 불가 (리더/관리자/명시적 권한자만 가능)
-- 권한 없음 시 한국어 에러 메시지 그대로 표시 (제네릭 메시지 X)
-- PostgREST 1000행 제한 전체 수정 완료
-- 모든 변경사항 커밋/푸시 완료
-- Vercel 자동 배포됨
+- setup-user API 인증 추가 완료 (치명적 보안 취약점 해결)
+- check-email API 쿼리 최적화 완료
+- 미사용 패키지 4개 제거 완료
+- 모든 변경사항 커밋/푸시 완료, Vercel 배포됨
+- 로그인/로그인실패 테스트 정상 확인
 
 ---
 
