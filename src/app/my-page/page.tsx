@@ -628,15 +628,25 @@ const handleTeamNameChange = (value: string) => {
         .eq('visibility', 'teams')
       setTeamSongCount(teamCount || 0)
 
-      // 2. 곡 데이터 가져오기 (전체 - 클라이언트에서 페이지네이션)
-      const { data: songsData, error: songsError } = await supabase
-        .from('songs')
-        .select('*')
-        .eq('uploaded_by', user.id)
-        .order('created_at', { ascending: false })
-        .range(0, 9999)
+      // 2. 곡 데이터 가져오기 (PostgREST max_rows=1000 제한 우회를 위해 페이지별 조회)
+      const PAGE_SIZE = 1000
+      let allSongsData: any[] = []
+      let from = 0
+      while (true) {
+        const { data: batch, error: batchError } = await supabase
+          .from('songs')
+          .select('*')
+          .eq('uploaded_by', user.id)
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1)
 
-      if (songsError) throw songsError
+        if (batchError) throw batchError
+        if (!batch || batch.length === 0) break
+        allSongsData = allSongsData.concat(batch)
+        if (batch.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+      const songsData = allSongsData
 
       // 3. 사용 통계 가져오기
       const songIds = (songsData || []).map(s => s.id)
@@ -646,16 +656,23 @@ const handleTeamNameChange = (value: string) => {
         return
       }
 
-      const { data: statsData, error: statsError } = await supabase
-        .from('song_usage_stats')
-        .select('*')
-        .in('song_id', songIds)
+      // song_usage_stats도 1000개 제한 우회
+      let allStatsData: any[] = []
+      const STATS_BATCH = 500
+      for (let i = 0; i < songIds.length; i += STATS_BATCH) {
+        const batchIds = songIds.slice(i, i + STATS_BATCH)
+        const { data: statsBatch, error: statsError } = await supabase
+          .from('song_usage_stats')
+          .select('*')
+          .in('song_id', batchIds)
 
-      if (statsError) {
-        console.warn('통계 조회 실패:', statsError)
-        setSongs(songsData || [])
-        return
+        if (statsError) {
+          console.warn('통계 조회 실패:', statsError)
+          continue
+        }
+        if (statsBatch) allStatsData = allStatsData.concat(statsBatch)
       }
+      const statsData = allStatsData
 
       // 4. 데이터 병합
       const songsWithStats = (songsData || []).map(song => {
