@@ -564,21 +564,34 @@ export default function TeamDetailPage() {
     setCreating(true)
 
     try {
-      const { data, error } = await supabase
-        .from('team_setlists')
-        .insert({
-          team_id: teamId,
-          title: newSetlist.title.trim(),
-          service_date: newSetlist.service_date,
-          service_type: newSetlist.service_type === '직접입력'
-            ? newSetlist.custom_service_type.trim()
-            : newSetlist.service_type,
-          created_by: user.id
-        })
-        .select()
-        .single()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('로그인이 필요합니다.')
+        return
+      }
 
-      if (error) throw error
+      const serviceType = newSetlist.service_type === '직접입력'
+        ? newSetlist.custom_service_type.trim()
+        : newSetlist.service_type
+
+      const res = await fetch('/api/setlists/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          teamId,
+          title: newSetlist.title.trim(),
+          serviceDate: newSetlist.service_date,
+          serviceType,
+        }),
+      })
+
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || '콘티 생성에 실패했습니다.')
+
+      const data = result.setlist
 
       if (user && data) {
         await logSetlistCreate(
