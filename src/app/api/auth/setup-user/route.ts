@@ -3,33 +3,48 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, email, name, profileImageUrl, authProvider, mergeFromId, termsAgreedAt } = await request.json()
-
-    if (!userId || !email) {
-      return NextResponse.json({ error: 'userId와 email은 필수입니다.' }, { status: 400 })
-    }
+    const { name, profileImageUrl, authProvider, mergeFromId, termsAgreedAt } = await request.json()
 
     // Service role 클라이언트 (RLS 우회)
     const adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     )
+
+    // 인증 확인: Bearer 토큰에서 사용자 정보 추출
+    const authHeader = request.headers.get('authorization')
+    const token = authHeader?.replace('Bearer ', '') || ''
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token)
+    if (authError || !user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+    }
+
+    const userId = user.id
+    const email = user.email!
 
     // 0. 기존 계정 id 병합 (탈퇴 후 재가입 등)
     if (mergeFromId && mergeFromId !== userId) {
-      console.log('🔗 Merging user id:', mergeFromId, '→', userId)
-
-      // team_members의 user_id를 새 id로 업데이트
-      await adminClient
-        .from('team_members')
-        .update({ user_id: userId })
-        .eq('user_id', mergeFromId)
-
-      // 기존 users 레코드 삭제 (새 id로 upsert할 것이므로)
-      await adminClient
+      // 병합 대상이 같은 이메일인지 확인 (타인 데이터 탈취 방지)
+      const { data: mergeTarget } = await adminClient
         .from('users')
-        .delete()
+        .select('email')
         .eq('id', mergeFromId)
+        .maybeSingle()
+
+      if (mergeTarget?.email === email) {
+        // team_members의 user_id를 새 id로 업데이트
+        await adminClient
+          .from('team_members')
+          .update({ user_id: userId })
+          .eq('user_id', mergeFromId)
+
+        // 기존 users 레코드 삭제 (새 id로 upsert할 것이므로)
+        await adminClient
+          .from('users')
+          .delete()
+          .eq('id', mergeFromId)
+      }
     }
 
     // 1. 같은 이메일의 orphaned 데이터 정리 (탈퇴 후 재가입 시 이전 ID의 행이 남아있을 수 있음)

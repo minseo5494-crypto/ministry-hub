@@ -739,17 +739,21 @@ export default function MainPage() {
         if (authProvider === 'email' && (!currentUser.terms_agreed_at || currentUser.auth_provider !== 'email')) {
           // 이메일 가입자: DB 데이터가 누락된 경우 자동 수정 (가입 시 이미 동의함)
           // setup-user API가 auth_provider, terms_agreed_at 설정 + 데모 팀 가입도 처리
-          await fetch('/api/auth/setup-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: currentUser.id,
-              email: currentUser.email,
-              name: currentUser.name || currentUser.user_metadata?.name || currentUser.email?.split('@')[0],
-              authProvider: 'email',
-              termsAgreedAt: new Date().toISOString()
-            })
-          }).catch(err => console.error('이메일 사용자 자동 설정 실패:', err))
+          const { data: { session: s } } = await supabase.auth.getSession()
+          if (s?.access_token) {
+            await fetch('/api/auth/setup-user', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${s.access_token}`,
+              },
+              body: JSON.stringify({
+                name: currentUser.name || currentUser.user_metadata?.name || currentUser.email?.split('@')[0],
+                authProvider: 'email',
+                termsAgreedAt: new Date().toISOString()
+              })
+            }).catch(err => console.error('이메일 사용자 자동 설정 실패:', err))
+          }
         } else if (!currentUser.terms_agreed_at && authProvider !== 'email') {
           // Google OAuth 등 소셜 로그인: 약관 동의 팝업 표시
           setShowTermsModal(true)

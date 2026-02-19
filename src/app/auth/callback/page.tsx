@@ -24,10 +24,11 @@ export default function AuthCallbackPage() {
             // 이메일 인증 완료: setup-user API로 프로필 설정 + 데모 팀 가입
             const res = await fetch('/api/auth/setup-user', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
               body: JSON.stringify({
-                userId: session.user.id,
-                email: session.user.email,
                 name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
                 authProvider: 'email',
                 termsAgreedAt: new Date().toISOString()

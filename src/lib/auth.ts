@@ -288,8 +288,6 @@ export const handleOAuthCallback = async () => {
     // 4. 서버 API로 사용자 생성/업데이트 (RLS 우회)
     // 신규 사용자, 이메일 매칭(id 병합), 기존 사용자 모두 서버에서 처리
     const setupPayload: any = {
-      userId: user.id,
-      email: user.email,
       name: userName,
       profileImageUrl,
       authProvider: 'google'
@@ -303,7 +301,10 @@ export const handleOAuthCallback = async () => {
 
     const res = await fetch('/api/auth/setup-user', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify(setupPayload)
     });
 
