@@ -628,6 +628,8 @@ export default function MainPage() {
         // 좋아요도 같으면 제목 가나다순
         return a.song_name.localeCompare(b.song_name, 'ko')
       })
+    } else if (sortBy === 'recent') {
+      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     } else if (sortBy === 'likes') {
       result.sort((a, b) => ((b as any).like_count || 0) - ((a as any).like_count || 0))
     } else if (sortBy === 'name') {
