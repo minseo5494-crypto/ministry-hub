@@ -68,6 +68,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ team: teamData })
   } catch (error: any) {
     console.error('팀 생성 실패:', error)
-    return NextResponse.json({ error: error.message || '팀 생성에 실패했습니다.' }, { status: 500 })
+    return NextResponse.json({ error: '팀 생성에 실패했습니다.' }, { status: 500 })
   }
 }

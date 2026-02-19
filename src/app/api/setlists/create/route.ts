@@ -102,6 +102,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ setlist: data })
   } catch (error: any) {
     console.error('콘티 생성 실패:', error)
-    return NextResponse.json({ error: error.message || '콘티 생성에 실패했습니다.' }, { status: 500 })
+    return NextResponse.json({ error: '콘티 생성에 실패했습니다.' }, { status: 500 })
   }
 }

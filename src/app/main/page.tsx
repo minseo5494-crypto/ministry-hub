@@ -344,7 +344,12 @@ export default function MainPage() {
       if (songs.length === 0) return
 
       try {
-        const res = await fetch('/api/songs/weekly-popular')
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/songs/weekly-popular', {
+          headers: session?.access_token
+            ? { 'Authorization': `Bearer ${session.access_token}` }
+            : {},
+        })
         const { data } = await res.json()
 
         const rankMap = new Map<string, number>()

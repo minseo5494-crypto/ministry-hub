@@ -53,12 +53,12 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('데모 팀 가입 실패:', insertError)
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
+      return NextResponse.json({ error: '데모 팀 가입에 실패했습니다.' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error('데모 팀 가입 API 오류:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

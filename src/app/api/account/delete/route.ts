@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (deletePrivateError) {
       console.error('Private songs delete error:', deletePrivateError)
       return NextResponse.json(
-        { error: `나만보기 곡 삭제 실패: ${deletePrivateError.message}` },
+        { error: '계정 삭제 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (updateSongsError) {
       console.error('Songs update error:', updateSongsError)
       return NextResponse.json(
-        { error: `곡 데이터 처리 실패: ${updateSongsError.message}` },
+        { error: '계정 삭제 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (deleteUserError) {
       console.error('User delete error:', deleteUserError)
       return NextResponse.json(
-        { error: `사용자 삭제 실패: ${deleteUserError.message}` },
+        { error: '계정 삭제 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     if (deleteAuthError) {
       console.error('Auth user delete error:', deleteAuthError)
       return NextResponse.json(
-        { error: `인증 계정 삭제 실패: ${deleteAuthError.message}` },
+        { error: '계정 삭제 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Account delete API error:', error)
     return NextResponse.json(
-      { error: `서버 오류: ${error.message}` },
+      { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }

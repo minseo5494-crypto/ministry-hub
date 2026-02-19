@@ -1,5 +1,15 @@
 import { loadKoreanFont } from './fontLoader'
 
+// XSS 방어: HTML 이스케이프
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 export interface PDFSong {
   id: string
   song_name: string
@@ -168,13 +178,13 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
     coverDiv.innerHTML = `
       <div style="text-align: center;">
         <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
-          ${title}
+          ${escapeHtml(title)}
         </h1>
         <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
-          ${date}
+          ${escapeHtml(date)}
         </p>
       </div>
-      
+
       <div style="margin-top: 80px;">
         <h2 style="font-size: 24px; font-weight: 600; color: #2d3748; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
           곡 목록
@@ -183,9 +193,9 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
           ${songs.map((song, i) => `
             <li style="font-size: 18px; color: #4a5568; margin-bottom: 16px; padding-left: 30px; position: relative;">
               <span style="position: absolute; left: 0; color: #3182ce; font-weight: 600;">${i + 1}.</span>
-              <strong style="color: #2d3748;">${song.song_name}</strong>
-              ${song.team_name ? `<span style="color: #718096;"> - ${song.team_name}</span>` : ''}
-              ${song.keyTransposed || song.key ? `<span style="color: #805ad5; margin-left: 10px;">(Key: ${song.keyTransposed || song.key})</span>` : ''}
+              <strong style="color: #2d3748;">${escapeHtml(song.song_name)}</strong>
+              ${song.team_name ? `<span style="color: #718096;"> - ${escapeHtml(song.team_name)}</span>` : ''}
+              ${song.keyTransposed || song.key ? `<span style="color: #805ad5; margin-left: 10px;">(Key: ${escapeHtml(song.keyTransposed || song.key || '')})</span>` : ''}
             </li>
           `).join('')}
         </ol>
@@ -611,10 +621,10 @@ export const generatePDFFromCanvas = async (options: {
       coverDiv.innerHTML = `
         <div style="text-align: center;">
           <h1 style="font-size: 48px; font-weight: bold; color: #1a202c; margin: 40px 0 20px 0;">
-            ${title}
+            ${escapeHtml(title)}
           </h1>
           <p style="font-size: 28px; color: #4a5568; margin-bottom: 60px;">
-            ${date}
+            ${escapeHtml(date)}
           </p>
         </div>
 
@@ -626,9 +636,9 @@ export const generatePDFFromCanvas = async (options: {
             ${songs.map((song, i) => `
               <li style="font-size: 18px; color: #4a5568; margin-bottom: 16px; padding-left: 30px; position: relative;">
                 <span style="position: absolute; left: 0; color: #3182ce; font-weight: 600;">${i + 1}.</span>
-                <strong style="color: #2d3748;">${song.song_name}</strong>
-                ${song.team_name ? `<span style="color: #718096;"> - ${song.team_name}</span>` : ''}
-                ${song.keyTransposed || song.key ? `<span style="color: #805ad5; margin-left: 10px;">(Key: ${song.keyTransposed || song.key})</span>` : ''}
+                <strong style="color: #2d3748;">${escapeHtml(song.song_name)}</strong>
+                ${song.team_name ? `<span style="color: #718096;"> - ${escapeHtml(song.team_name)}</span>` : ''}
+                ${song.keyTransposed || song.key ? `<span style="color: #805ad5; margin-left: 10px;">(Key: ${escapeHtml(song.keyTransposed || song.key || '')})</span>` : ''}
               </li>
             `).join('')}
           </ol>

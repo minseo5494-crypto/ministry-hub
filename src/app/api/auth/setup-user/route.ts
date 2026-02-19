@@ -54,14 +54,31 @@ export async function POST(request: NextRequest) {
       .eq('email', email)
       .neq('id', userId)
 
+    // profileImageUrl 검증 (https만 허용)
+    let safeProfileImageUrl = null
+    if (profileImageUrl && typeof profileImageUrl === 'string') {
+      try {
+        const url = new URL(profileImageUrl)
+        if (url.protocol === 'https:') {
+          safeProfileImageUrl = profileImageUrl
+        }
+      } catch {
+        // 잘못된 URL은 무시
+      }
+    }
+
+    // authProvider 검증
+    const allowedProviders = ['google', 'email', 'kakao', 'apple']
+    const safeAuthProvider = allowedProviders.includes(authProvider) ? authProvider : 'email'
+
     // 2. users 테이블에 upsert
     const upsertData: any = {
       id: userId,
       email,
-      name: name || email.split('@')[0],
-      profile_image_url: profileImageUrl || null,
+      name: name ? String(name).slice(0, 50) : email.split('@')[0],
+      profile_image_url: safeProfileImageUrl,
       email_verified: true,
-      auth_provider: authProvider || 'google',
+      auth_provider: safeAuthProvider,
       last_login: new Date().toISOString()
     }
     if (termsAgreedAt) {
@@ -74,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     if (upsertError) {
       console.error('setup-user upsert error:', upsertError)
-      return NextResponse.json({ error: upsertError.message }, { status: 500 })
+      return NextResponse.json({ error: '사용자 설정 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
     // 2. 데모 팀 자동 가입
@@ -108,6 +125,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error('setup-user error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

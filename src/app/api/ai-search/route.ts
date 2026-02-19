@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 
+// 인메모리 Rate Limiting (사용자별 분당 5회)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+const RATE_LIMIT = 5
+const RATE_WINDOW_MS = 60 * 1000
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(userId)
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS })
+    return true
+  }
+
+  if (entry.count >= RATE_LIMIT) {
+    return false
+  }
+
+  entry.count++
+  return true
+}
+
 // 검색 필터 타입 정의
 interface SearchFilters {
   keywords: string[]        // 검색 키워드 (곡명, 아티스트 등)
@@ -48,6 +70,11 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 만료되었습니다. 다시 로그인해주세요.' }, { status: 401 })
+    }
+
+    // Rate Limiting 체크
+    if (!checkRateLimit(user.id)) {
+      return NextResponse.json({ error: '검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }, { status: 429 })
     }
 
     const { query: rawQuery } = await request.json()

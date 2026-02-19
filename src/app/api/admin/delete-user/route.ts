@@ -55,12 +55,12 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       console.error('Auth user delete error:', deleteError)
-      return NextResponse.json({ error: `삭제 실패: ${deleteError.message}` }, { status: 500 })
+      return NextResponse.json({ error: '사용자 삭제에 실패했습니다.' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
     console.error('Delete user API error:', error)
-    return NextResponse.json({ error: `서버 오류: ${error.message}` }, { status: 500 })
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
