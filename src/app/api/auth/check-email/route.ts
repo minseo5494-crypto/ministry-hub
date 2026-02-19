@@ -15,14 +15,14 @@ export async function POST(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // auth.users에서 직접 확인 (퍼블릭 users 테이블은 불완전할 수 있음)
-    const { data: { users } } = await adminClient.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    })
-    const exists = users?.some(u => u.email === email) ?? false
+    // users 테이블에서 이메일로 단건 조회 (1000명 전체 로드 대신)
+    const { data } = await adminClient
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
 
-    return NextResponse.json({ exists })
+    return NextResponse.json({ exists: !!data })
   } catch {
     return NextResponse.json({ exists: false })
   }
