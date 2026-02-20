@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 19일 저녁
+**마지막 업데이트**: 2026년 2월 20일 오후
 
 ---
 
@@ -68,19 +68,19 @@
 
 ---
 
-## 3. 최근 작업 (2026-02-19 저녁)
+## 3. 최근 작업 (2026-02-20 오후)
 
 ### 완료된 작업
-- [x] **AI 검색 프롬프트 인젝션 방어** — 한/영 패턴 감지, 시스템 프롬프트 강화, rawResponse 노출 제거, 필터값 화이트리스트 검증
-- [x] **악성 유저 조사 및 차단** — 1129devs@gmail.com (팍코딩), activity_logs로 프롬프트 인젝션 시도 확인, Supabase에서 Ban 처리 (8760일)
-- [x] **보안 취약점 6건 수정** — Rate Limiting, 에러 메시지 일반화, PDF XSS, URL 검증, is_admin 통일, weekly-popular 인증
-- [x] **베타 테스트 연락 방법 논의** — 카톡 초대 + Notion 가이드 링크 방식 확정
+- [x] **Google Analytics 4 계정 전환** — 개인 계정(`G-JGTQG531DE`) → 서비스 전용 계정(`G-VRWZH9YVDX`)으로 변경, `.env.local` + Vercel 환경변수 업데이트, Redeploy 완료
+- [x] **Supabase Postgres Best Practices 에이전트 스킬 설치** — `.agents/skills/supabase-postgres-best-practices` 추가, DB 작업 시 30개 모범 사례 규칙 자동 적용
 
 ---
 
 ## 4. 이전 작업 요약
 
-### 2026-02-19 오전/오후
+### 2026-02-19
+- AI 검색 프롬프트 인젝션 3중 방어, 악성 유저 Ban 처리
+- 보안 취약점 6건 수정 (Rate Limiting, XSS, 에러 노출 등)
 - setup-user API 인증 추가, check-email 쿼리 최적화, 미사용 패키지 제거
 - 콘티 생성/삭제 서버 API 전환, PostgREST 1000행 제한 수정
 
@@ -146,6 +146,8 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-20 | GA4 서비스 전용 계정 전환 (G-JGTQG531DE → G-VRWZH9YVDX) |
+| 2026-02-20 | Supabase Postgres Best Practices 에이전트 스킬 설치 |
 | 2026-02-19 | AI 검색 프롬프트 인젝션 3중 방어 추가 |
 | 2026-02-19 | 보안 취약점 6건 수정 (Rate Limit, XSS, 에러 노출, URL 검증 등) |
 | 2026-02-19 | 악성 유저 1129devs@gmail.com Ban 처리 |
@@ -209,10 +211,10 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 보안 취약점 대규모 수정 완료 (프롬프트 인젝션, Rate Limit, XSS, 에러 노출 등)
-- 악성 유저 Ban 처리 완료
-- 모든 변경사항 커밋/푸시 완료, Vercel 배포됨
-- 내일 베타 테스트 연락 시작 (카톡 + Notion 가이드)
+- GA4 서비스 전용 계정으로 전환 완료 (G-VRWZH9YVDX)
+- Supabase Postgres Best Practices 에이전트 스킬 설치 완료
+- 보안 취약점 수정 완료, 모든 변경사항 커밋/푸시 완료
+- 베타 테스트 연락 진행 중
 
 ---
 
