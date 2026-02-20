@@ -68,15 +68,26 @@
 
 ---
 
-## 3. 최근 작업 (2026-02-20 오후)
+## 3. 최근 작업 (2026-02-20 저녁)
 
 ### 완료된 작업
-- [x] **Google Analytics 4 계정 전환** — 개인 계정(`G-JGTQG531DE`) → 서비스 전용 계정(`G-VRWZH9YVDX`)으로 변경, `.env.local` + Vercel 환경변수 업데이트, Redeploy 완료
-- [x] **Supabase Postgres Best Practices 에이전트 스킬 설치** — `.agents/skills/supabase-postgres-best-practices` 추가, DB 작업 시 30개 모범 사례 규칙 자동 적용
+- [x] **관리자 페이지 데이터 정합성 이슈 11건 수정** (da6a9b3)
+  - 대시보드: songs 통계 숨김 곡 필터, PostgREST 1000건 제한 해결, DAU/WAU/MAU 삭제된 사용자 제외, 성장 비교 관리자 제외
+  - 곡 승인: 삭제된 사용자 승인 방지 (requester JOIN + NULL 체크)
+  - 팀 승인: 삭제된 사용자 경고 표시
+  - 계정 관리: member_count 실시간 집계, feedbacks 삭제→null 보존
+- [x] **auth.users ↔ public.users 동기화 트리거 추가** — auth.users 삭제 시 public.users 자동 정리
+- [x] **고아 레코드 정리** — minseo5494@gmail.com (public.users에만 존재) 삭제
+- [x] **CLAUDE.md 테이블명 수정** — profiles→users, songforms→team_setlists
+- [x] **GA4 서비스 전용 계정 전환** — G-JGTQG531DE → G-VRWZH9YVDX
+- [x] **Supabase Postgres Best Practices 에이전트 스킬 설치**
 
 ---
 
 ## 4. 이전 작업 요약
+
+### 2026-02-20 오후
+- GA4 서비스 전용 계정 전환, Supabase Best Practices 에이전트 스킬 설치
 
 ### 2026-02-19
 - AI 검색 프롬프트 인젝션 3중 방어, 악성 유저 Ban 처리
@@ -146,6 +157,8 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-20 | 관리자 페이지 데이터 정합성 이슈 11건 수정 |
+| 2026-02-20 | auth.users 삭제 트리거 추가 (public.users 자동 정리) |
 | 2026-02-20 | GA4 서비스 전용 계정 전환 (G-JGTQG531DE → G-VRWZH9YVDX) |
 | 2026-02-20 | Supabase Postgres Best Practices 에이전트 스킬 설치 |
 | 2026-02-19 | AI 검색 프롬프트 인젝션 3중 방어 추가 |
@@ -211,8 +224,8 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- GA4 서비스 전용 계정으로 전환 완료 (G-VRWZH9YVDX)
-- Supabase Postgres Best Practices 에이전트 스킬 설치 완료
+- 관리자 페이지 데이터 정합성 11건 수정 완료 (대시보드 통계, 승인 페이지, 계정 관리)
+- auth.users ↔ public.users 동기화 트리거 추가 완료
 - 보안 취약점 수정 완료, 모든 변경사항 커밋/푸시 완료
 - 베타 테스트 연락 진행 중
 
