@@ -381,7 +381,7 @@ export default function AccountManagementPage() {
         supabase.from('user_favorite_songforms').delete().eq('user_id', userId),
         supabase.from('user_song_settings').delete().eq('user_id', userId),
         supabase.from('sheet_music_notes').delete().eq('user_id', userId),
-        supabase.from('feedbacks').delete().eq('user_id', userId),
+        supabase.from('feedbacks').update({ user_id: null }).eq('user_id', userId),
         supabase.from('song_sheets').update({ uploaded_by: null }).eq('uploaded_by', userId),
         supabase.from('songs').update({ uploaded_by: null }).eq('uploaded_by', userId),
       ])
@@ -595,7 +595,7 @@ export default function AccountManagementPage() {
                           </span>
                         </div>
                         <p className="text-sm text-gray-500">
-                          {team.church_name || team.type} · 멤버 {team.member_count || 0}명
+                          {team.church_name || team.type} · 멤버 {(team as any).team_members?.[0]?.count || 0}명
                         </p>
                         <p className="text-xs text-gray-400 mt-1">
                           {new Date(team.created_at || '').toLocaleDateString('ko-KR')} 생성

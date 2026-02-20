@@ -20,10 +20,14 @@ interface SongApprovalRequest {
   lyrics: string | null
   file_url: string | null
   file_type: string | null
-  requester_id: string
+  requester_id: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
   admin_notes: string | null
+  requester?: {
+    email: string
+    name: string
+  } | null
 }
 
 export default function SongApprovalsPage() {
@@ -80,7 +84,7 @@ export default function SongApprovalsPage() {
     try {
       let query = supabase
         .from('song_approval_requests')
-        .select('*')
+        .select('*, requester:requester_id(email, name)')
         .order('created_at', { ascending: false })
 
       if (filter !== 'all') {
@@ -99,6 +103,11 @@ export default function SongApprovalsPage() {
   }
 
   const handleApprove = async (request: SongApprovalRequest) => {
+    if (!request.requester_id) {
+      alert('요청자가 삭제되어 승인할 수 없습니다.')
+      return
+    }
+
     if (!confirm(`"${request.song_name}" 곡을 승인하시겠습니까?`)) {
       return
     }
@@ -313,8 +322,19 @@ export default function SongApprovalsPage() {
                     </div>
 
                     <div className="text-sm text-gray-600">
+                      <p>
+                        요청자: {request.requester
+                          ? `${request.requester.name || ''} (${request.requester.email})`
+                          : '알 수 없음 (삭제된 계정)'}
+                      </p>
                       <p>요청일: {new Date(request.created_at).toLocaleString('ko-KR')}</p>
                     </div>
+
+                    {!request.requester_id && request.status === 'pending' && (
+                      <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                        요청자가 삭제되어 승인할 수 없습니다
+                      </div>
+                    )}
 
                     {request.admin_notes && (
                       <div className="mt-2 p-3 bg-gray-50 rounded text-sm">
@@ -338,8 +358,9 @@ export default function SongApprovalsPage() {
                       <>
                         <button
                           onClick={() => handleApprove(request)}
-                          disabled={processing === request.id}
+                          disabled={processing === request.id || !request.requester_id}
                           className="px-4 py-2 bg-[#84B9C0] text-white rounded-lg hover:bg-[#6FA5AC] font-medium transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
+                          title={!request.requester_id ? '요청자가 삭제되어 승인할 수 없습니다' : ''}
                         >
                           <CheckCircle className="mr-2" size={18} />
                           승인

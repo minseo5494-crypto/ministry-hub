@@ -74,9 +74,9 @@ src/
 | songs | 곡 정보 (제목, 아티스트, 키 등) |
 | song_sheets | 악보 파일 (PDF URL, 버전) |
 | user_song_notes | 개인 필기 노트 |
-| songforms | 송폼 (예배 순서) |
+| team_setlists | 팀 셋리스트 (예배 순서) |
 | feedbacks | 사용자 피드백 |
-| profiles | 사용자 프로필 |
+| users | 사용자 정보 (이메일, 이름, 교회, 관리자 여부 등) |
 
 ## Git Workflow
 

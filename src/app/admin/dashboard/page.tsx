@@ -22,6 +22,7 @@ interface Stats {
   totalUsers: number;
   totalTeams: number;
   totalSongs: number;
+  hiddenSongs: number;
   totalSetlists: number;
   totalDownloads: number;
   recentActivityCount: number;
@@ -122,6 +123,7 @@ export default function AdminDashboard() {
     totalUsers: 0,
     totalTeams: 0,
     totalSongs: 0,
+    hiddenSongs: 0,
     totalSetlists: 0,
     totalDownloads: 0,
     recentActivityCount: 0,
@@ -216,26 +218,41 @@ export default function AdminDashboard() {
         usersResult,
         teamsResult,
         songsResult,
+        hiddenSongsResult,
         setlistsResult,
         activityResult,
         downloadsResult
       ] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true }),
         supabase.from('teams').select('*', { count: 'exact', head: true }),
-        supabase.from('songs').select('*', { count: 'exact', head: true }),
+        supabase.from('songs').select('*', { count: 'exact', head: true })
+          .or('is_hidden.is.null,is_hidden.eq.false'),
+        supabase.from('songs').select('*', { count: 'exact', head: true })
+          .eq('is_hidden', true),
         supabase.from('team_setlists').select('*', { count: 'exact', head: true }),
         supabase.from('activity_logs').select('*', { count: 'exact', head: true })
           .gte('created_at', daysAgo.toISOString()),
-        supabase.from('activity_logs').select('user_id')
-          .in('action_type', ['ppt_download', 'pdf_download'])
-          .gte('created_at', daysAgo.toISOString())
+        admins.length > 0
+          ? supabase.from('activity_logs').select('*', { count: 'exact', head: true })
+              .in('action_type', ['ppt_download', 'pdf_download'])
+              .gte('created_at', daysAgo.toISOString())
+              .not('user_id', 'in', `(${admins.join(',')})`)
+          : supabase.from('activity_logs').select('*', { count: 'exact', head: true })
+              .in('action_type', ['ppt_download', 'pdf_download'])
+              .gte('created_at', daysAgo.toISOString())
       ]);
 
-      // DAU/WAU/MAU 계산 (관리자 제외)
+      // DAU/WAU/MAU 계산 (관리자 및 삭제된 사용자 제외)
       const now = new Date();
       const oneDayAgo = new Date(now); oneDayAgo.setDate(now.getDate() - 1);
       const oneWeekAgo = new Date(now); oneWeekAgo.setDate(now.getDate() - 7);
       const oneMonthAgo = new Date(now); oneMonthAgo.setDate(now.getDate() - 30);
+
+      // 존재하는 사용자 ID 목록 (삭제된 사용자 제외)
+      const { data: existingUsers } = await supabase
+        .from('users')
+        .select('id');
+      const existingUserIds = new Set(existingUsers?.map(u => u.id) || []);
 
       const [dauResult, wauResult, mauResult] = await Promise.all([
         supabase.from('activity_logs').select('user_id').gte('created_at', oneDayAgo.toISOString()),
@@ -243,21 +260,22 @@ export default function AdminDashboard() {
         supabase.from('activity_logs').select('user_id').gte('created_at', oneMonthAgo.toISOString())
       ]);
 
-      // 관리자 제외하고 unique user 계산
-      const filterAdmins = (data: { user_id: string }[] | null) =>
-        new Set(data?.filter(d => !admins.includes(d.user_id)).map(d => d.user_id)).size;
+      // 관리자 제외 + 존재하는 사용자만 카운트
+      const filterAdminsAndDeleted = (data: { user_id: string }[] | null) =>
+        new Set(data?.filter(d => !admins.includes(d.user_id) && existingUserIds.has(d.user_id)).map(d => d.user_id)).size;
 
-      const dau = filterAdmins(dauResult.data);
-      const wau = filterAdmins(wauResult.data);
-      const mau = filterAdmins(mauResult.data);
+      const dau = filterAdminsAndDeleted(dauResult.data);
+      const wau = filterAdminsAndDeleted(wauResult.data);
+      const mau = filterAdminsAndDeleted(mauResult.data);
 
-      // 다운로드 수 (관리자 제외)
-      const totalDownloads = downloadsResult.data?.filter(d => !admins.includes(d.user_id)).length || 0;
+      // 다운로드 수 (관리자 제외 - 서버 사이드 필터링)
+      const totalDownloads = downloadsResult.count || 0;
 
       setStats({
         totalUsers: usersResult.count || 0,
         totalTeams: teamsResult.count || 0,
         totalSongs: songsResult.count || 0,
+        hiddenSongs: hiddenSongsResult.count || 0,
         totalSetlists: setlistsResult.count || 0,
         totalDownloads,
         recentActivityCount: activityResult.count || 0,
@@ -293,7 +311,7 @@ export default function AdminDashboard() {
       // 성장 비교 (관리자 제외)
       await loadGrowthComparison(admins);
 
-      // 기기 분석
+      // 기기 분석 (피드백 user_agent 기준 - 대표성 제한적)
       await loadDeviceStats(daysAgo);
 
       // 베타 지표 (관리자 제외)
@@ -606,14 +624,14 @@ export default function AdminDashboard() {
     const oneMonthAgo = new Date(now); oneMonthAgo.setDate(now.getDate() - 30);
     const twoMonthsAgo = new Date(now); twoMonthsAgo.setDate(now.getDate() - 60);
 
-    // 가입자 수는 count로, 다운로드는 user_id를 가져와서 필터링
+    // 가입자 수는 관리자 제외하고 count, 다운로드도 관리자 제외
     const [thisWeekUsers, lastWeekUsers, thisWeekDownloads, lastWeekDownloads, thisMonthUsers, lastMonthUsers] = await Promise.all([
-      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneWeekAgo.toISOString()),
-      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneWeekAgo.toISOString()).or('is_admin.is.null,is_admin.eq.false'),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()).or('is_admin.is.null,is_admin.eq.false'),
       supabase.from('activity_logs').select('user_id').in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', oneWeekAgo.toISOString()),
       supabase.from('activity_logs').select('user_id').in('action_type', ['ppt_download', 'pdf_download']).gte('created_at', twoWeeksAgo.toISOString()).lt('created_at', oneWeekAgo.toISOString()),
-      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneMonthAgo.toISOString()),
-      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo.toISOString()).lt('created_at', oneMonthAgo.toISOString())
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', oneMonthAgo.toISOString()).or('is_admin.is.null,is_admin.eq.false'),
+      supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', twoMonthsAgo.toISOString()).lt('created_at', oneMonthAgo.toISOString()).or('is_admin.is.null,is_admin.eq.false')
     ]);
 
     const thisWeekUsersCount = thisWeekUsers.count || 0;
@@ -754,7 +772,8 @@ export default function AdminDashboard() {
     const statsData = [
       { 지표: '전체 사용자', 값: stats.totalUsers },
       { 지표: '전체 팀', 값: stats.totalTeams },
-      { 지표: '전체 곡', 값: stats.totalSongs },
+      { 지표: '서비스 중 곡', 값: stats.totalSongs },
+      { 지표: '숨김 곡', 값: stats.hiddenSongs },
       { 지표: '전체 콘티', 값: stats.totalSetlists },
       { 지표: `다운로드 (${timeRange}일)`, 값: stats.totalDownloads },
       { 지표: '일간 활성 사용자 (DAU)', 값: stats.dau },
@@ -940,10 +959,13 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">전체 곡</p>
+                <p className="text-sm font-medium text-gray-600">서비스 중 곡</p>
                 <p className="text-3xl font-bold text-gray-900 mt-2">
                   {stats.totalSongs.toLocaleString()}
                 </p>
+                {stats.hiddenSongs > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">숨김 {stats.hiddenSongs}곡</p>
+                )}
               </div>
               <div className="p-3 bg-purple-100 rounded-full">
                 <Music className="w-8 h-8 text-purple-600" />

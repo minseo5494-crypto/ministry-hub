@@ -11,7 +11,7 @@ interface ApprovalRequest {
   team_name: string
   team_type: 'church_internal' | 'external'
   church_name: string | null
-  requester_id: string
+  requester_id: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
   users?: {
@@ -323,6 +323,12 @@ export default function AdminApprovalsPage() {
                         요청일: {new Date(request.created_at).toLocaleString('ko-KR')}
                       </p>
                     </div>
+
+                    {!request.requester_id && request.status === 'pending' && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700">
+                        요청자가 삭제된 계정입니다
+                      </div>
+                    )}
                   </div>
 
                   {/* 버튼 */}
