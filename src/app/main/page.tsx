@@ -305,7 +305,7 @@ export default function MainPage() {
     generatePPTWithOptions,
     hasMultipleSongs,
     hasSongForms: hasSongFormsForPPT,
-    DownloadFormatModal,
+    renderDownloadFormatModal,
   } = useDownload({
     selectedSongs,
     songForms,
@@ -1782,7 +1782,7 @@ export default function MainPage() {
         userId={user?.id}
       />
 
-      <DownloadFormatModal />
+      {renderDownloadFormatModal()}
 
       <DownloadLoadingModal
         isOpen={downloadingPDF || downloadingPPT || downloadingImage}

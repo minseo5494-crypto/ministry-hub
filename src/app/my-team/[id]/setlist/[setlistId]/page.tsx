@@ -501,7 +501,7 @@ const {
   onPositionConfirm,
   onPositionCancel,
   startDownloadWithFormat,
-  DownloadFormatModal,  // ✅ 추가
+  renderDownloadFormatModal,  // ✅ 렌더 헬퍼 함수
 } = useDownload({
   selectedSongs: downloadSongs,
   songForms: downloadSongForms,
@@ -1965,8 +1965,8 @@ const saveNote = async () => {
   </div>
 )}
 
-      {/* 🔄 다운로드 형식 선택 모달 - 공통 컴포넌트 */}
-<DownloadFormatModal />
+      {/* 🔄 다운로드 형식 선택 모달 */}
+{renderDownloadFormatModal()}
       
       {/* 📍 송폼 위치 선택 모달 */}
 {showPositionModal && (

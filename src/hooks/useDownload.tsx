@@ -83,8 +83,8 @@ interface UseDownloadReturn {
   hasMultipleSongs: boolean
   hasSongForms: boolean
 
-  // ✅ 새로 추가: 공통 모달 컴포넌트
-  DownloadFormatModal: () => React.ReactElement | null
+  // ✅ 렌더 헬퍼 함수 (컴포넌트 아님 - input 포커스 유지)
+  renderDownloadFormatModal: () => React.ReactElement | null
 }
 
 export function useDownload({
@@ -341,9 +341,9 @@ export function useDownload({
   }, [downloadOptions.includeSongForm, hasSongsWithForms])
   
   // ========================================
-  // ✅ 공통 다운로드 형식 선택 모달 컴포넌트
+  // ✅ 렌더 헬퍼 함수 (컴포넌트 아님 - input 포커스 유지)
   // ========================================
-  const DownloadFormatModal = useCallback(() => {
+  const renderDownloadFormatModal = () => {
     if (!showFormatModal) return null
     
     return (
@@ -462,7 +462,7 @@ export function useDownload({
         </div>
       </div>
     )
-  }, [showFormatModal, downloadOptions, hasSongsWithForms, startDownloadWithFormat])
+  }
   
   // ========================================
   // 🆕 canvasDataUrls에서 이미지 다운로드 (다중 페이지 지원)
@@ -1370,7 +1370,7 @@ export function useDownload({
     hasMultipleSongs,
     hasSongForms: hasSongFormsForPPT,
 
-    // ✅ 공통 모달 컴포넌트
-    DownloadFormatModal,
+    // ✅ 렌더 헬퍼 함수 (input 포커스 유지)
+    renderDownloadFormatModal,
   }
 }
