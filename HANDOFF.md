@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 23일
+**마지막 업데이트**: 2026년 2월 24일
 
 ---
 
@@ -85,22 +85,26 @@
 
 ---
 
-## 3. 최근 작업 (2026-02-23)
+## 3. 최근 작업 (2026-02-24)
 
 ### 완료된 작업
-- [x] **RLS 보안 취약점 3건 수정** (1881cc8)
-  - activity_logs: 과도한 SELECT 정책(qual=true) 삭제
-  - songs: 중복 INSERT 정책 삭제 (user_id 위조 방지)
-  - sheetmusic 스토리지: 무제한 정책 삭제 → 역할별 정책 추가 + 50MB/MIME 제한
-- [x] **다운로드 모달 파일명 입력 포커스 유실 수정** (1999ac8)
-  - useDownload 훅의 DownloadFormatModal을 useCallback 컴포넌트 → 렌더 헬퍼 함수로 변환
-  - 메인 페이지, 콘티 상세 페이지 모두 적용
-- [x] **사업자등록 업종분류 가이드 문서 작성** (`docs/내부/사업자등록_업종분류_가이드.md`)
-  - 주업종: 62010 컴퓨터 프로그래밍 서비스업, 부업종: 63120 인터넷 정보매개 서비스업
+- [x] **악보 버전/키/필기 통합 관리 기능 계획 수립**
+  - 팀 에이전트(planner/coder/docs) 활용하여 코드베이스 전체 분석
+  - 현재 시스템 진단: song_sheets 미사용, 곡 간 연결 없음, key_transposed UI 없음
+  - 3단계 로드맵 수립:
+    - Phase 1: 콘티 키 변경 UI + 내 필기 불러오기 (DB 변경 없음, 파일 1개)
+    - Phase 2: song_groups 테이블 + 곡 버전 교체 모달 (마이그레이션 1개)
+    - Phase 3: song_sheets 활성화 + 악보 선택 (마이그레이션 1개)
+  - 계획서: `docs/내부/개인_악보_필기_버전관리_계획.md`
 
 ---
 
 ## 4. 이전 작업 요약
+
+### 2026-02-23
+- RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지)
+- 다운로드 모달 파일명 입력 포커스 유실 수정
+- 사업자등록 업종분류 가이드 문서 작성
 
 ### 2026-02-20
 - 관리자 페이지 데이터 정합성 이슈 11건 수정
@@ -123,17 +127,19 @@
 ## 5. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
-2. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
-3. [ ] **베타 테스터 피드백 수집** — 카톡 메시지 + Notion 가이드 링크
+1. [ ] **악보 통합 관리 Phase 1 구현** — 콘티 키 변경 UI + 내 필기 불러오기 (DB 변경 없음, 계획서 참조)
+2. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
+3. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
 
 ### 단기 (베타 기간)
+- [ ] 악보 통합 관리 Phase 2 (song_groups + 곡 교체 모달)
 - [ ] page.tsx 거대 컴포넌트 분리 (1900줄+)
 - [ ] Next.js 미들웨어 추가
 - [ ] 중간 보안 항목 수정 (check-email Rate Limit, MIME 검증, invite_code 등)
 - [ ] 테스터 피드백 반영
 
 ### 중기
+- [ ] 악보 통합 관리 Phase 3 (song_sheets 활성화)
 - [ ] 관리자 페이지 서버 API 전환
 - [ ] sheetmusic 버킷 비공개 전환 (API Proxy 구축)
 - [ ] 디자이너와 UI/UX 리뉴얼
@@ -156,10 +162,14 @@
 | 사용자 설정 API | `src/app/api/auth/setup-user/route.ts` |
 | 인증 함수 | `src/lib/auth.ts` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
+| 개인 필기 훅 | `src/hooks/useSheetMusicNotes.ts` |
+| 콘티 개인화 훅 | `src/hooks/usePersonalSetlistView.ts` |
+| 콘티 상세 페이지 | `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` |
 
 ### 문서
 | 문서 | 경로 |
 |------|------|
+| 악보 통합 관리 계획서 | `docs/내부/개인_악보_필기_버전관리_계획.md` |
 | 서비스 인프라 현황 | `docs/내부/서비스_인프라_현황.md` |
 | 보안 점검 보고서 | `docs/내부/보안_점검_보고서.md` |
 | 사업자등록 업종분류 | `docs/내부/사업자등록_업종분류_가이드.md` |
@@ -171,6 +181,7 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-24 | 악보 버전/키/필기 통합 관리 기능 계획 수립 (Phase 1~3 로드맵) |
 | 2026-02-23 | RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지) |
 | 2026-02-23 | 다운로드 모달 파일명 입력 포커스 유실 수정 |
 | 2026-02-20 | 관리자 페이지 데이터 정합성 이슈 11건 수정 |
@@ -233,9 +244,10 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- RLS 보안 취약점 3건 수정 완료 (쉬운 항목), 중간 난이도 2건 남음 (songs SELECT, users SELECT)
-- 다운로드 모달 포커스 유실 수정 완료
-- 모든 변경사항 커밋/푸시 완료, Vercel 배포 트리거됨
+- 악보 버전/키/필기 통합 관리 계획 수립 완료 → Phase 1 구현 대기
+- Phase 1(콘티 키 변경 UI + 내 필기 불러오기)은 DB 변경 없이 즉시 구현 가능
+- 계획서: `docs/내부/개인_악보_필기_버전관리_계획.md`
+- RLS 중간 난이도 2건 남음 (songs SELECT, users SELECT)
 
 ---
 
