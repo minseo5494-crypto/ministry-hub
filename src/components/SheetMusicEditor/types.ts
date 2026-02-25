@@ -78,6 +78,13 @@ export interface EditorSong {
   file_url: string
   file_type: 'pdf' | 'image'
   songForms?: string[]
+  // 기존 필기 데이터 (콘티에서 개인 노트 불러올 때 사용)
+  annotations?: PageAnnotation[]
+  songFormEnabled?: boolean
+  songFormStyle?: SongFormStyle
+  partTags?: PartTagStyle[]
+  pianoScores?: PianoScoreElement[]
+  drumScores?: DrumScoreElement[]
 }
 
 // ===== 저장 데이터 타입 =====
@@ -131,7 +138,7 @@ export interface EditorProps {
       pianoScores?: PianoScoreElement[]
       drumScores?: DrumScoreElement[]
     }
-  }[]) => void
+  }[]) => void | Promise<void>
   // 보기/편집 모드 통합
   initialMode?: 'view' | 'edit'
 }

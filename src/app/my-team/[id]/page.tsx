@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
+import { useSetlistNotes, SetlistNoteData } from '@/hooks/useSetlistNotes'
 import SheetMusicEditor from '@/components/SheetMusicEditor'
 import { PageAnnotation } from '@/lib/supabase'
 import { useTeamPermissions } from '@/hooks/useTeamPermissions'
@@ -136,6 +137,7 @@ export default function TeamDetailPage() {
     songForms?: string[]
   }[]>([])
   const [noteEditorSetlistTitle, setNoteEditorSetlistTitle] = useState('')
+  const [noteEditorSetlistId, setNoteEditorSetlistId] = useState('')
 
   // 팀 나가기
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
@@ -755,6 +757,7 @@ export default function TeamDetailPage() {
   }
 
   const { saveNote } = useSheetMusicNotes()
+  const { saveSetlistNote } = useSetlistNotes()
 
   const handleCopySetlistToNotes = async (setlist: Setlist) => {
     if (!user) {
@@ -808,6 +811,7 @@ export default function TeamDetailPage() {
 
       setNoteEditorSongs(songsForEditor)
       setNoteEditorSetlistTitle(setlist.title)
+      setNoteEditorSetlistId(setlist.id)
       setShowNoteEditor(true)
     } catch (error: any) {
       console.error('Error copying to notes:', error)
@@ -817,100 +821,76 @@ export default function TeamDetailPage() {
     }
   }
 
-  const handleSaveAllNotes = async (data: { song: any, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: any, partTags: any[] } }[]) => {
+  const handleSaveAllNotes = async (data: { song: any, annotations: PageAnnotation[], extra?: { songFormEnabled: boolean, songFormStyle: any, partTags: any[], pianoScores?: any[], drumScores?: any[] } }[]) => {
     if (!user) return
 
-    if (data.length > 1) {
-      let allAnnotations: PageAnnotation[] = []
-      let pageOffset = 0
-      const songsInfo = data.map(item => {
-        const maxPage = item.annotations.length > 0
-          ? Math.max(...item.annotations.map(a => a.pageNumber)) + 1
-          : 1
-
-        const offsetAnnotations = item.annotations.map(ann => ({
-          ...ann,
-          pageNumber: ann.pageNumber + pageOffset
-        }))
-        allAnnotations = [...allAnnotations, ...offsetAnnotations]
-
-        const songInfo = {
-          song_id: item.song.song_id,
+    // 다중 곡 + setlistId가 있으면 setlist_notes 테이블에 통합 저장
+    if (data.length > 1 && noteEditorSetlistId) {
+      const noteData: SetlistNoteData = {}
+      data.forEach((item, index) => {
+        noteData[item.song.song_id] = {
+          order: index,
           song_name: item.song.song_name,
-          team_name: item.song.team_name || undefined,
           file_url: item.song.file_url,
           file_type: item.song.file_type as 'pdf' | 'image',
+          team_name: item.song.team_name || undefined,
           songForms: item.song.songForms || [],
-          pageCount: maxPage,
+          annotations: item.annotations || [],
+          songFormEnabled: item.extra?.songFormEnabled ?? false,
+          songFormStyle: item.extra?.songFormStyle || { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+          partTags: item.extra?.partTags || [],
+          pianoScores: item.extra?.pianoScores,
+          drumScores: item.extra?.drumScores,
         }
-
-        pageOffset += maxPage
-        return songInfo
       })
 
-      const songNames = songsInfo.map(s => s.song_name).join(', ')
-
-      const result = await saveNote({
+      const result = await saveSetlistNote({
         user_id: user.id,
-        song_id: songsInfo[0].song_id,
-        song_name: songNames.length > 30 ? songNames.substring(0, 30) + '...' : songNames,
-        team_name: songsInfo[0].team_name,
-        file_url: songsInfo[0].file_url,
-        file_type: songsInfo[0].file_type,
-        title: noteEditorSetlistTitle || `콘티 (${songsInfo.length}곡)`,
-        annotations: allAnnotations,
-        songForms: [],
-        songFormEnabled: false,
-        songs: songsInfo,
+        setlist_id: noteEditorSetlistId,
+        note_data: noteData,
+        title: noteEditorSetlistTitle || `콘티 (${data.length}곡)`,
       })
 
       setShowNoteEditor(false)
       setNoteEditorSongs([])
       setNoteEditorSetlistTitle('')
+      setNoteEditorSetlistId('')
 
       if (result) {
-        alert(`✅ 콘티가 저장되었습니다! (${songsInfo.length}곡)\nmy-page > 내 필기 노트에서 확인하세요.`)
+        const savedCount = result.note_data ? Object.keys(result.note_data).length : 0
+        alert(`콘티 필기가 저장되었습니다! (${savedCount}곡)`)
       } else {
-        alert('저장에 실패했습니다.')
+        alert('콘티 저장에 실패했습니다.')
       }
       return
     }
 
+    // 단일 곡이면 기존 sheet_music_notes에 개별 저장
     const item = data[0]
-    const hasContent = item.annotations.some(
-      ann => (ann.strokes?.length || 0) > 0 || (ann.textElements?.length || 0) > 0
-    )
+    const result = await saveNote({
+      user_id: user.id,
+      song_id: item.song.song_id,
+      song_name: item.song.song_name,
+      team_name: item.song.team_name || undefined,
+      file_url: item.song.file_url,
+      file_type: item.song.file_type,
+      title: noteEditorSetlistTitle ? `${noteEditorSetlistTitle} - ${item.song.song_name}` : item.song.song_name,
+      annotations: item.annotations,
+      songForms: item.song.songForms || [],
+      songFormEnabled: item.extra?.songFormEnabled ?? ((item.song.songForms?.length || 0) > 0),
+      songFormStyle: item.extra?.songFormStyle,
+      partTags: item.extra?.partTags,
+    })
 
-    if (hasContent || data.length === 1) {
-      const result = await saveNote({
-        user_id: user.id,
-        song_id: item.song.song_id,
-        song_name: item.song.song_name,
-        team_name: item.song.team_name || undefined,
-        file_url: item.song.file_url,
-        file_type: item.song.file_type,
-        title: noteEditorSetlistTitle ? `${noteEditorSetlistTitle} - ${item.song.song_name}` : item.song.song_name,
-        annotations: item.annotations,
-        songForms: item.song.songForms || [],
-        songFormEnabled: item.extra?.songFormEnabled ?? ((item.song.songForms?.length || 0) > 0),
-        songFormStyle: item.extra?.songFormStyle,
-        partTags: item.extra?.partTags,
-      })
+    setShowNoteEditor(false)
+    setNoteEditorSongs([])
+    setNoteEditorSetlistTitle('')
+    setNoteEditorSetlistId('')
 
-      setShowNoteEditor(false)
-      setNoteEditorSongs([])
-      setNoteEditorSetlistTitle('')
-
-      if (result) {
-        alert(`✅ 필기가 저장되었습니다!\nmy-page > 내 필기 노트에서 확인하세요.`)
-      } else {
-        alert('저장에 실패했습니다.')
-      }
+    if (result) {
+      alert(`필기가 저장되었습니다!`)
     } else {
-      setShowNoteEditor(false)
-      setNoteEditorSongs([])
-      setNoteEditorSetlistTitle('')
-      alert('저장할 필기가 없습니다.')
+      alert('저장에 실패했습니다.')
     }
   }
 
@@ -923,6 +903,7 @@ export default function TeamDetailPage() {
     setShowNoteEditor(false)
     setNoteEditorSongs([])
     setNoteEditorSetlistTitle('')
+    setNoteEditorSetlistId('')
   }
 
   const handleDeleteSetlist = async () => {

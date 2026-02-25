@@ -167,7 +167,7 @@ export default function SheetMusicEditor({
   const [allAnnotations, setAllAnnotations] = useState<{ [songId: string]: PageAnnotation[] }>(() => {
     if (isMultiSongMode) {
       const initial: { [songId: string]: PageAnnotation[] } = {}
-      songs.forEach(s => { initial[s.song_id] = [] })
+      songs.forEach(s => { initial[s.song_id] = s.annotations || [] })
       return initial
     }
     return {}
@@ -179,9 +179,9 @@ export default function SheetMusicEditor({
       const initial: { [songId: string]: { enabled: boolean, style: SongFormStyle, partTags: PartTagStyle[] } } = {}
       songs.forEach(s => {
         initial[s.song_id] = {
-          enabled: (s.songForms?.length || 0) > 0,
-          style: { x: 50, y: 5, fontSize: 36, color: '#7C3AED', opacity: 1 },
-          partTags: []
+          enabled: s.songFormEnabled ?? (s.songForms?.length || 0) > 0,
+          style: s.songFormStyle || { x: 50, y: 5, fontSize: 36, color: '#7C3AED', opacity: 1 },
+          partTags: s.partTags || []
         }
       })
       return initial
@@ -429,8 +429,12 @@ export default function SheetMusicEditor({
     if (!containerRef.current) return
 
     const container = containerRef.current
-    const containerWidth = container.clientWidth
-    const containerHeight = container.clientHeight
+    // 패딩을 제외한 실제 콘텐츠 영역 크기 계산
+    const style = getComputedStyle(container)
+    const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    const paddingY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+    const containerWidth = container.clientWidth - paddingX
+    const containerHeight = container.clientHeight - paddingY
 
     // 컨테이너 크기가 아직 확정되지 않은 경우 재시도
     if (containerHeight < 100) {
@@ -470,10 +474,15 @@ export default function SheetMusicEditor({
   useEffect(() => {
     if (!isMultiSongMode || !currentSong) return
 
-    // 이전 곡의 songForm 상태 저장 (첫 번째 로드 제외)
+    // 이전 곡의 annotations + songForm 상태 저장 (첫 번째 로드 제외)
     if (prevSongIndexRef.current >= 0 && prevSongIndexRef.current !== currentSongIndex) {
       const prevSong = songs[prevSongIndexRef.current]
       if (prevSong) {
+        // 이전 곡의 annotations 명시적으로 저장 (annotationsRef는 아직 이전 곡의 데이터)
+        setAllAnnotations(prev => ({
+          ...prev,
+          [prevSong.song_id]: annotationsRef.current
+        }))
         setAllSongFormStates(prev => ({
           ...prev,
           [prevSong.song_id]: {
@@ -1943,11 +1952,13 @@ export default function SheetMusicEditor({
   }, [draggingNewPartTag, currentPage])
 
   // ===== 저장 =====
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     // annotationsRef.current를 사용하여 항상 최신 상태를 가져옴
     const currentAnnotations = annotationsRef.current
 
     if (isMultiSongMode) {
+      console.log(`🔍 handleSave: isMultiSongMode=true, songs=${songs.length}곡`)
+
       // 다중 곡 모드: 모든 곡의 annotations 및 songForm 상태 저장
       // 현재 곡의 annotations와 songForm 상태를 최신 상태로 반영
       const updatedAllAnnotations = {
@@ -1972,20 +1983,23 @@ export default function SheetMusicEditor({
           style: { x: 50, y: 5, fontSize: 36, color: '#7C3AED', opacity: 1 },
           partTags: []
         }
+        const isCurrentSong = currentSong && song.song_id === currentSong.song_id
+        const songAnnotations = updatedAllAnnotations[song.song_id] || []
         return {
           song,
-          annotations: updatedAllAnnotations[song.song_id] || [],
+          annotations: songAnnotations,
           extra: {
             songFormEnabled: formState.enabled,
             songFormStyle: formState.style,
             partTags: formState.partTags,
-            pianoScores: pianoScores.filter(s => s.pageIndex >= 0),
-            drumScores: drumScores.filter(s => s.pageIndex >= 0)
+            pianoScores: isCurrentSong ? pianoScores.filter(s => s.pageIndex >= 0) : [],
+            drumScores: isCurrentSong ? drumScores.filter(s => s.pageIndex >= 0) : []
           }
         }
       })
 
-      onSaveAll?.(dataToSave)
+      console.log(`📦 콘티 저장 데이터: ${dataToSave.length}곡`, dataToSave.map(d => d.song.song_name))
+      await onSaveAll?.(dataToSave)
     } else {
       // 송폼 정보와 피아노/드럼 악보도 함께 전달
       onSave?.(currentAnnotations, { songFormEnabled, songFormStyle, partTags, pianoScores, drumScores })
@@ -1994,7 +2008,7 @@ export default function SheetMusicEditor({
     // 저장 완료 후 변경사항 플래그 초기화
     setHasUnsavedChanges(false)
     initialAnnotationsRef.current = JSON.stringify(currentAnnotations)
-  }, [isMultiSongMode, onSave, songs, allAnnotations, onSaveAll, currentSong, songFormEnabled, songFormStyle, partTags, pianoScores, drumScores])
+  }, [isMultiSongMode, onSave, songs, allAnnotations, allSongFormStates, onSaveAll, currentSong, songFormEnabled, songFormStyle, partTags, pianoScores, drumScores])
 
   // ===== 내보내기 (PDF/이미지) - 캔버스 기반으로 화면 그대로 렌더링 =====
   const handleExport = useCallback(async (format: 'pdf' | 'image') => {

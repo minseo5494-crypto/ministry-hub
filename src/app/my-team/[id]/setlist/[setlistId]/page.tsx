@@ -36,8 +36,7 @@ import {
 } from 'lucide-react'
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
-import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
-import { usePersonalSetlistView } from '@/hooks/usePersonalSetlistView'
+import { useSetlistNotes, SetlistNoteData } from '@/hooks/useSetlistNotes'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
@@ -112,10 +111,6 @@ interface SortableSongItemProps {
   onOpenSheetFullscreen: (song: Song) => void
   isPreviewOpen: boolean
   totalSongs: number
-  // 개인화 관련 props
-  personalNote?: LocalSheetMusicNote  // 이 곡에 적용된 개인 필기 노트
-  userNotes?: LocalSheetMusicNote[]   // 이 곡에 대한 사용자의 모든 필기 노트
-  onSelectPersonalNote?: (songId: string, noteId: string | null) => void
 }
 
 function SortableSongItem({
@@ -134,9 +129,6 @@ function SortableSongItem({
   onOpenSheetFullscreen,
   isPreviewOpen,
   totalSongs,
-  personalNote,
-  userNotes,
-  onSelectPersonalNote,
 }: SortableSongItemProps) {
   // 🆕 여기서 useSortable 호출 (컴포넌트 최상위)
   const {
@@ -444,14 +436,7 @@ export default function TeamSetlistDetailPage() {
 
   // 🎵 SheetMusicEditor 상태 (다중 곡 악보 에디터)
   const [showSheetMusicEditor, setShowSheetMusicEditor] = useState(false)
-  const [sheetEditorSongs, setSheetEditorSongs] = useState<{
-    song_id: string
-    song_name: string
-    team_name?: string
-    file_url: string
-    file_type: 'pdf' | 'image'
-    selected_form?: string[]
-  }[]>([])
+  const [sheetEditorSongs, setSheetEditorSongs] = useState<EditorSong[]>([])
   const [startingSongIndex, setStartingSongIndex] = useState(0)
 
 
@@ -533,38 +518,10 @@ const {
 // 모바일 감지
 const isMobile = useMobile()
 
-// 개인화 훅
-const { notes: userSheetNotes, fetchNotes: fetchUserNotes, saveNote: saveSheetNote } = useSheetMusicNotes()
-const {
-  personalView,
-  fetchPersonalView,
-  replaceSongWithNote,
-  removeCustomization
-} = usePersonalSetlistView()
-
-// 각 곡에 대한 사용자 노트 맵
-const [songNotesMap, setSongNotesMap] = useState<{ [songId: string]: LocalSheetMusicNote[] }>({})
+// 콘티 단위 필기 노트 훅
+const { fetchSetlistNote, saveSetlistNote } = useSetlistNotes()
 
 // 개인화된 곡 선택 핸들러
-const handleSelectPersonalNote = async (songId: string, noteId: string | null) => {
-  if (!user?.id || !setlistId) return
-
-  if (noteId) {
-    // 내 버전 선택
-    await replaceSongWithNote(user.id, setlistId, songId, noteId)
-  } else {
-    // 원본 선택 - 해당 곡의 커스터마이징 제거
-    // 현재 해당 곡에 적용된 노트 ID 찾기
-    const existingCustomization = personalView?.customizations.find(
-      c => c.type === 'replace' && c.originalSongId === songId
-    )
-    if (existingCustomization) {
-      await removeCustomization(user.id, setlistId, existingCustomization.noteId)
-    }
-  }
-  // 개인 뷰 다시 로드
-  await fetchPersonalView(user.id, setlistId)
-}
 
 useEffect(() => {
   checkUser()
@@ -574,23 +531,8 @@ useEffect(() => {
     if (user && teamId && setlistId) {
       fetchSetlistDetail()
       fetchOtherSetlists()
-      // 개인 뷰와 필기 노트 로드
-      fetchPersonalView(user.id, setlistId)
-      fetchUserNotes(user.id)
     }
   }, [user, teamId, setlistId])
-
-  // 곡 목록이 로드되면 각 곡에 대한 필기 노트 맵 생성
-  useEffect(() => {
-    if (songs.length > 0 && userSheetNotes.length > 0) {
-      const map: { [songId: string]: LocalSheetMusicNote[] } = {}
-      songs.forEach(song => {
-        const songId = song.songs.id
-        map[songId] = userSheetNotes.filter(note => note.song_id === songId)
-      })
-      setSongNotesMap(map)
-    }
-  }, [songs, userSheetNotes])
 
   // ✅ 편집 권한 확인 (생성자 체크 추가)
 useEffect(() => {
@@ -1224,55 +1166,42 @@ const removeSongForm = (index: number) => {
   
 
   // 🎵 악보 에디터 열기 (SheetMusicEditor 사용)
-  const openSheetViewerForSong = (setlistSong: SetlistSong) => {
+  const openSheetViewerForSong = async (setlistSong: SetlistSong) => {
     console.log('🎵 악보보기 모드 열기:', setlistSong.songs.song_name)
 
-    // 악보가 있는 곡만 필터링하고, 개인화된 노트가 있으면 적용
-    const songsWithSheets = songs
+    // 기존 콘티 필기 로드
+    let existingNoteData: SetlistNoteData = {}
+    if (user?.id && setlistId) {
+      const note = await fetchSetlistNote(user.id, setlistId as string)
+      if (note?.note_data) {
+        existingNoteData = note.note_data as SetlistNoteData
+      }
+    }
+
+    // 악보가 있는 곡만 필터링 + 기존 필기 주입
+    const songsWithSheets: EditorSong[] = songs
       .filter(s => s.songs.file_url)
       .map(s => {
-        // 개인화된 노트 확인
-        const customization = personalView?.customizations.find(
-          c => c.type === 'replace' && c.originalSongId === s.songs.id
-        )
-        const personalNote = customization
-          ? userSheetNotes.find(n => n.id === customization.noteId)
-          : undefined
-
-        if (personalNote) {
-          // 개인 노트로 대체
-          return {
-            song_id: personalNote.song_id,
-            song_name: personalNote.song_name,
-            team_name: personalNote.team_name,
-            file_url: personalNote.file_url,
-            file_type: personalNote.file_type === 'pdf' ? 'pdf' as const : 'image' as const,
-            selected_form: s.selected_form,
-            annotations: personalNote.annotations,
-            songForms: personalNote.songForms,
-            songFormEnabled: personalNote.songFormEnabled,
-            songFormStyle: personalNote.songFormStyle,
-            partTags: personalNote.partTags,
-            pianoScores: personalNote.pianoScores,
-          }
-        }
-
-        // 원본 사용
+        const songNote = existingNoteData[s.songs.id]
         return {
           song_id: s.songs.id,
           song_name: s.songs.song_name,
           team_name: s.songs.team_name,
           file_url: s.songs.file_url!,
           file_type: s.songs.file_type === 'pdf' ? 'pdf' as const : 'image' as const,
-          selected_form: s.selected_form,
+          songForms: s.selected_form,
+          annotations: songNote?.annotations,
+          songFormEnabled: songNote?.songFormEnabled,
+          songFormStyle: songNote?.songFormStyle,
+          partTags: songNote?.partTags,
+          pianoScores: songNote?.pianoScores,
+          drumScores: songNote?.drumScores,
         }
       })
 
     // 클릭한 곡의 인덱스 찾기
     const clickedIndex = songsWithSheets.findIndex(
-      s => s.song_id === setlistSong.songs.id ||
-           (personalView?.customizations.find(c => c.originalSongId === setlistSong.songs.id)?.noteId &&
-            userSheetNotes.find(n => n.id === personalView?.customizations.find(c => c.originalSongId === setlistSong.songs.id)?.noteId)?.song_id === s.song_id)
+      s => s.song_id === setlistSong.songs.id
     )
 
     setSheetEditorSongs(songsWithSheets)
@@ -1291,7 +1220,7 @@ const removeSongForm = (index: number) => {
     setSheetEditorSongs([])
   }
 
-  // 📝 악보 에디터에서 저장 핸들러 (다중 곡 모드)
+  // 📝 악보 에디터에서 저장 핸들러 (콘티 단위 저장)
   const handleSaveSheetNotes = async (dataList: Array<{
     song: EditorSong
     annotations: any[]
@@ -1303,30 +1232,49 @@ const removeSongForm = (index: number) => {
       drumScores?: any[]
     }
   }>) => {
-    if (!user?.id) return
+    console.log(`📦 handleSaveSheetNotes 호출됨! dataList=${dataList?.length}곡, user=${user?.id}, setlistId=${setlistId}`)
 
-    for (const data of dataList) {
-      await saveSheetNote({
-        user_id: user.id,
-        song_id: data.song.song_id,
-        song_name: data.song.song_name,
-        team_name: data.song.team_name,
-        file_url: data.song.file_url,
-        file_type: data.song.file_type,
-        title: data.song.song_name,
-        annotations: data.annotations,
-        songForms: data.song.songForms,
-        songFormEnabled: data.extra?.songFormEnabled,
-        songFormStyle: data.extra?.songFormStyle,
-        partTags: data.extra?.partTags,
-        pianoScores: data.extra?.pianoScores,
-        drumScores: data.extra?.drumScores,
-      })
+    if (!user?.id || !setlistId) {
+      alert(`저장 실패: 인증 정보 없음 (user=${user?.id ? '있음' : '없음'}, setlistId=${setlistId || '없음'})`)
+      return
     }
 
-    alert('필기 노트가 저장되었습니다!')
-    // 필기 노트 다시 로드
-    fetchUserNotes(user.id)
+    // 모든 곡 데이터를 SetlistNoteData 객체로 합침
+    const noteData: SetlistNoteData = {}
+
+    dataList.forEach((data, index) => {
+      noteData[data.song.song_id] = {
+        order: index,
+        song_name: data.song.song_name,
+        file_url: data.song.file_url,
+        file_type: data.song.file_type,
+        team_name: data.song.team_name,
+        songForms: data.song.songForms,
+        annotations: data.annotations || [],
+        songFormEnabled: data.extra?.songFormEnabled ?? false,
+        songFormStyle: data.extra?.songFormStyle || { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+        partTags: data.extra?.partTags || [],
+        pianoScores: data.extra?.pianoScores,
+        drumScores: data.extra?.drumScores,
+      }
+    })
+
+    console.log(`💾 저장할 noteData: ${Object.keys(noteData).length}곡`, Object.keys(noteData))
+
+    // 단일 saveSetlistNote 호출
+    const result = await saveSetlistNote({
+      user_id: user.id,
+      setlist_id: setlistId as string,
+      note_data: noteData,
+      title: setlist?.title || '',
+    })
+
+    if (result) {
+      const savedSongCount = result.note_data ? Object.keys(result.note_data).length : 0
+      alert(`콘티 필기가 저장되었습니다! (${savedSongCount}곡)`)
+    } else {
+      alert('콘티 저장에 실패했습니다. 콘솔을 확인해주세요.')
+    }
   }
   // 📝 메모 모달 열기
 const openNoteModal = (song: SetlistSong) => {
@@ -1651,17 +1599,6 @@ const saveNote = async () => {
             onOpenSheetFullscreen={openSimpleViewer}
             isPreviewOpen={previewStates[song.id] || false}
             totalSongs={songs.length}
-            userNotes={songNotesMap[song.songs.id] || []}
-            personalNote={
-              personalView?.customizations.find(
-                c => c.type === 'replace' && c.originalSongId === song.songs.id
-              )?.noteId
-                ? userSheetNotes.find(n => n.id === personalView?.customizations.find(
-                    c => c.type === 'replace' && c.originalSongId === song.songs.id
-                  )?.noteId)
-                : undefined
-            }
-            onSelectPersonalNote={handleSelectPersonalNote}
           />
         ))}
       </div>

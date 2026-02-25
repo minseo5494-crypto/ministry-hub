@@ -16,7 +16,8 @@ import { cleanSongText } from '@/lib/textUtils'
 import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
-import SheetMusicEditor from '@/components/SheetMusicEditor'
+import { useSetlistNotes, SetlistNote } from '@/hooks/useSetlistNotes'
+import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
 
 interface UploadedSong {
@@ -136,8 +137,16 @@ const {
   updateNoteTitle: updateSheetMusicNoteTitle,
   deleteNote: deleteSheetMusicNote,
 } = useSheetMusicNotes()
+const { fetchAllSetlistNotes } = useSetlistNotes()
+const [setlistNotes, setSetlistNotes] = useState<(SetlistNote & { team_id?: string; setlist_title?: string })[]>([])
+const [setlistNotesLoading, setSetlistNotesLoading] = useState(false)
 const [editingNote, setEditingNote] = useState<LocalSheetMusicNote | null>(null)
 const [showNoteEditor, setShowNoteEditor] = useState(false)
+
+// 📂 콘티 필기 뷰어 상태
+const [showSetlistViewer, setShowSetlistViewer] = useState(false)
+const [setlistViewerSongs, setSetlistViewerSongs] = useState<EditorSong[]>([])
+const [setlistViewerTitle, setSetlistViewerTitle] = useState('')
 
 // 📝 필기 노트 뷰 및 선택 상태
 const [notesViewMode, setNotesViewMode] = useState<'grid' | 'list'>('grid')
@@ -572,8 +581,31 @@ const handleTeamNameChange = (value: string) => {
       fetchUserTeams()
       fetchLikedSongs()  // 🎵 추가
       fetchSheetMusicNotes(user.id)  // 📝 필기 노트 불러오기
+      // 📂 콘티 필기 노트 불러오기
+      setSetlistNotesLoading(true)
+      fetchAllSetlistNotes(user.id).then(async (notes) => {
+        if (notes.length > 0) {
+          // setlist_id로 team_setlists에서 team_id, title 가져오기
+          const setlistIds = notes.map(n => n.setlist_id)
+          const { data: setlistData } = await supabase
+            .from('team_setlists')
+            .select('id, team_id, title')
+            .in('id', setlistIds)
+          const setlistMap = new Map(
+            (setlistData || []).map(s => [s.id, { team_id: s.team_id, title: s.title }])
+          )
+          setSetlistNotes(notes.map(n => ({
+            ...n,
+            team_id: setlistMap.get(n.setlist_id)?.team_id,
+            setlist_title: setlistMap.get(n.setlist_id)?.title || n.title,
+          })))
+        } else {
+          setSetlistNotes([])
+        }
+        setSetlistNotesLoading(false)
+      })
     }
-  }, [user, fetchSheetMusicNotes])
+  }, [user, fetchSheetMusicNotes, fetchAllSetlistNotes])
 
   const checkUser = async () => {
     try {
@@ -1269,7 +1301,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
               <h2 className="text-lg font-bold text-slate-900">
                 {activeTab === 'uploaded' && `내가 추가한 곡 (${filteredSongs.length})`}
                 {activeTab === 'liked' && `좋아요 (${likedSongs.length})`}
-                {activeTab === 'notes' && `필기 노트 (${sheetMusicNotes.length})`}
+                {activeTab === 'notes' && `필기 노트 (${sheetMusicNotes.length + setlistNotes.length})`}
               </h2>
             </div>
 
@@ -1579,12 +1611,12 @@ setNewSong({ ...newSong, tempo: tempoValue })
             {/* 📝 내 필기 노트 탭 */}
             {activeTab === 'notes' && (
               <>
-                {notesLoading ? (
+                {(notesLoading || setlistNotesLoading) ? (
                   <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                     <p className="mt-4 text-slate-500">불러오는 중...</p>
                   </div>
-                ) : sheetMusicNotes.length === 0 ? (
+                ) : sheetMusicNotes.length === 0 && setlistNotes.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     <FileText className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                     <p className="text-lg font-medium">필기 노트가 없습니다</p>
@@ -1682,6 +1714,72 @@ setNewSong({ ...newSong, tempo: tempoValue })
                         </div>
                       )}
                     </div>
+
+                    {/* 📂 콘티 필기 섹션 */}
+                    {setlistNotes.length > 0 && (
+                      <div className="p-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-base text-indigo-500">folder</span>
+                          콘티 필기
+                          <span className="bg-indigo-50 text-indigo-600 text-xs px-1.5 py-0.5 rounded-full ml-1">{setlistNotes.length}</span>
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {setlistNotes.map((note) => {
+                            const songCount = note.note_data ? Object.keys(note.note_data).length : 0
+                            return (
+                              <button
+                                key={note.id}
+                                onClick={() => {
+                                  if (!note.note_data) return
+                                  console.log(`📂 콘티 필기 열기: ${note.setlist_title || note.title}, note_data 곡 수=${Object.keys(note.note_data).length}`)
+                                  // note_data에서 EditorSong 배열 구성
+                                  const editorSongs: EditorSong[] = Object.entries(note.note_data).map(([songId, data]) => {
+                                    return {
+                                      song_id: songId,
+                                      song_name: data.song_name || '제목 없음',
+                                      file_url: data.file_url || '',
+                                      file_type: data.file_type || 'image',
+                                      team_name: data.team_name,
+                                      songForms: data.songForms,
+                                      annotations: data.annotations,
+                                      songFormEnabled: data.songFormEnabled,
+                                      songFormStyle: data.songFormStyle,
+                                      partTags: data.partTags,
+                                      pianoScores: data.pianoScores,
+                                      drumScores: data.drumScores,
+                                      _order: data.order ?? 999,
+                                    } as EditorSong & { _order: number }
+                                  })
+                                  .filter(s => s.file_url)
+                                  .sort((a, b) => (a as any)._order - (b as any)._order)
+                                  .map(({ _order, ...song }) => song) as EditorSong[]
+                                  console.log(`📂 EditorSong 배열: ${editorSongs.length}곡 (file_url 없는 곡 제외 후), multi-song 모드=${editorSongs.length > 0}`)
+                                  if (editorSongs.length === 0) return
+                                  setSetlistViewerSongs(editorSongs)
+                                  setSetlistViewerTitle(note.setlist_title || note.title)
+                                  setShowSetlistViewer(true)
+                                }}
+                                className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-sm transition-all text-left group"
+                                style={{ touchAction: 'manipulation' }}
+                              >
+                                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
+                                  <span className="material-symbols-outlined text-xl text-indigo-500">queue_music</span>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-slate-800 truncate">
+                                    {note.setlist_title || note.title}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-0.5">
+                                    {songCount}곡 필기 · {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                                  </p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 group-hover:text-indigo-400 transition-colors" />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* 🆕 그리드 뷰 - 컴팩트한 파일 브라우저 스타일 */}
                     {notesViewMode === 'grid' && (
@@ -2014,6 +2112,23 @@ setNewSong({ ...newSong, tempo: tempoValue })
           onClose={() => {
             setShowNoteEditor(false)
             setEditingNote(null)
+          }}
+        />
+      )}
+
+      {/* 📂 콘티 필기 뷰어 */}
+      {showSetlistViewer && setlistViewerSongs.length > 0 && (
+        <SheetMusicEditor
+          fileUrl=""
+          fileType="image"
+          songName=""
+          songs={setlistViewerSongs}
+          setlistTitle={setlistViewerTitle}
+          initialMode="view"
+          onClose={() => {
+            setShowSetlistViewer(false)
+            setSetlistViewerSongs([])
+            setSetlistViewerTitle('')
           }}
         />
       )}
