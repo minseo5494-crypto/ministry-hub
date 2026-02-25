@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 24일
+**마지막 업데이트**: 2026년 2월 25일
 
 ---
 
@@ -85,26 +85,37 @@
 
 ---
 
-## 3. 최근 작업 (2026-02-24)
+## 3. 최근 작업 (2026-02-25)
 
 ### 완료된 작업
-- [x] **악보 버전/키/필기 통합 관리 기능 계획 수립**
-  - 팀 에이전트(planner/coder/docs) 활용하여 코드베이스 전체 분석
-  - 현재 시스템 진단: song_sheets 미사용, 곡 간 연결 없음, key_transposed UI 없음
-  - 3단계 로드맵 수립:
-    - Phase 1: 콘티 키 변경 UI + 내 필기 불러오기 (DB 변경 없음, 파일 1개)
-    - Phase 2: song_groups 테이블 + 곡 버전 교체 모달 (마이그레이션 1개)
-    - Phase 3: song_sheets 활성화 + 악보 선택 (마이그레이션 1개)
-  - 계획서: `docs/내부/개인_악보_필기_버전관리_계획.md`
+- [x] **콘티 노트 저장 버그 수정** — 커밋 완료 (`01bc415`)
+  - 팀 페이지에서 저장 시 `useSheetMusicNotes` 대신 `useSetlistNotes` 사용하도록 수정
+  - `useSetlistNotes` 훅: SELECT→INSERT/UPDATE 패턴, 인증 확인, 에러 alert 추가
+  - 곡 순서 역전 버그 수정 (JSONB `order` 필드 추가)
+  - SheetMusicEditor `handleSave`를 async로 변경
+  - my-page에서 콘티 필기 order 기반 정렬
+- [x] **GoodNotes 통합 계획서 분석** — 3인 에이전트 팀으로 실현 가능성 분석
+  - DB 스키마 문제점 (RLS 서브쿼리 성능, song_id 타입 불일치 등)
+  - 프론트엔드 위험 (에디터 4659줄 확장 한계, iOS 메모리 문제)
+  - UX/비즈니스 (베타 11명에 10주 리팩토링은 과도)
+  - **결론: 원래 10주 계획은 현 단계에서 비현실적**
+- [x] **독립 필기노트 서비스 계획서 작성** — 커밋 완료 (`0c238e9`)
+  - GoodNotes 계획 축소: 테이블 4개→1개, 기간 10주→4일
+  - `notebooks` 테이블 1개 + JSONB pages 구조
+  - 콘티→필기노트 복사 방식 (독립 데이터)
+  - SheetMusicEditor 최소 수정 (+80줄)
 
 ---
 
 ## 4. 이전 작업 요약
 
+### 2026-02-24
+- 콘티 노트 저장 버그 수정 (팀 페이지→setlist_notes 연결, 곡 순서 수정)
+- GoodNotes 통합 계획서 작성 (29개 기능 분석)
+
 ### 2026-02-23
 - RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지)
 - 다운로드 모달 파일명 입력 포커스 유실 수정
-- 사업자등록 업종분류 가이드 문서 작성
 
 ### 2026-02-20
 - 관리자 페이지 데이터 정합성 이슈 11건 수정
@@ -127,13 +138,18 @@
 ## 5. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **악보 통합 관리 Phase 1 구현** — 콘티 키 변경 UI + 내 필기 불러오기 (DB 변경 없음, 계획서 참조)
+1. [ ] **독립 필기노트 서비스 구현** — `docs/내부/독립_필기노트_서비스_계획서.md` 참고 (4일 계획)
+   - Phase 1: notebooks 테이블 마이그레이션 + useNotebooks 훅
+   - Phase 2: 콘티 저장 시 notebooks 복사 로직
+   - Phase 3: my-page 필기노트 UI 변경
+   - Phase 4: SheetMusicEditor notebookMode (+80줄)
 2. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
 3. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
 
 ### 단기 (베타 기간)
-- [ ] 악보 통합 관리 Phase 2 (song_groups + 곡 교체 모달)
-- [ ] page.tsx 거대 컴포넌트 분리 (1900줄+)
+- [ ] 자동 저장 기능 추가 (15~30초 디바운스 + dirty flag)
+- [ ] 필기노트 검색/정렬 기능
+- [ ] page.tsx 거대 컴포넌트 분리 (3500줄+)
 - [ ] Next.js 미들웨어 추가
 - [ ] 중간 보안 항목 수정 (check-email Rate Limit, MIME 검증, invite_code 등)
 - [ ] 테스터 피드백 반영
@@ -162,7 +178,8 @@
 | 사용자 설정 API | `src/app/api/auth/setup-user/route.ts` |
 | 인증 함수 | `src/lib/auth.ts` |
 | 악보 에디터 | `src/components/SheetMusicEditor.tsx` |
-| 개인 필기 훅 | `src/hooks/useSheetMusicNotes.ts` |
+| 개인 필기 훅 (곡별) | `src/hooks/useSheetMusicNotes.ts` |
+| 콘티 필기 훅 (콘티 단위) | `src/hooks/useSetlistNotes.ts` |
 | 콘티 개인화 훅 | `src/hooks/usePersonalSetlistView.ts` |
 | 콘티 상세 페이지 | `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` |
 
@@ -170,6 +187,8 @@
 | 문서 | 경로 |
 |------|------|
 | 악보 통합 관리 계획서 | `docs/내부/개인_악보_필기_버전관리_계획.md` |
+| 독립 필기노트 서비스 계획서 | `docs/내부/독립_필기노트_서비스_계획서.md` |
+| GoodNotes 통합 분석 (참고용) | `docs/내부/GoodNotes_통합_계획서.md` |
 | 서비스 인프라 현황 | `docs/내부/서비스_인프라_현황.md` |
 | 보안 점검 보고서 | `docs/내부/보안_점검_보고서.md` |
 | 사업자등록 업종분류 | `docs/내부/사업자등록_업종분류_가이드.md` |
@@ -181,6 +200,9 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-02-25 | 독립 필기노트 서비스 계획서 작성 (notebooks 테이블 1개, 4일 계획) |
+| 2026-02-25 | 콘티 노트 저장 버그 수정 커밋 (setlist_notes 연결 + 곡 순서) |
+| 2026-02-24 | setlist_notes 테이블 생성 + 콘티 단위 필기 저장 기능 |
 | 2026-02-24 | 악보 버전/키/필기 통합 관리 기능 계획 수립 (Phase 1~3 로드맵) |
 | 2026-02-23 | RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지) |
 | 2026-02-23 | 다운로드 모달 파일명 입력 포커스 유실 수정 |
@@ -244,9 +266,10 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 악보 버전/키/필기 통합 관리 계획 수립 완료 → Phase 1 구현 대기
-- Phase 1(콘티 키 변경 UI + 내 필기 불러오기)은 DB 변경 없이 즉시 구현 가능
-- 계획서: `docs/내부/개인_악보_필기_버전관리_계획.md`
+- 콘티 노트 저장 버그 수정 완료 (커밋됨 `01bc415`)
+- 독립 필기노트 서비스 계획서 작성 완료 → `docs/내부/독립_필기노트_서비스_계획서.md`
+  - notebooks 테이블 1개, JSONB pages, 콘티→복사 방식, 4일 계획
+- 다음 작업: 독립 필기노트 서비스 구현 (Phase 1~5)
 - RLS 중간 난이도 2건 남음 (songs SELECT, users SELECT)
 
 ---
