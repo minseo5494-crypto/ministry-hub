@@ -17,6 +17,7 @@ type AISearchResult = {
     keywords?: string[]
     lyricsKeywords?: string[]
   }
+  error?: string
 }
 
 type HeroSectionProps = {
@@ -196,6 +197,35 @@ export default function HeroSection({
                   가사 포함 검색
                 </span>
               </label>
+            </div>
+          )}
+
+          {/* AI 검색 에러 (로그인 필요 등) */}
+          {aiSearchResult && !aiSearchResult.success && aiSearchResult.error && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-700 flex items-center gap-1.5">
+                  {aiSearchResult.error === '로그인이 필요합니다.' ? (
+                    <>
+                      <span>AI 검색은 로그인 후 이용할 수 있어요.</span>
+                      <a
+                        href="/login"
+                        className="underline font-semibold text-amber-800 hover:text-amber-900"
+                      >
+                        로그인하기
+                      </a>
+                    </>
+                  ) : (
+                    <span>{aiSearchResult.error}</span>
+                  )}
+                </span>
+                <button
+                  onClick={clearAIResult}
+                  className="text-amber-400 hover:text-amber-600 text-xs ml-2 shrink-0"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
           )}
 
