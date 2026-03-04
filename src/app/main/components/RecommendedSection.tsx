@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Eye, Heart, Youtube } from 'lucide-react'
 import { Song } from '../types'
 
@@ -19,6 +20,7 @@ export default function RecommendedSection({
   onSongSelect,
   onYoutubeClick
 }: RecommendedSectionProps) {
+  const router = useRouter()
   const scrollRef = useRef<HTMLDivElement>(null)
 
   if (songs.length === 0) return null
@@ -37,8 +39,11 @@ export default function RecommendedSection({
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg md:text-xl font-bold text-gray-900">
-          {sectionTitle}
+        <h2
+          className="text-lg md:text-xl font-bold text-gray-900 cursor-pointer hover:text-violet-600 transition-colors"
+          onClick={() => router.push('/explore')}
+        >
+          {sectionTitle} →
         </h2>
         <div className="hidden md:flex items-center gap-1">
           <button
@@ -111,7 +116,7 @@ export default function RecommendedSection({
                 </button>
                 <button
                   onClick={(e) => onToggleLike(e, song.id)}
-                  className={`p-1.5 rounded-lg transition-colors ${
+                  className={`p-1.5 rounded-lg transition-colors flex items-center gap-0.5 ${
                     isLiked
                       ? 'text-red-500 hover:bg-red-50'
                       : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
@@ -119,6 +124,9 @@ export default function RecommendedSection({
                   title="좋아요"
                 >
                   <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
+                  {(song.like_count || 0) > 0 && (
+                    <span className="text-[10px]">{song.like_count}</span>
+                  )}
                 </button>
                 {song.youtube_url && onYoutubeClick && (
                   <button

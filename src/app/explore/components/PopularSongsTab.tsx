@@ -1,10 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Loader2, TrendingUp, Heart, Youtube, Eye, EyeOff, LogIn } from 'lucide-react'
+import { Loader2, TrendingUp, Heart, Youtube, Eye, EyeOff } from 'lucide-react'
 import { useWeeklyPopular } from '@/hooks/useWeeklyPopular'
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useRef, useCallback } from 'react'
 import type { Song } from '@/lib/supabase'
 import ResponsiveImage from '@/components/ResponsiveImage'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
@@ -12,8 +11,6 @@ import SheetMusicViewer from '@/components/SheetMusicViewer'
 export default function PopularSongsTab() {
   const router = useRouter()
   const { songs, likedSongs, loading, toggleLike } = useWeeklyPopular()
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
-
   // 인라인 미리보기 상태
   const [previewStates, setPreviewStates] = useState<Record<string, boolean>>({})
   // 유튜브 토글 상태
@@ -24,12 +21,6 @@ export default function PopularSongsTab() {
   // 더블탭 감지용
   const lastTapTimeRef = useRef(0)
   const lastTapSongIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session)
-    })
-  }, [])
 
   const togglePreview = useCallback((songId: string) => {
     setPreviewStates(prev => ({ ...prev, [songId]: !prev[songId] }))
@@ -65,31 +56,12 @@ export default function PopularSongsTab() {
     }
   }, [openSimpleViewer])
 
-  // 로그인 체크 중
-  if (isLoggedIn === null) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={28} className="text-violet-500 animate-spin" />
-      </div>
-    )
-  }
-
-  // 미인증
-  if (!isLoggedIn) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <LogIn size={40} className="text-gray-300" />
-        <p className="text-gray-500 font-medium">로그인하면 인기 악보를 볼 수 있습니다</p>
-        <button
-          onClick={() => router.push('/login')}
-          className="px-5 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition"
-          style={{ touchAction: 'manipulation', minHeight: '44px' }}
-        >
-          로그인하기
-        </button>
-      </div>
-    )
-  }
+  const handleLike = useCallback(async (e: React.MouseEvent, songId: string) => {
+    const ok = await toggleLike(e, songId)
+    if (!ok) {
+      router.push('/login')
+    }
+  }, [toggleLike, router])
 
   if (loading) {
     return (
@@ -182,7 +154,7 @@ export default function PopularSongsTab() {
                   {/* 좋아요 */}
                   <div className="w-8 flex flex-col items-center">
                     <button
-                      onClick={(e) => toggleLike(e, song.id)}
+                      onClick={(e) => handleLike(e, song.id)}
                       className={`p-1.5 rounded-lg transition-colors ${
                         isLiked
                           ? 'text-red-500 hover:bg-red-50'
@@ -193,9 +165,9 @@ export default function PopularSongsTab() {
                     >
                       <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
                     </button>
-                    {((song as any).like_count || 0) > 0 && (
+                    {(song.like_count || 0) > 0 && (
                       <span className={`text-[10px] leading-none ${isLiked ? 'text-red-500' : 'text-gray-400'}`}>
-                        {(song as any).like_count}
+                        {song.like_count}
                       </span>
                     )}
                   </div>
