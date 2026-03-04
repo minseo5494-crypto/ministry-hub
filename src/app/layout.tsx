@@ -4,6 +4,7 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import Footer from '@/components/Footer'
 import FeedbackButtonWrapper from '@/components/FeedbackButtonWrapper'
+import InAppBrowserAlert from '@/components/InAppBrowserAlert'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
@@ -70,6 +71,7 @@ export default function RootLayout({
         <main className="flex-grow">{children}</main>
         <Footer />
         <FeedbackButtonWrapper />
+        <InAppBrowserAlert />
       </body>
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </html>

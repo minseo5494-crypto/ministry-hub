@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import {
   Music, Plus, Users, UserPlus, X,
-  BarChart3, MessageSquare
+  BarChart3, MessageSquare, Compass
 } from 'lucide-react'
 import { User } from '../types'
 
@@ -52,6 +52,18 @@ export default function MobileMenu({
         <div className="p-4 space-y-1">
           {user ? (
             <>
+              {/* Explore */}
+              <button
+                onClick={() => {
+                  router.push('/explore')
+                  onClose()
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-white rounded-xl transition"
+              >
+                <Compass size={18} style={{ color: '#7c3aed' }} />
+                <span className="text-sm font-medium">Explore</span>
+              </button>
+
               {/* My Team */}
               <button
                 onClick={() => {

@@ -17,6 +17,10 @@ import { useMobile } from '@/hooks/useMobile'
 import { useTeamNameSearch } from '@/hooks/useTeamNameSearch'
 import { useSheetMusicNotes, LocalSheetMusicNote } from '@/hooks/useSheetMusicNotes'
 import { useSetlistNotes, SetlistNote } from '@/hooks/useSetlistNotes'
+import { useNotebooks } from '@/hooks/useNotebooks'
+import { Notebook, NotebookPage } from '@/types/notebook'
+import { useCommunity } from '@/hooks/useCommunity'
+import type { SharedSetlist } from '@/types/community'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
 
@@ -122,7 +126,12 @@ export default function MyPagePage() {
   const [loading, setLoading] = useState(true)
   const [songs, setSongs] = useState<UploadedSong[]>([])
 const [userTeams, setUserTeams] = useState<Team[]>([])
-const [activeTab, setActiveTab] = useState<'uploaded' | 'liked' | 'notes'>('uploaded')
+const [activeTab, setActiveTab] = useState<'uploaded' | 'liked' | 'notes' | 'bookmarks'>('uploaded')
+
+// 🔖 저장한 콘티 관련 상태
+const [bookmarkedSetlists, setBookmarkedSetlists] = useState<SharedSetlist[]>([])
+const [loadingBookmarks, setLoadingBookmarks] = useState(false)
+const { fetchBookmarkedSetlists } = useCommunity()
 
 // 🎵 좋아요한 곡 관련 상태
 const [likedSongs, setLikedSongs] = useState<UploadedSong[]>([])
@@ -138,6 +147,7 @@ const {
   deleteNote: deleteSheetMusicNote,
 } = useSheetMusicNotes()
 const { fetchAllSetlistNotes } = useSetlistNotes()
+const { fetchNotebooks, deleteNotebook, renameNotebook, addPage, addPages, removePage, updateNotebook } = useNotebooks()
 const [setlistNotes, setSetlistNotes] = useState<(SetlistNote & { team_id?: string; setlist_title?: string })[]>([])
 const [setlistNotesLoading, setSetlistNotesLoading] = useState(false)
 const [editingNote, setEditingNote] = useState<LocalSheetMusicNote | null>(null)
@@ -153,6 +163,46 @@ const [notesViewMode, setNotesViewMode] = useState<'grid' | 'list'>('grid')
 const [notesSelectMode, setNotesSelectMode] = useState(false)
 const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
 const [deletingNotes, setDeletingNotes] = useState(false)
+
+// 📒 노트북 상태
+const [notebooks, setNotebooks] = useState<Notebook[]>([])
+const [notebooksLoading, setNotebooksLoading] = useState(false)
+const [renamingNotebook, setRenamingNotebook] = useState<Notebook | null>(null)
+const [newNotebookTitle, setNewNotebookTitle] = useState('')
+const [showNotebookRenameModal, setShowNotebookRenameModal] = useState(false)
+const [openingNotebook, setOpeningNotebook] = useState<Notebook | null>(null)
+const [notebookEditorPages, setNotebookEditorPages] = useState<EditorSong[]>([])
+
+// NotebookPage[] → EditorSong[] 변환
+const notebookPageToEditorSong = (page: NotebookPage): EditorSong => {
+  // 곡 이름: 다중 페이지 PDF면 "(2p)" 형태로 페이지 번호 표시
+  let songName = page.pageType === 'sheet' ? (page.songName || '제목 없음') :
+                 page.pageType === 'blank' ? '백지' :
+                 page.pageType === 'staff' ? '오선지' :
+                 (page.uploadFileName || '업로드')
+  if (page.pdfPageNumber && page.pdfPageNumber > 1) {
+    songName = `${songName} (${page.pdfPageNumber}p)`
+  }
+  return {
+    // 플랫 구조에서 unique 보장 (같은 PDF의 여러 페이지가 동일 songId를 가지므로 page.id 사용)
+    song_id: page.id,
+    song_name: songName,
+    team_name: page.teamName,
+    file_url: page.fileUrl || '',
+    file_type: page.fileType || 'image',
+    songForms: page.songForms,
+    annotations: page.annotations || [],
+    songFormEnabled: page.songFormEnabled,
+    songFormStyle: page.songFormStyle,
+    partTags: page.partTags || [],
+    pianoScores: page.pianoScores,
+    drumScores: page.drumScores,
+    pageType: page.pageType,
+    pdfPageNumber: page.pdfPageNumber,
+    uploadUrl: page.uploadUrl,
+    uploadFileName: page.uploadFileName,
+  }
+}
 
 // 📝 파일명 수정 및 공유 모달 상태
 const [showRenameModal, setShowRenameModal] = useState(false)
@@ -581,6 +631,18 @@ const handleTeamNameChange = (value: string) => {
       fetchUserTeams()
       fetchLikedSongs()  // 🎵 추가
       fetchSheetMusicNotes(user.id)  // 📝 필기 노트 불러오기
+      // 🔖 저장한 콘티 불러오기
+      setLoadingBookmarks(true)
+      fetchBookmarkedSetlists(user.id).then(data => {
+        setBookmarkedSetlists(data)
+        setLoadingBookmarks(false)
+      })
+      // 📒 노트북 목록 불러오기
+      setNotebooksLoading(true)
+      fetchNotebooks(user.id).then(data => {
+        setNotebooks(data)
+        setNotebooksLoading(false)
+      })
       // 📂 콘티 필기 노트 불러오기
       setSetlistNotesLoading(true)
       fetchAllSetlistNotes(user.id).then(async (notes) => {
@@ -606,6 +668,80 @@ const handleTeamNameChange = (value: string) => {
       })
     }
   }, [user, fetchSheetMusicNotes, fetchAllSetlistNotes])
+
+  // 📒 openingNotebook 변경 시 EditorSong[] 변환 + 다중 PDF 자동 마이그레이션
+  useEffect(() => {
+    if (!openingNotebook) {
+      setNotebookEditorPages([])
+      return
+    }
+
+    const migrateAndConvert = async () => {
+      const pdfjsLib = (window as any).pdfjsLib
+      let needsMigration = false
+      const expandedPages: NotebookPage[] = []
+
+      for (const page of openingNotebook.pages) {
+        // pdfPageNumber가 없는 PDF sheet → 펼침 대상
+        if (page.pageType === 'sheet' && page.fileType === 'pdf' && page.fileUrl && !page.pdfPageNumber && pdfjsLib) {
+          try {
+            const pdfDoc = await pdfjsLib.getDocument({ url: page.fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
+            const numPages = pdfDoc.numPages
+            if (numPages > 1) {
+              needsMigration = true
+              for (let p = 1; p <= numPages; p++) {
+                // 기존 annotations 중 해당 페이지의 것만 분리 (pageNumber 기준)
+                const pageAnnotations = (page.annotations || [])
+                  .filter((a: any) => (a.pageNumber || 1) === p)
+                  .map((a: any) => ({ ...a, pageNumber: 1 }))
+                expandedPages.push({
+                  ...page,
+                  id: p === 1 ? page.id : crypto.randomUUID(),
+                  pdfPageNumber: p,
+                  annotations: pageAnnotations,
+                  // 첫 페이지 외에는 필기 보조 요소 초기화
+                  ...(p > 1 ? {
+                    songFormEnabled: false,
+                    songFormStyle: { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+                    partTags: [],
+                    pianoScores: [],
+                    drumScores: [],
+                  } : {}),
+                })
+              }
+            } else {
+              // 1페이지 PDF → pdfPageNumber: 1 설정
+              needsMigration = true
+              expandedPages.push({ ...page, pdfPageNumber: 1 })
+            }
+          } catch {
+            // PDF 로드 실패 시 그대로 유지
+            expandedPages.push(page)
+          }
+        } else {
+          expandedPages.push(page)
+        }
+      }
+
+      if (needsMigration) {
+        // order 재계산 후 DB 저장 (1회성 마이그레이션)
+        const reordered = expandedPages.map((p, i) => ({ ...p, order: i }))
+        const success = await updateNotebook(openingNotebook.id, reordered)
+        if (success) {
+          const updated = { ...openingNotebook, pages: reordered }
+          setOpeningNotebook(updated)
+          setNotebooks(prev => prev.map(nb => nb.id === updated.id ? updated : nb))
+          // setNotebookEditorPages는 openingNotebook 상태 변경으로 다시 호출됨
+          return
+        }
+      }
+
+      setNotebookEditorPages(openingNotebook.pages.map(notebookPageToEditorSong))
+    }
+
+    migrateAndConvert()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openingNotebook])
 
   const checkUser = async () => {
     try {
@@ -1119,6 +1255,17 @@ setNewSong({ ...newSong, tempo: tempoValue })
             <FileText className="w-5 h-5" />
             <span>필기 노트</span>
           </button>
+          <button
+            onClick={() => setActiveTab('bookmarks')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 rounded-lg ${
+              activeTab === 'bookmarks'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+          >
+            <Globe className="w-5 h-5" />
+            <span>저장한 콘티</span>
+          </button>
         </nav>
         <div className="p-4 border-t border-slate-100 space-y-2">
           {/* 뒤로가기 버튼 */}
@@ -1257,6 +1404,16 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 >
                   필기
                 </button>
+                <button
+                  onClick={() => setActiveTab('bookmarks')}
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                    activeTab === 'bookmarks'
+                      ? 'text-slate-900 border-b-2 border-indigo-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  저장콘티
+                </button>
               </div>
 
               {/* 검색 및 필터 */}
@@ -1301,7 +1458,8 @@ setNewSong({ ...newSong, tempo: tempoValue })
               <h2 className="text-lg font-bold text-slate-900">
                 {activeTab === 'uploaded' && `내가 추가한 곡 (${filteredSongs.length})`}
                 {activeTab === 'liked' && `좋아요 (${likedSongs.length})`}
-                {activeTab === 'notes' && `필기 노트 (${sheetMusicNotes.length + setlistNotes.length})`}
+                {activeTab === 'notes' && `필기 노트 (${notebooks.length})`}
+                {activeTab === 'bookmarks' && `저장한 콘티 (${bookmarkedSetlists.length})`}
               </h2>
             </div>
 
@@ -1608,455 +1766,234 @@ setNewSong({ ...newSong, tempo: tempoValue })
               </>
             )}
 
-            {/* 📝 내 필기 노트 탭 */}
+            {/* 📒 내 필기노트 탭 (notebooks) */}
             {activeTab === 'notes' && (
               <>
-                {(notesLoading || setlistNotesLoading) ? (
+                {notebooksLoading ? (
                   <div className="text-center py-12">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                     <p className="mt-4 text-slate-500">불러오는 중...</p>
                   </div>
-                ) : sheetMusicNotes.length === 0 && setlistNotes.length === 0 ? (
+                ) : notebooks.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     <FileText className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-                    <p className="text-lg font-medium">필기 노트가 없습니다</p>
-                    <p className="text-sm mt-2">메인 페이지에서 악보의 ✏️ 버튼을 눌러 필기해보세요!</p>
-                    <button
-                      onClick={() => router.push('/')}
-                      className="mt-4 px-6 py-3 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
-                    >
-                      악보 보러가기
-                    </button>
+                    <p className="text-lg font-medium">필기노트가 없습니다</p>
+                    <p className="text-sm mt-2">콘티에서 악보 필기를 저장하면 여기에 나타납니다.</p>
                   </div>
                 ) : (
                   <>
-                    {/* 🆕 상단 툴바 */}
+                    {/* 📒 상단 툴바 */}
                     <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center gap-2">
-                        {/* 뷰 전환 버튼 */}
-                        <div className="flex border border-slate-200 rounded-lg overflow-hidden">
-                          <button
-                            onClick={() => setNotesViewMode('grid')}
-                            className={`p-2 transition-colors ${notesViewMode === 'grid' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                            title="그리드 뷰"
-                          >
-                            <Grid className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setNotesViewMode('list')}
-                            className={`p-2 transition-colors ${notesViewMode === 'list' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                            title="리스트 뷰"
-                          >
-                            <List className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        {/* 선택 모드 토글 */}
+                      <div className="flex border border-slate-200 rounded-lg overflow-hidden">
                         <button
-                          onClick={() => {
-                            setNotesSelectMode(!notesSelectMode)
-                            if (notesSelectMode) {
-                              setSelectedNoteIds(new Set())
-                            }
-                          }}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            notesSelectMode
-                              ? 'bg-indigo-100 text-indigo-700'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
+                          onClick={() => setNotesViewMode('grid')}
+                          className={`p-2 transition-colors ${notesViewMode === 'grid' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                          title="그리드 뷰"
+                          style={{ minHeight: '44px', touchAction: 'manipulation' }}
                         >
-                          {notesSelectMode ? '선택 취소' : '선택'}
+                          <Grid className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setNotesViewMode('list')}
+                          className={`p-2 transition-colors ${notesViewMode === 'list' ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+                          title="리스트 뷰"
+                          style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                        >
+                          <List className="w-4 h-4" />
                         </button>
                       </div>
-
-                      {/* 선택 모드일 때 표시 */}
-                      {notesSelectMode && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-500">
-                            {selectedNoteIds.size}개 선택됨
-                          </span>
-                          <button
-                            onClick={() => {
-                              if (selectedNoteIds.size === sheetMusicNotes.length) {
-                                setSelectedNoteIds(new Set())
-                              } else {
-                                setSelectedNoteIds(new Set(sheetMusicNotes.map(n => n.id)))
-                              }
-                            }}
-                            className="px-3 py-1 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-                          >
-                            {selectedNoteIds.size === sheetMusicNotes.length ? '전체 해제' : '전체 선택'}
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (selectedNoteIds.size === 0) {
-                                alert('삭제할 노트를 선택해주세요.')
-                                return
-                              }
-                              if (!confirm(`선택한 ${selectedNoteIds.size}개의 노트를 삭제하시겠습니까?`)) return
-
-                              setDeletingNotes(true)
-                              let successCount = 0
-                              for (const noteId of selectedNoteIds) {
-                                const success = await deleteSheetMusicNote(noteId)
-                                if (success) successCount++
-                              }
-                              setDeletingNotes(false)
-                              setSelectedNoteIds(new Set())
-                              setNotesSelectMode(false)
-                              alert(`${successCount}개의 노트가 삭제되었습니다.`)
-                            }}
-                            disabled={selectedNoteIds.size === 0 || deletingNotes}
-                            className="px-3 py-1 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
-                          >
-                            {deletingNotes ? '삭제 중...' : `삭제 (${selectedNoteIds.size})`}
-                          </button>
-                        </div>
-                      )}
+                      <span className="text-sm text-slate-400">{notebooks.length}개</span>
                     </div>
 
-                    {/* 📂 콘티 필기 섹션 */}
-                    {setlistNotes.length > 0 && (
-                      <div className="p-4 border-b border-slate-100">
-                        <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-base text-indigo-500">folder</span>
-                          콘티 필기
-                          <span className="bg-indigo-50 text-indigo-600 text-xs px-1.5 py-0.5 rounded-full ml-1">{setlistNotes.length}</span>
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {setlistNotes.map((note) => {
-                            const songCount = note.note_data ? Object.keys(note.note_data).length : 0
-                            return (
-                              <button
-                                key={note.id}
-                                onClick={() => {
-                                  if (!note.note_data) return
-                                  console.log(`📂 콘티 필기 열기: ${note.setlist_title || note.title}, note_data 곡 수=${Object.keys(note.note_data).length}`)
-                                  // note_data에서 EditorSong 배열 구성
-                                  const editorSongs: EditorSong[] = Object.entries(note.note_data).map(([songId, data]) => {
-                                    return {
-                                      song_id: songId,
-                                      song_name: data.song_name || '제목 없음',
-                                      file_url: data.file_url || '',
-                                      file_type: data.file_type || 'image',
-                                      team_name: data.team_name,
-                                      songForms: data.songForms,
-                                      annotations: data.annotations,
-                                      songFormEnabled: data.songFormEnabled,
-                                      songFormStyle: data.songFormStyle,
-                                      partTags: data.partTags,
-                                      pianoScores: data.pianoScores,
-                                      drumScores: data.drumScores,
-                                      _order: data.order ?? 999,
-                                    } as EditorSong & { _order: number }
-                                  })
-                                  .filter(s => s.file_url)
-                                  .sort((a, b) => (a as any)._order - (b as any)._order)
-                                  .map(({ _order, ...song }) => song) as EditorSong[]
-                                  console.log(`📂 EditorSong 배열: ${editorSongs.length}곡 (file_url 없는 곡 제외 후), multi-song 모드=${editorSongs.length > 0}`)
-                                  if (editorSongs.length === 0) return
-                                  setSetlistViewerSongs(editorSongs)
-                                  setSetlistViewerTitle(note.setlist_title || note.title)
-                                  setShowSetlistViewer(true)
-                                }}
-                                className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-sm transition-all text-left group"
-                                style={{ touchAction: 'manipulation' }}
-                              >
-                                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
-                                  <span className="material-symbols-outlined text-xl text-indigo-500">queue_music</span>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-slate-800 truncate">
-                                    {note.setlist_title || note.title}
-                                  </p>
-                                  <p className="text-xs text-slate-400 mt-0.5">
-                                    {songCount}곡 필기 · {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                                  </p>
-                                </div>
-                                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0 group-hover:text-indigo-400 transition-colors" />
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 🆕 그리드 뷰 - 컴팩트한 파일 브라우저 스타일 */}
+                    {/* 📒 그리드 뷰 */}
                     {notesViewMode === 'grid' && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                        {sheetMusicNotes.map((note) => (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+                        {notebooks.map((nb) => (
                           <div
-                            key={note.id}
-                            className={`bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition overflow-hidden relative ${
-                              selectedNoteIds.has(note.id) ? 'ring-2 ring-indigo-500' : ''
-                            }`}
+                            key={nb.id}
+                            className="bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition overflow-hidden"
                           >
-                            {/* 선택 체크박스 */}
-                            {notesSelectMode && (
-                              <button
-                                onClick={() => {
-                                  const newSet = new Set(selectedNoteIds)
-                                  if (newSet.has(note.id)) {
-                                    newSet.delete(note.id)
-                                  } else {
-                                    newSet.add(note.id)
-                                  }
-                                  setSelectedNoteIds(newSet)
-                                }}
-                                className="absolute top-1 left-1 z-10 p-0.5 bg-white rounded shadow"
-                              >
-                                {selectedNoteIds.has(note.id) ? (
-                                  <CheckSquare className="w-4 h-4 text-indigo-600" />
-                                ) : (
-                                  <Square className="w-4 h-4 text-slate-400" />
-                                )}
-                              </button>
-                            )}
-
-                            {/* 썸네일 영역 */}
+                            {/* 썸네일 */}
                             <div
-                              className="h-24 bg-slate-100 flex items-center justify-center cursor-pointer relative"
-                              onClick={() => {
-                                if (notesSelectMode) {
-                                  const newSet = new Set(selectedNoteIds)
-                                  if (newSet.has(note.id)) {
-                                    newSet.delete(note.id)
-                                  } else {
-                                    newSet.add(note.id)
-                                  }
-                                  setSelectedNoteIds(newSet)
-                                } else {
-                                  setEditingNote(note)
-                                  setShowNoteEditor(true)
-                                }
-                              }}
+                              className="h-24 bg-indigo-50 flex items-center justify-center cursor-pointer"
+                              onClick={() => setOpeningNotebook(nb)}
+                              style={{ touchAction: 'manipulation' }}
                             >
-                              {note.thumbnail_url ? (
-                                <img
-                                  src={note.thumbnail_url}
-                                  alt={note.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="text-slate-400 text-center">
-                                  <FileText className="w-7 h-7 mx-auto" />
-                                </div>
-                              )}
-                              {/* 파일 타입 배지 */}
-                              <span className={`absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                note.file_type === 'pdf'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-blue-100 text-indigo-700'
-                              }`}>
-                                {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
-                              </span>
+                              <FileText className="w-8 h-8 text-indigo-300" />
                             </div>
-
-                            {/* 정보 영역 */}
-                            <div className="px-2 pt-2">
-                              <h3 className="font-medium text-xs text-slate-900 truncate" title={note.title}>{note.title}</h3>
-                              <p className="text-[10px] text-slate-500 truncate" title={note.song_name}>{note.song_name}</p>
-                              <p className="text-[10px] text-slate-400 mt-1">
-                                {new Date(note.updated_at).toLocaleDateString('ko-KR')}
-                              </p>
-
-                              {/* 버튼 영역 */}
-                              {!notesSelectMode && (
-                                <div className="flex mt-1 border-t border-slate-100 pt-1 pb-0.5">
-                                  <button
-                                    onClick={() => {
-                                      setEditingNote(note)
-                                      setShowNoteEditor(true)
-                                    }}
-                                    className="flex-1 flex justify-center text-indigo-600 hover:text-indigo-700 transition-colors"
-                                    title="편집"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setRenameNote(note)
-                                      setNewTitle(note.title)
-                                      setShowRenameModal(true)
-                                    }}
-                                    className="flex-1 flex justify-center text-slate-400 hover:text-indigo-600 transition-colors"
-                                    title="파일명 변경"
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShareNote(note)
-                                      setShareFileName(note.title)
-                                      setShowShareModal2(true)
-                                    }}
-                                    className="flex-1 flex justify-center text-slate-400 hover:text-indigo-600 transition-colors"
-                                    title="내보내기"
-                                  >
-                                    <Upload className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
-                                      const success = await deleteSheetMusicNote(note.id)
-                                      if (success) {
-                                        alert('삭제되었습니다.')
-                                      }
-                                    }}
-                                    className="flex-1 flex justify-center text-slate-400 hover:text-red-600 transition-colors"
-                                    title="삭제"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                            {/* 정보 */}
+                            <div className="px-2 pt-2 pb-1">
+                              <h3 className="font-medium text-xs text-slate-900 truncate" title={nb.title}>{nb.title}</h3>
+                              {nb.source_setlist_title && (
+                                <p className="text-[10px] text-indigo-500 truncate">{nb.source_setlist_title}</p>
                               )}
+                              <p className="text-[10px] text-slate-400">
+                                {nb.pages.length}페이지 · {new Date(nb.updated_at).toLocaleDateString('ko-KR')}
+                              </p>
+                              {/* 버튼 */}
+                              <div className="flex mt-1 border-t border-slate-100 pt-1">
+                                <button
+                                  onClick={() => setOpeningNotebook(nb)}
+                                  className="flex-1 flex justify-center text-indigo-600 hover:text-indigo-700 transition-colors"
+                                  title="열기"
+                                  style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRenamingNotebook(nb)
+                                    setNewNotebookTitle(nb.title)
+                                    setShowNotebookRenameModal(true)
+                                  }}
+                                  className="flex-1 flex justify-center text-slate-400 hover:text-indigo-600 transition-colors"
+                                  title="이름 변경"
+                                  style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm(`"${nb.title}"을(를) 삭제하시겠습니까?`)) return
+                                    const ok = await deleteNotebook(nb.id)
+                                    if (ok) setNotebooks(prev => prev.filter(n => n.id !== nb.id))
+                                  }}
+                                  className="flex-1 flex justify-center text-slate-400 hover:text-red-600 transition-colors"
+                                  title="삭제"
+                                  style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* 🆕 리스트 뷰 */}
+                    {/* 📒 리스트 뷰 */}
                     {notesViewMode === 'list' && (
                       <div className="divide-y divide-slate-100">
-                        {sheetMusicNotes.map((note) => (
+                        {notebooks.map((nb) => (
                           <div
-                            key={note.id}
-                            className={`flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors ${
-                              selectedNoteIds.has(note.id) ? 'bg-indigo-50' : ''
-                            }`}
+                            key={nb.id}
+                            className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors"
                           >
-                            {/* 선택 체크박스 */}
-                            {notesSelectMode && (
-                              <button
-                                onClick={() => {
-                                  const newSet = new Set(selectedNoteIds)
-                                  if (newSet.has(note.id)) {
-                                    newSet.delete(note.id)
-                                  } else {
-                                    newSet.add(note.id)
-                                  }
-                                  setSelectedNoteIds(newSet)
-                                }}
-                                className="flex-shrink-0"
-                              >
-                                {selectedNoteIds.has(note.id) ? (
-                                  <CheckSquare className="w-6 h-6 text-indigo-600" />
-                                ) : (
-                                  <Square className="w-6 h-6 text-slate-400" />
-                                )}
-                              </button>
-                            )}
-
-                            {/* 썸네일 */}
+                            {/* 아이콘 */}
                             <div
-                              className="w-16 h-16 bg-slate-100 rounded-lg flex-shrink-0 flex items-center justify-center cursor-pointer overflow-hidden"
-                              onClick={() => {
-                                if (notesSelectMode) {
-                                  const newSet = new Set(selectedNoteIds)
-                                  if (newSet.has(note.id)) {
-                                    newSet.delete(note.id)
-                                  } else {
-                                    newSet.add(note.id)
-                                  }
-                                  setSelectedNoteIds(newSet)
-                                } else {
-                                  setEditingNote(note)
-                                  setShowNoteEditor(true)
-                                }
-                              }}
+                              className="w-12 h-12 bg-indigo-50 rounded-lg flex-shrink-0 flex items-center justify-center cursor-pointer"
+                              onClick={() => setOpeningNotebook(nb)}
+                              style={{ touchAction: 'manipulation' }}
                             >
-                              {note.thumbnail_url ? (
-                                <img
-                                  src={note.thumbnail_url}
-                                  alt={note.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <FileText className="w-6 h-6 text-slate-400" />
-                              )}
+                              <FileText className="w-6 h-6 text-indigo-400" />
                             </div>
-
                             {/* 정보 */}
                             <div
                               className="flex-1 min-w-0 cursor-pointer"
-                              onClick={() => {
-                                if (notesSelectMode) {
-                                  const newSet = new Set(selectedNoteIds)
-                                  if (newSet.has(note.id)) {
-                                    newSet.delete(note.id)
-                                  } else {
-                                    newSet.add(note.id)
-                                  }
-                                  setSelectedNoteIds(newSet)
-                                } else {
-                                  setEditingNote(note)
-                                  setShowNoteEditor(true)
-                                }
-                              }}
+                              onClick={() => setOpeningNotebook(nb)}
+                              style={{ touchAction: 'manipulation' }}
                             >
-                              <h3 className="font-semibold text-slate-900 truncate">{note.title}</h3>
-                              <p className="text-sm text-slate-500 truncate">
-                                {note.song_name} {note.team_name && `· ${note.team_name}`}
-                              </p>
+                              <h3 className="font-semibold text-slate-900 truncate">{nb.title}</h3>
+                              {nb.source_setlist_title && (
+                                <p className="text-sm text-indigo-500 truncate">{nb.source_setlist_title}</p>
+                              )}
                               <p className="text-xs text-slate-400">
-                                {new Date(note.updated_at).toLocaleDateString('ko-KR')}
+                                {nb.pages.length}페이지 · {new Date(nb.updated_at).toLocaleDateString('ko-KR')}
                               </p>
                             </div>
-
-                            {/* 타입 배지 */}
-                            <span className={`px-2 py-1 rounded-md text-xs font-bold flex-shrink-0 ${
-                              note.file_type === 'pdf'
-                                ? 'bg-red-100 text-red-700'
-                              : 'bg-blue-100 text-indigo-700'
-                          }`}>
-                            {note.file_type === 'pdf' ? 'PDF' : 'IMG'}
-                          </span>
-
-                            {/* 버튼 - 선택 모드가 아닐 때만 표시 */}
-                            {!notesSelectMode && (
-                              <div className="flex gap-1 flex-shrink-0">
-                                <button
-                                  onClick={() => {
-                                    setEditingNote(note)
-                                    setShowNoteEditor(true)
-                                  }}
-                                  className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                  title="편집"
-                                >
-                                  <Edit className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setRenameNote(note)
-                                    setNewTitle(note.title)
-                                    setShowRenameModal(true)
-                                  }}
-                                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-                                  title="이름 변경"
-                                >
-                                  <Pencil className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    if (!confirm(`"${note.title}"을(를) 삭제하시겠습니까?`)) return
-                                    const success = await deleteSheetMusicNote(note.id)
-                                    if (success) {
-                                      alert('삭제되었습니다.')
-                                    }
-                                  }}
-                                  className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-                                  title="삭제"
-                                >
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
-                              </div>
-                            )}
+                            {/* 버튼 */}
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => setOpeningNotebook(nb)}
+                                className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                                title="열기"
+                                style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                              >
+                                <Edit className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRenamingNotebook(nb)
+                                  setNewNotebookTitle(nb.title)
+                                  setShowNotebookRenameModal(true)
+                                }}
+                                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="이름 변경"
+                                style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                              >
+                                <Pencil className="w-5 h-5" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`"${nb.title}"을(를) 삭제하시겠습니까?`)) return
+                                  const ok = await deleteNotebook(nb.id)
+                                  if (ok) setNotebooks(prev => prev.filter(n => n.id !== nb.id))
+                                }}
+                                className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                                title="삭제"
+                                style={{ minHeight: '44px', touchAction: 'manipulation' }}
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </>
+                )}
+              </>
+            )}
+
+            {/* 🔖 저장한 콘티 탭 */}
+            {activeTab === 'bookmarks' && (
+              <>
+                {loadingBookmarks ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                  </div>
+                ) : bookmarkedSetlists.length === 0 ? (
+                  <div className="text-center py-12 px-6">
+                    <Globe className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">저장한 콘티가 없습니다</p>
+                    <p className="text-sm text-slate-400 mt-1">커뮤니티에서 마음에 드는 콘티를 저장해보세요</p>
+                    <button
+                      onClick={() => router.push('/explore?tab=shared')}
+                      className="mt-4 px-4 py-2 text-sm text-indigo-600 font-medium hover:underline"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      공유 콘티 둘러보기
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {bookmarkedSetlists.map((setlist) => (
+                      <button
+                        key={setlist.id}
+                        onClick={() => router.push(`/explore/${setlist.id}`)}
+                        className="w-full flex items-start gap-4 p-4 hover:bg-slate-50 transition-colors text-left"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        <div className="w-10 h-10 bg-violet-50 rounded-xl flex-shrink-0 flex items-center justify-center">
+                          <Music className="w-5 h-5 text-violet-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-slate-900 truncate">{setlist.title}</h3>
+                          <p className="text-sm text-slate-500 truncate">
+                            {setlist.author_name} 님{setlist.author_church ? ` · ${setlist.author_church}` : ''}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-slate-400">{setlist.songs.length}곡</span>
+                            <span className="text-xs text-slate-400">❤️ {setlist.like_count}</span>
+                            {setlist.tags.slice(0, 2).map((tag, i) => (
+                              <span key={i} className="text-xs text-violet-500">#{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0 mt-1" />
+                      </button>
+                    ))}
+                  </div>
                 )}
               </>
             )}
@@ -2130,6 +2067,134 @@ setNewSong({ ...newSong, tempo: tempoValue })
             setSetlistViewerSongs([])
             setSetlistViewerTitle('')
           }}
+        />
+      )}
+
+      {/* 📒 노트북 에디터 (notebookMode) */}
+      {openingNotebook && notebookEditorPages.length > 0 && (
+        <SheetMusicEditor
+          fileUrl=""
+          fileType="image"
+          songName={openingNotebook.title}
+          songs={notebookEditorPages}
+          setlistTitle={openingNotebook.title}
+          initialMode="edit"
+          notebookMode={true}
+          userId={user?.id}
+          notebookId={openingNotebook.id}
+          onAddPage={async (position, page, currentPageIndex) => {
+            if (!openingNotebook || !user) return
+
+            // 다중 페이지 PDF 자동 펼침
+            if (page.type === 'sheet' && page.fileType === 'pdf' && page.fileUrl) {
+              try {
+                const pdfjsLib = (window as any).pdfjsLib
+                if (pdfjsLib) {
+                  const pdfDoc = await pdfjsLib.getDocument({ url: page.fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
+                  const numPages = pdfDoc.numPages
+                  if (numPages > 1) {
+                    // N개 페이지로 펼침
+                    const newPages: Omit<NotebookPage, 'id' | 'order'>[] = Array.from(
+                      { length: numPages },
+                      (_, i) => ({
+                        pageType: 'sheet' as const,
+                        songId: page.songId,
+                        songName: page.songName,
+                        fileUrl: page.fileUrl,
+                        fileType: page.fileType,
+                        pdfPageNumber: i + 1,
+                        annotations: [],
+                        songFormEnabled: false,
+                        songFormStyle: { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+                        partTags: [],
+                      })
+                    )
+                    const updatedPages = await addPages(
+                      openingNotebook.id,
+                      openingNotebook.pages,
+                      newPages,
+                      position,
+                      currentPageIndex
+                    )
+                    if (updatedPages) {
+                      const updated = { ...openingNotebook, pages: updatedPages }
+                      setOpeningNotebook(updated)
+                      setNotebooks(prev => prev.map(nb => nb.id === updated.id ? updated : nb))
+                    }
+                    return
+                  }
+                  // 1페이지 PDF → pdfPageNumber: 1 설정
+                }
+              } catch (err) {
+                console.error('PDF 페이지 수 확인 실패:', err)
+              }
+            }
+
+            // 기본 단일 페이지 추가 (비-PDF 또는 1페이지 PDF)
+            const newPage: Omit<NotebookPage, 'id' | 'order'> = {
+              pageType: page.type,
+              songId: page.songId,
+              songName: page.songName,
+              fileUrl: page.fileUrl,
+              fileType: page.fileType,
+              pdfPageNumber: (page.type === 'sheet' && page.fileType === 'pdf') ? 1 : undefined,
+              uploadUrl: page.uploadUrl,
+              uploadFileName: page.uploadFileName,
+              annotations: [],
+              songFormEnabled: false,
+              songFormStyle: { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+              partTags: [],
+            }
+            const updatedPages = await addPage(
+              openingNotebook.id,
+              openingNotebook.pages,
+              newPage,
+              position,
+              currentPageIndex
+            )
+            if (updatedPages) {
+              const updated = { ...openingNotebook, pages: updatedPages }
+              setOpeningNotebook(updated)
+              setNotebooks(prev => prev.map(nb => nb.id === updated.id ? updated : nb))
+            }
+          }}
+          onRemovePage={async (pageIndex) => {
+            if (!openingNotebook) return
+            const updatedPages = await removePage(
+              openingNotebook.id,
+              openingNotebook.pages,
+              pageIndex
+            )
+            if (updatedPages) {
+              const updated = { ...openingNotebook, pages: updatedPages }
+              setOpeningNotebook(updated)
+              setNotebooks(prev => prev.map(nb => nb.id === updated.id ? updated : nb))
+            }
+          }}
+          onSaveAll={async (data) => {
+            if (!openingNotebook) return
+            // 에디터의 각 곡 데이터를 NotebookPage에 반영
+            const updatedPages: NotebookPage[] = openingNotebook.pages.map((page, i) => {
+              const songData = data[i]
+              if (!songData) return page
+              return {
+                ...page,
+                annotations: songData.annotations || [],
+                songFormEnabled: songData.extra?.songFormEnabled ?? page.songFormEnabled,
+                songFormStyle: songData.extra?.songFormStyle ?? page.songFormStyle,
+                partTags: songData.extra?.partTags ?? page.partTags,
+                pianoScores: songData.extra?.pianoScores ?? page.pianoScores,
+                drumScores: songData.extra?.drumScores ?? page.drumScores,
+              }
+            })
+            const success = await updateNotebook(openingNotebook.id, updatedPages)
+            if (success) {
+              const updated = { ...openingNotebook, pages: updatedPages }
+              setOpeningNotebook(updated)
+              setNotebooks(prev => prev.map(nb => nb.id === updated.id ? updated : nb))
+            }
+          }}
+          onClose={() => setOpeningNotebook(null)}
         />
       )}
 
@@ -2752,6 +2817,59 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                 }}
                 disabled={!newTitle.trim()}
                 className="flex-1 px-4 py-3 bg-blue-100 hover:bg-blue-200 text-indigo-700 rounded-lg font-medium disabled:bg-gray-400"
+              >
+                변경
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📒 노트북 이름 변경 모달 */}
+      {showNotebookRenameModal && renamingNotebook && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">노트북 이름 변경</h2>
+            <input
+              type="text"
+              value={newNotebookTitle}
+              onChange={(e) => setNewNotebookTitle(e.target.value)}
+              placeholder="새 이름 입력..."
+              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              style={{ fontSize: '16px' }}
+              autoFocus
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowNotebookRenameModal(false)
+                  setRenamingNotebook(null)
+                  setNewNotebookTitle('')
+                }}
+                className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium"
+                style={{ minHeight: '44px', touchAction: 'manipulation' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  if (!newNotebookTitle.trim()) {
+                    alert('이름을 입력해주세요.')
+                    return
+                  }
+                  const ok = await renameNotebook(renamingNotebook.id, newNotebookTitle.trim())
+                  if (ok) {
+                    setNotebooks(prev =>
+                      prev.map(n => n.id === renamingNotebook.id ? { ...n, title: newNotebookTitle.trim() } : n)
+                    )
+                    setShowNotebookRenameModal(false)
+                    setRenamingNotebook(null)
+                    setNewNotebookTitle('')
+                  }
+                }}
+                disabled={!newNotebookTitle.trim()}
+                className="flex-1 px-4 py-3 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg font-medium disabled:opacity-50"
+                style={{ minHeight: '44px', touchAction: 'manipulation' }}
               >
                 변경
               </button>

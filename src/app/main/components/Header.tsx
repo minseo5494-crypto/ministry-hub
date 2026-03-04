@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import {
   Music, Plus, Users, UserPlus, MoreVertical,
-  BarChart3, Menu, MessageSquare
+  BarChart3, Menu, MessageSquare, Compass
 } from 'lucide-react'
 import { User } from '../types'
 
@@ -66,6 +66,14 @@ export default function Header({
 
               {user ? (
                 <>
+                  <button
+                    onClick={() => router.push('/explore')}
+                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap flex items-center gap-1"
+                  >
+                    <Compass size={15} />
+                    <span>Explore</span>
+                  </button>
+
                   <button
                     onClick={() => router.push('/my-team')}
                     className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition whitespace-nowrap"
