@@ -99,7 +99,30 @@ export default function HeroSection({
             ? 'bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-500 shadow-lg shadow-purple-500/30'
             : 'bg-transparent'
             }`}>
-            <div className="relative">
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                searchInputRef.current?.blur()
+                if (isAISearchEnabled && filters.searchText.trim() && !isAISearching) {
+                  const result = await searchWithAI(filters.searchText)
+                  if (result?.success && result.filters) {
+                    const aiFilters = result.filters
+                    const allKeywords = [
+                      ...(aiFilters.keywords || []),
+                      ...(aiFilters.lyricsKeywords || [])
+                    ]
+                    setAiSearchKeywords(allKeywords)
+                    setFilters({
+                      ...filters,
+                      season: aiFilters.season || filters.season,
+                      tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
+                      key: aiFilters.key || filters.key,
+                    })
+                  }
+                }
+              }}
+              className="relative"
+            >
               <Search className={`absolute left-4 top-5 md:top-4 transition-colors ${isAISearchEnabled ? 'text-purple-500' : 'text-gray-400'}`} size={24} />
               <input
                 ref={searchInputRef}
@@ -117,50 +140,12 @@ export default function HeroSection({
                     clearAIResult()
                   }
                 }}
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter' && isAISearchEnabled && filters.searchText.trim()) {
-                    const result = await searchWithAI(filters.searchText)
-                    if (result?.success && result.filters) {
-                      const aiFilters = result.filters
-                      const allKeywords = [
-                        ...(aiFilters.keywords || []),
-                        ...(aiFilters.lyricsKeywords || [])
-                      ]
-                      setAiSearchKeywords(allKeywords)
-                      setFilters({
-                        ...filters,
-                        season: aiFilters.season || filters.season,
-                        tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
-                        key: aiFilters.key || filters.key,
-                      })
-                    }
-                  }
-                }}
                 style={{ backgroundColor: 'white', fontSize: '16px' }}
               />
               {/* 버튼 영역 */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                 <button
-                  onClick={async () => {
-                    searchInputRef.current?.blur();
-                    if (isAISearchEnabled && filters.searchText.trim() && !isAISearching) {
-                      const result = await searchWithAI(filters.searchText)
-                      if (result?.success && result.filters) {
-                        const aiFilters = result.filters
-                        const allKeywords = [
-                          ...(aiFilters.keywords || []),
-                          ...(aiFilters.lyricsKeywords || [])
-                        ]
-                        setAiSearchKeywords(allKeywords)
-                        setFilters({
-                          ...filters,
-                          season: aiFilters.season || filters.season,
-                          tempo: aiFilters.tempo === 'slow' ? '느림' : aiFilters.tempo === 'fast' ? '빠름' : aiFilters.tempo === 'medium' ? '보통' : filters.tempo,
-                          key: aiFilters.key || filters.key,
-                        })
-                      }
-                    }
-                  }}
+                  type="submit"
                   disabled={isAISearchEnabled && (!filters.searchText.trim() || isAISearching)}
                   className={`p-2.5 rounded-xl transition-all ${
                     isAISearchEnabled
@@ -179,6 +164,7 @@ export default function HeroSection({
                   )}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsAISearchEnabled(!isAISearchEnabled)}
                   className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-all duration-300 ${isAISearchEnabled
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/40'
@@ -192,7 +178,7 @@ export default function HeroSection({
                   </span>
                 </button>
               </div>
-            </div>
+            </form>
           </div>
 
           {/* 가사 검색 토글 */}
