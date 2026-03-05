@@ -32,11 +32,15 @@ import {
   ArrowLeft, Edit, Trash2, Plus, Music, X,
   Save, Eye, EyeOff, ChevronUp, ChevronDown,
   Download, FileDown, Youtube, ChevronLeft, ChevronRight, Presentation,
-  GripVertical, BookOpen, Check
+  GripVertical, BookOpen, Check, Share2
 } from 'lucide-react'
+import ShareSetlistModal from '@/app/community/components/ShareSetlistModal'
+import { useCommunity } from '@/hooks/useCommunity'
 import { useMobile } from '@/hooks/useMobile'
 import { useDownload } from '@/hooks/useDownload'
 import { useSetlistNotes, SetlistNoteData } from '@/hooks/useSetlistNotes'
+import { useNotebooks } from '@/hooks/useNotebooks'
+import { Notebook } from '@/types/notebook'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
 import DownloadLoadingModal from '@/components/DownloadLoadingModal'
@@ -457,6 +461,13 @@ const [noteModal, setNoteModal] = useState<{
 })
 const [savingNote, setSavingNote] = useState(false)
 
+// 📋 필기노트 복사 다이얼로그 상태
+const [notebookDialog, setNotebookDialog] = useState<{
+  existingNotebook: Notebook
+  noteData: SetlistNoteData
+} | null>(null)
+const [notebookActionLoading, setNotebookActionLoading] = useState(false)
+
 // 🆕 useDownload 훅용 데이터 변환 (songs 상태 이후에 위치해야 함)
 const downloadSongs = songs.map(s => s.songs)
 const downloadSongForms: { [key: string]: string[] } = {}
@@ -515,11 +526,17 @@ const {
 
   const [canUserEdit, setCanUserEdit] = useState(false) // ✅ 편집 권한 상태
 
+  // 커뮤니티 공유 모달
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [alreadyShared, setAlreadyShared] = useState(false)
+  const { shareSetlist } = useCommunity()
+
 // 모바일 감지
 const isMobile = useMobile()
 
 // 콘티 단위 필기 노트 훅
 const { fetchSetlistNote, saveSetlistNote } = useSetlistNotes()
+const { findBySetlistId, createNotebookFromSetlist, overwriteNotebookFromSetlist } = useNotebooks()
 
 // 개인화된 곡 선택 핸들러
 
@@ -1271,9 +1288,40 @@ const removeSongForm = (index: number) => {
 
     if (result) {
       const savedSongCount = result.note_data ? Object.keys(result.note_data).length : 0
-      alert(`콘티 필기가 저장되었습니다! (${savedSongCount}곡)`)
+
+      // 📋 필기노트(notebooks) 복사 처리 — alert 전에 실행 (race condition 방지)
+      let notebookMsg = ''
+      try {
+        const existingNotebook = await findBySetlistId(user.id, setlistId as string)
+        console.log('📋 기존 노트북 조회 결과:', existingNotebook ? `id=${existingNotebook.id}` : '없음')
+
+        if (!existingNotebook) {
+          // 기존 노트북 없음 → 자동 신규 생성
+          const nb = await createNotebookFromSetlist({
+            userId: user.id,
+            setlistId: setlistId as string,
+            setlistTitle: setlist?.title || '제목 없는 콘티',
+            teamId: teamId || undefined,
+            noteData,
+          })
+          if (nb) {
+            notebookMsg = '\n📒 필기노트에 저장됨'
+          } else {
+            notebookMsg = '\n⚠️ 필기노트 저장 실패 (콘솔 확인)'
+          }
+        } else {
+          // 기존 노트북 있음 → 사용자에게 선택 요청
+          setNotebookDialog({ existingNotebook, noteData })
+        }
+      } catch (err) {
+        console.error('❌ 필기노트 복사 처리 중 에러:', err)
+        notebookMsg = '\n⚠️ 필기노트 복사 실패'
+      }
+
+      alert(`콘티 필기가 저장되었습니다! (${savedSongCount}곡)${notebookMsg}`)
     } else {
       alert('콘티 저장에 실패했습니다. 콘솔을 확인해주세요.')
+      return
     }
   }
   // 📝 메모 모달 열기
@@ -1488,6 +1536,15 @@ const saveNote = async () => {
                     </button>
                     {canEdit() && (
                       <>
+                        <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                        <button
+                          onClick={() => setShowShareModal(true)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-violet-50 text-violet-600 hover:bg-violet-100 transition-all"
+                          title="커뮤니티에 공유"
+                        >
+                          <Share2 size={13} />
+                          <span className="hidden sm:inline">공유</span>
+                        </button>
                         <div className="h-6 w-px bg-gray-200 mx-1"></div>
                         <button
                           onClick={() => setIsEditing(true)}
@@ -1981,6 +2038,97 @@ const saveNote = async () => {
         />
       )}
 
+      {/* 📋 필기노트 복사 확인 다이얼로그 */}
+      {notebookDialog && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
+          style={{ touchAction: 'manipulation' }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                <BookOpen className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">이미 저장된 필기노트가 있어요</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  <span className="font-medium text-slate-700">"{notebookDialog.existingNotebook.title}"</span>에 기존 필기가 남아있습니다. 어떻게 할까요?
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {/* 업데이트 */}
+              <button
+                disabled={notebookActionLoading}
+                onClick={async () => {
+                  setNotebookActionLoading(true)
+                  try {
+                    await overwriteNotebookFromSetlist(
+                      notebookDialog.existingNotebook.id,
+                      notebookDialog.noteData
+                    )
+                  } finally {
+                    setNotebookActionLoading(false)
+                    setNotebookDialog(null)
+                  }
+                }}
+                className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50 text-left"
+                style={{ minHeight: '44px' }}
+              >
+                <span className="material-symbols-outlined text-indigo-600 text-xl">sync</span>
+                <div>
+                  <p className="text-sm font-semibold text-indigo-800">업데이트</p>
+                  <p className="text-xs text-indigo-500">기존 필기노트를 최신 콘티 내용으로 덮어씁니다</p>
+                </div>
+              </button>
+
+              {/* 새로 추가 */}
+              <button
+                disabled={notebookActionLoading}
+                onClick={async () => {
+                  setNotebookActionLoading(true)
+                  try {
+                    await createNotebookFromSetlist({
+                      userId: user!.id,
+                      setlistId: setlistId as string,
+                      setlistTitle: setlist?.title || '제목 없는 콘티',
+                      teamId: teamId || undefined,
+                      noteData: notebookDialog.noteData,
+                    })
+                  } finally {
+                    setNotebookActionLoading(false)
+                    setNotebookDialog(null)
+                  }
+                }}
+                className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50 text-left"
+                style={{ minHeight: '44px' }}
+              >
+                <span className="material-symbols-outlined text-slate-600 text-xl">note_add</span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">새로 추가</p>
+                  <p className="text-xs text-slate-500">기존 노트는 그대로 두고 별도 필기노트를 만듭니다</p>
+                </div>
+              </button>
+
+              {/* 건너뛰기 */}
+              <button
+                disabled={notebookActionLoading}
+                onClick={() => setNotebookDialog(null)}
+                className="w-full p-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                style={{ minHeight: '44px' }}
+              >
+                건너뛰기
+              </button>
+            </div>
+
+            {notebookActionLoading && (
+              <p className="text-center text-xs text-slate-400 mt-3">처리 중...</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 다운로드 로딩 모달 */}
       <DownloadLoadingModal
         isOpen={downloadingPDF || downloadingPPT || downloadingImage}
@@ -1995,6 +2143,29 @@ const saveNote = async () => {
           onClose={() => setShowPreview(false)}
           onSave={handlePreviewSave}
           onSaveAll={handlePreviewSaveAll}
+        />
+      )}
+
+      {/* 커뮤니티 공유 모달 */}
+      {setlist && (
+        <ShareSetlistModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          sourceSetlistId={setlist.id}
+          sourceTeamId={setlist.team_id}
+          defaultTitle={setlist.title}
+          defaultServiceType={setlist.service_type}
+          defaultDevotionalGuide={setlist.devotional_guide}
+          alreadyShared={alreadyShared}
+          onShare={async (input) => {
+            if (!user) return false
+            const result = await shareSetlist(input, user.id)
+            if (result) {
+              setAlreadyShared(true)
+              return true
+            }
+            return false
+          }}
         />
       )}
     </div>

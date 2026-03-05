@@ -192,7 +192,7 @@ export default function AnnotatedPreview({
 
       // PDF 문서 캐싱
       if (!pdfDocRef.current) {
-        const loadingTask = (window as any).pdfjsLib.getDocument(fileUrl)
+        const loadingTask = (window as any).pdfjsLib.getDocument({ url: fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
         pdfDocRef.current = await loadingTask.promise
         setTotalPages(pdfDocRef.current.numPages)
       }

@@ -999,7 +999,7 @@ export function useDownload({
         throw new Error('PDF.js 라이브러리가 로드되지 않았습니다.')
       }
 
-      const loadingTask = pdfjsLib.getDocument(song.file_url)
+      const loadingTask = pdfjsLib.getDocument({ url: song.file_url, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
       const pdf = await loadingTask.promise
       const pageCount = pdf.numPages
 

@@ -85,6 +85,11 @@ export interface EditorSong {
   partTags?: PartTagStyle[]
   pianoScores?: PianoScoreElement[]
   drumScores?: DrumScoreElement[]
+  // notebookMode 전용
+  pageType?: 'sheet' | 'blank' | 'staff' | 'upload'
+  pdfPageNumber?: number        // 다중 페이지 PDF 플랫 전개 (1-based)
+  uploadUrl?: string
+  uploadFileName?: string
 }
 
 // ===== 저장 데이터 타입 =====
@@ -141,6 +146,25 @@ export interface EditorProps {
   }[]) => void | Promise<void>
   // 보기/편집 모드 통합
   initialMode?: 'view' | 'edit'
+  // notebookMode
+  notebookMode?: boolean
+  userId?: string
+  notebookId?: string
+  onAddPage?: (
+    position: 'before' | 'after' | 'last',
+    page: {
+      type: 'blank' | 'staff' | 'sheet' | 'upload'
+      songId?: string
+      fileUrl?: string
+      fileType?: 'pdf' | 'image'
+      songName?: string
+      uploadUrl?: string
+      uploadFileName?: string
+    },
+    currentPageIndex: number
+  ) => void
+  onRemovePage?: (pageIndex: number) => void
+  onDownloadPages?: (pageIndices: number[] | 'all') => void
 }
 
 // ===== 올가미 선택 영역 =====

@@ -248,7 +248,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             return
           }
 
-          const loadingTask = pdfjsLib.getDocument(fileUrl)
+          const loadingTask = pdfjsLib.getDocument({ url: fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
           const pdf = await loadingTask.promise
 
           if (isCancelled) return
@@ -293,7 +293,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
 
             await page.render({
               canvasContext: offscreenCtx,
-              viewport: viewport
+              viewport: viewport,
             }).promise
 
             offscreenCtx.restore()

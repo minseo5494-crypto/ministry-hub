@@ -9,8 +9,10 @@ import {
   ArrowLeft, Music, CheckCircle, Shield, Tag,
   Search, Check, X, ChevronLeft, ChevronRight,
   FileText, Eye, Edit2, User, Calendar, Lock, Globe, Users,
-  Save, Trash2, ExternalLink, Filter, Heart
+  Save, Trash2, ExternalLink, Filter, Heart, Upload, Youtube, AlignLeft
 } from 'lucide-react'
+import { SEASONS, KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
+import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 
 // 사용자 정보가 포함된 확장 Song 타입
 interface SongWithUploader extends Song {
@@ -71,11 +73,18 @@ export default function ContentManagementPage() {
     team_name: '',
     key: '',
     bpm: '',
+    time_signature: '',
+    tempo: '',
+    season: '',
     themes: '',
+    youtube_url: '',
+    lyrics: '',
     visibility: 'public' as 'private' | 'teams' | 'public',
     is_official: false,
   })
   const [saving, setSaving] = useState(false)
+  const [editFile, setEditFile] = useState<File | null>(null)
+  const [editCurrentFileUrl, setEditCurrentFileUrl] = useState<string | null>(null)
 
   // 삭제 확인 모달
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -825,15 +834,27 @@ export default function ContentManagementPage() {
   // 편집 모달 열기
   const openEditModal = (song: SongWithUploader) => {
     setEditingSong(song)
+    // BPM이 있고 tempo가 없으면 자동 설정
+    let tempo = song.tempo || ''
+    if (!tempo && song.bpm) {
+      tempo = getTempoFromBPM(song.bpm)
+    }
     setEditForm({
       song_name: song.song_name || '',
       team_name: song.team_name || '',
       key: song.key || '',
       bpm: song.bpm?.toString() || '',
+      time_signature: song.time_signature || '',
+      tempo,
+      season: song.season || '',
       themes: Array.isArray(song.themes) ? song.themes.join(', ') : (song.themes || ''),
+      youtube_url: song.youtube_url || '',
+      lyrics: song.lyrics || '',
       visibility: song.visibility || 'public',
       is_official: song.is_official || false,
     })
+    setEditFile(null)
+    setEditCurrentFileUrl(song.file_url || null)
   }
 
   // 편집 저장
@@ -842,29 +863,110 @@ export default function ContentManagementPage() {
 
     setSaving(true)
 
-    const { error } = await supabase
-      .from('songs')
-      .update({
+    try {
+      let fileUrl = editCurrentFileUrl
+      let fileType = editingSong.file_type
+
+      // 새 파일이 있으면 업로드
+      if (editFile) {
+        const fileExt = editFile.name.split('.').pop()?.toLowerCase()
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+        const filePath = `song-sheets/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('song-sheets')
+          .upload(filePath, editFile)
+
+        if (uploadError) {
+          showToast(`파일 업로드 오류: ${uploadError.message}`, 'error')
+          setSaving(false)
+          return
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('song-sheets')
+          .getPublicUrl(filePath)
+
+        fileUrl = urlData.publicUrl
+        fileType = fileExt === 'pdf' ? 'pdf' : 'image'
+      }
+
+      const updateData: Record<string, any> = {
         song_name: editForm.song_name.trim(),
         team_name: editForm.team_name.trim() || null,
         key: editForm.key.trim() || null,
-        bpm: editForm.bpm.trim() || null,
+        bpm: editForm.bpm.trim() ? parseInt(editForm.bpm.trim()) : null,
+        time_signature: editForm.time_signature || null,
+        tempo: editForm.tempo || null,
+        season: editForm.season || null,
         themes: editForm.themes.trim() || null,
+        youtube_url: editForm.youtube_url.trim() || null,
+        lyrics: editForm.lyrics.trim() || null,
         visibility: editForm.visibility,
         is_official: editForm.is_official,
-      })
-      .eq('id', editingSong.id)
+      }
+
+      // 파일 변경이 있으면 file_url, file_type도 업데이트
+      if (editFile || fileUrl !== editingSong.file_url) {
+        updateData.file_url = fileUrl
+        updateData.file_type = fileType
+      }
+
+      const { error } = await supabase
+        .from('songs')
+        .update(updateData)
+        .eq('id', editingSong.id)
+
+      if (!error) {
+        showToast('곡 정보가 수정되었습니다.', 'success')
+        setEditingSong(null)
+        setEditFile(null)
+        setEditCurrentFileUrl(null)
+        loadData()
+      } else {
+        console.error('Song update error:', error)
+        showToast(`수정 오류: ${error.message}`, 'error')
+      }
+    } catch (err: any) {
+      console.error('Save error:', err)
+      showToast(`저장 오류: ${err.message}`, 'error')
+    }
 
     setSaving(false)
+  }
 
-    if (!error) {
-      showToast('곡 정보가 수정되었습니다.', 'success')
-      setEditingSong(null)
-      loadData()
-    } else {
-      console.error('Song update error:', error)
-      showToast(`수정 오류: ${error.message}`, 'error')
+  // 편집 모달 파일 선택
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('파일 크기는 10MB 이하만 가능합니다.', 'error')
+      return
     }
+    setEditFile(file)
+  }
+
+  // BPM 입력 시 자동 템포 설정
+  const handleAdminBPMChange = (bpmValue: string) => {
+    if (bpmValue) {
+      const autoTempo = getTempoFromBPM(parseInt(bpmValue))
+      setEditForm({ ...editForm, bpm: bpmValue, tempo: autoTempo })
+    } else {
+      setEditForm({ ...editForm, bpm: bpmValue })
+    }
+  }
+
+  // 템포 선택 시 BPM 범위 안내
+  const handleAdminTempoChange = (tempoValue: string) => {
+    const range = getBPMRangeFromTempo(tempoValue)
+    if (range && editForm.bpm) {
+      const currentBpm = parseInt(editForm.bpm)
+      if (currentBpm < range.min || currentBpm > range.max) {
+        setEditForm({ ...editForm, tempo: tempoValue, bpm: '' })
+        return
+      }
+    }
+    setEditForm({ ...editForm, tempo: tempoValue })
   }
 
   // 삭제 확인
@@ -1867,13 +1969,13 @@ export default function ContentManagementPage() {
       {/* 편집 모달 */}
       {editingSong && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b shrink-0">
               <h2 className="text-lg font-bold text-gray-900">곡 정보 수정</h2>
               <p className="text-sm text-gray-500 mt-1">관리자 권한으로 곡 정보를 수정합니다.</p>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
               {/* 곡명 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1898,40 +2000,193 @@ export default function ContentManagementPage() {
                 />
               </div>
 
-              {/* 키 & BPM */}
+              {/* 키 & 박자 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">키</label>
-                  <input
-                    type="text"
-                    value={editForm.key}
-                    onChange={(e) => setEditForm({ ...editForm, key: e.target.value })}
-                    placeholder="예: C, G, Em"
+                  <select
+                    value={editForm.key.replace('m', '')}
+                    onChange={(e) => {
+                      const baseKey = e.target.value
+                      const isMinor = editForm.key.includes('m')
+                      setEditForm({ ...editForm, key: isMinor && baseKey ? baseKey + 'm' : baseKey })
+                    }}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
-                  />
+                  >
+                    <option value="">선택</option>
+                    {KEYS.map(key => (
+                      <option key={key} value={key}>{key}{editForm.key.includes('m') ? 'm' : ''}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-1 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, key: editForm.key.replace('m', '') })}
+                      className={`flex-1 py-1 text-xs rounded transition ${!editForm.key.includes('m') ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      Major
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editForm.key.includes('m') && editForm.key) {
+                          setEditForm({ ...editForm, key: editForm.key + 'm' })
+                        }
+                      }}
+                      className={`flex-1 py-1 text-xs rounded transition ${editForm.key.includes('m') ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      Minor
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">BPM</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">박자</label>
+                  <select
+                    value={editForm.time_signature}
+                    onChange={(e) => setEditForm({ ...editForm, time_signature: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">선택</option>
+                    {TIME_SIGNATURES.map(ts => (
+                      <option key={ts} value={ts}>{ts}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 템포 & BPM */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">템포</label>
+                  <select
+                    value={editForm.tempo}
+                    onChange={(e) => handleAdminTempoChange(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">선택</option>
+                    {TEMPOS.map(tempo => (
+                      <option key={tempo} value={tempo}>{tempo}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    BPM
+                    {editForm.tempo && getBPMRangeFromTempo(editForm.tempo) && (
+                      <span className="text-xs text-gray-400 ml-1">
+                        ({getBPMRangeFromTempo(editForm.tempo)?.min}~{getBPMRangeFromTempo(editForm.tempo)?.max})
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     value={editForm.bpm}
-                    onChange={(e) => setEditForm({ ...editForm, bpm: e.target.value })}
+                    onChange={(e) => handleAdminBPMChange(e.target.value)}
                     placeholder="예: 120"
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
                   />
                 </div>
               </div>
 
-              {/* 테마 */}
+              {/* 시즌 & 테마 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">시즌</label>
+                  <select
+                    value={editForm.season}
+                    onChange={(e) => setEditForm({ ...editForm, season: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="">선택</option>
+                    {SEASONS.filter(s => s !== '전체').map(season => (
+                      <option key={season} value={season}>{season}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">테마</label>
+                  <input
+                    type="text"
+                    value={editForm.themes}
+                    onChange={(e) => setEditForm({ ...editForm, themes: e.target.value })}
+                    placeholder="쉼표로 구분 (예: 찬양, 경배)"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
+                  />
+                </div>
+              </div>
+
+              {/* YouTube URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">테마</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <Youtube size={14} />
+                  YouTube URL
+                </label>
                 <input
-                  type="text"
-                  value={editForm.themes}
-                  onChange={(e) => setEditForm({ ...editForm, themes: e.target.value })}
-                  placeholder="쉼표로 구분 (예: 찬양, 경배, 감사)"
+                  type="url"
+                  value={editForm.youtube_url}
+                  onChange={(e) => setEditForm({ ...editForm, youtube_url: e.target.value })}
+                  placeholder="https://www.youtube.com/watch?v=..."
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500"
                 />
+              </div>
+
+              {/* 가사 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  <AlignLeft size={14} />
+                  가사
+                </label>
+                <textarea
+                  value={editForm.lyrics}
+                  onChange={(e) => setEditForm({ ...editForm, lyrics: e.target.value })}
+                  rows={4}
+                  placeholder="곡의 가사를 입력하세요..."
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-500 resize-y"
+                />
+              </div>
+
+              {/* 악보 파일 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">악보 파일</label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleEditFileSelect}
+                  className="hidden"
+                  id="admin-edit-file"
+                />
+                {editCurrentFileUrl && !editFile && (
+                  <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <FileText size={16} />
+                      <span className="truncate max-w-[250px]">현재: {editCurrentFileUrl.split('/').pop()}</span>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('admin-edit-file')?.click()}
+                  className="w-full px-4 py-3 border-2 border-dashed border-gray-200 rounded-lg hover:border-violet-400 transition flex items-center justify-center gap-2 text-sm"
+                >
+                  <Upload size={18} />
+                  {editFile ? (
+                    <span className="text-green-600 font-medium">
+                      {editFile.name} ({(editFile.size / 1024 / 1024).toFixed(2)}MB)
+                    </span>
+                  ) : editCurrentFileUrl ? (
+                    '새 파일로 교체'
+                  ) : (
+                    '파일 선택 (PDF, JPG, PNG, 최대 10MB)'
+                  )}
+                </button>
+                {editFile && (
+                  <button
+                    onClick={() => setEditFile(null)}
+                    className="mt-1 text-sm text-red-600 hover:text-red-800"
+                  >
+                    새 파일 취소
+                  </button>
+                )}
               </div>
 
               {/* 공개 범위 */}
@@ -1996,9 +2251,9 @@ export default function ContentManagementPage() {
               )}
             </div>
 
-            <div className="p-6 border-t flex gap-3">
+            <div className="p-6 border-t flex gap-3 shrink-0">
               <button
-                onClick={() => setEditingSong(null)}
+                onClick={() => { setEditingSong(null); setEditFile(null); setEditCurrentFileUrl(null) }}
                 className="flex-1 px-4 py-2.5 border rounded-lg hover:bg-gray-50 transition"
               >
                 취소

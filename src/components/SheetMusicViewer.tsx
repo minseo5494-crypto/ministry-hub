@@ -4,6 +4,11 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import getStroke from 'perfect-freehand'
 import { PageAnnotation, Stroke, TextElement } from '@/lib/supabase'
 
+// PDF.js 설정 (CMap + Standard Font)
+const PDFJS_CMAP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
+const PDFJS_CMAP_PACKED = true
+const PDFJS_STANDARD_FONT_DATA_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+
 interface SheetMusicViewerProps {
   fileUrl: string
   fileType: 'pdf' | 'image'
@@ -165,7 +170,7 @@ export default function SheetMusicViewer({
         }
 
         if (!pdfDocRef.current) {
-          const loadingTask = pdfjsLib.getDocument(fileUrl)
+          const loadingTask = pdfjsLib.getDocument({ url: fileUrl, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
           pdfDocRef.current = await loadingTask.promise
           if (isCancelled) return
           setTotalPages(pdfDocRef.current.numPages)
@@ -223,7 +228,8 @@ export default function SheetMusicViewer({
         } catch (e) {}
       }
     }
-  }, [fileUrl, fileType, currentPage, fitToScreen, renderAnnotations])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileUrl, fileType, currentPage, fitToScreen])
 
   // 이미지 렌더링
   useEffect(() => {
@@ -274,19 +280,21 @@ export default function SheetMusicViewer({
       }
     }
     img.src = fileUrl
-  }, [fileUrl, fileType, fitToScreen, renderAnnotations])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileUrl, fileType, fitToScreen])
 
   // 페이지 변경 시 초기화
   useEffect(() => {
     hasInitializedScale.current = false
   }, [currentPage])
 
-  // 페이지 변경 시 어노테이션 다시 렌더링
+  // 페이지 변경 또는 annotations 변경 시 어노테이션 다시 렌더링
   useEffect(() => {
     if (canvasSize.width > 0 && canvasSize.height > 0) {
       renderAnnotations(canvasSize.width, canvasSize.height)
     }
-  }, [currentPage, canvasSize, renderAnnotations])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, canvasSize, annotations])
 
   // 줌 핸들러
   const handleZoom = useCallback((delta: number) => {
@@ -427,32 +435,40 @@ export default function SheetMusicViewer({
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* 닫기 버튼 */}
-      <button
-        onClick={onClose}
-        className="fixed top-4 right-4 z-[60] p-3"
-        style={{ touchAction: 'manipulation' }}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="28"
-          height="28"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}
+      {/* 상단 바: 제목 + 닫기 */}
+      <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
+        {songName && (
+          <h2 className="text-white text-sm font-medium truncate mr-12" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+            {songName}
+          </h2>
+        )}
+        {!songName && <div />}
+        <button
+          onClick={onClose}
+          className="p-2 shrink-0"
+          style={{ touchAction: 'manipulation' }}
         >
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' }}
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
 
       {/* 필기 표시 안내 */}
       {annotations.length > 0 && (
-        <div className="fixed top-4 left-4 z-[60] bg-amber-500/80 text-white px-3 py-1 rounded-full text-sm">
+        <div className="fixed top-12 left-4 z-[60] bg-amber-500/80 text-white px-3 py-1 rounded-full text-sm">
           내 필기 포함
         </div>
       )}

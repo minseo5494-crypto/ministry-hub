@@ -1,4 +1,5 @@
 import { loadKoreanFont } from './fontLoader'
+import { NotebookPage } from '@/types/notebook'
 
 // XSS 방어: HTML 이스케이프
 function escapeHtml(str: string): string {
@@ -596,9 +597,6 @@ export const generatePDFFromCanvas = async (options: {
   try {
     const pdfLib = await import('pdf-lib')
     const { PDFDocument } = pdfLib
-    const jsPDFModule = await import('jspdf')
-    const jsPDF = jsPDFModule.default
-    const html2canvas = (await import('html2canvas')).default
 
     const mergedPdf = await PDFDocument.create()
 
@@ -606,8 +604,11 @@ export const generatePDFFromCanvas = async (options: {
     const A4_WIDTH = 595.28
     const A4_HEIGHT = 841.89
 
-    // 표지 생성
+    // 표지 생성 (필요할 때만 jspdf, html2canvas 로드)
     if (includeCover) {
+      const jsPDFModule = await import('jspdf')
+      const jsPDF = jsPDFModule.default
+      const html2canvas = (await import('html2canvas')).default
       const coverDiv = document.createElement('div')
       coverDiv.style.cssText = `
         width: 210mm;
@@ -725,4 +726,52 @@ export const generatePDFFromCanvas = async (options: {
   } catch (error) {
     throw error
   }
+}
+// 노트북 페이지 타입에 따른 표시 이름
+function getNotebookPageLabel(page: NotebookPage): string {
+  switch (page.pageType) {
+    case 'sheet':  return page.songName || `악보 ${page.order + 1}`
+    case 'blank':  return `빈 페이지 ${page.order + 1}`
+    case 'staff':  return `오선지 ${page.order + 1}`
+    case 'upload': return page.uploadFileName || `업로드 ${page.order + 1}`
+  }
+}
+
+/**
+ * 노트북 전용 PDF 생성
+ * generatePDFFromCanvas 래퍼 — pageId 기반 canvasDataUrls 처리
+ * 빈/오선지/업로드 페이지는 canvas 데이터가 canvasDataUrls에 있으면 그대로 처리됨
+ */
+export const generateNotebookPDF = async (options: {
+  title: string
+  pages: NotebookPage[]
+  canvasDataUrls: { [pageId: string]: string[] }
+  customFileName?: string
+  onProgress?: (current: number, total: number, pageName?: string) => void
+}): Promise<boolean> => {
+  const { title, pages, canvasDataUrls, customFileName, onProgress } = options
+
+  if (pages.length === 0) {
+    throw new Error('페이지가 없습니다.')
+  }
+
+  // NotebookPage[] → PDFSong[] 변환 (id = pageId로 canvasDataUrls 키와 연결)
+  const songs: PDFSong[] = pages
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map(page => ({
+      id: page.id,
+      song_name: getNotebookPageLabel(page),
+      team_name: page.teamName,
+    }))
+
+  return generatePDFFromCanvas({
+    title,
+    date: new Date().toLocaleDateString('ko-KR'),
+    songs,
+    canvasDataUrls,
+    includeCover: false,
+    customFileName,
+    onProgress,
+  })
 }

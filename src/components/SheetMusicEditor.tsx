@@ -2,6 +2,11 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import getStroke from 'perfect-freehand'
+
+// PDF.js 설정 (CMap + Standard Font)
+const PDFJS_CMAP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
+const PDFJS_CMAP_PACKED = true
+const PDFJS_STANDARD_FONT_DATA_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
 import {
   Stroke,
   StrokePoint,
@@ -13,6 +18,9 @@ import DrumScoreRenderer from './scores/DrumScoreRenderer'
 import DrumScoreEditor from './scores/DrumScoreEditor'
 import PianoScoreRenderer from './scores/PianoScoreRenderer'
 import PianoScoreEditor from './scores/PianoScoreEditor'
+import AddPageModal from './AddPageModal'
+// NotebookDownloadModal — 내보내기 모달에 통합됨
+import { generatePDFFromCanvas } from '@/lib/pdfGenerator'
 
 // ===== 분리된 파일에서 import =====
 import {
@@ -77,6 +85,13 @@ export default function SheetMusicEditor({
   onSaveAll,
   // 보기/편집 모드
   initialMode = 'edit',
+  // notebookMode
+  notebookMode = false,
+  userId,
+  notebookId,
+  onAddPage,
+  onRemovePage,
+  onDownloadPages,
 }: EditorProps) {
   // ===== 모바일/태블릿 감지 =====
   const isMobile = useMobile()
@@ -223,6 +238,12 @@ export default function SheetMusicEditor({
   // 저장 안 된 변경사항 추적
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  // notebookMode: 페이지 추가 모달
+  const [showAddPageModal, setShowAddPageModal] = useState(false)
+  // notebookMode: 내보내기 페이지 선택
+  const [notebookDownloading, setNotebookDownloading] = useState(false)
+  const [exportPageMode, setExportPageMode] = useState<'all' | 'select'>('all')
+  const [exportSelectedPages, setExportSelectedPages] = useState<Set<number>>(new Set())
   const initialAnnotationsRef = useRef<string>(JSON.stringify(initialAnnotations))
 
   // annotations가 변경될 때마다 ref 업데이트 및 변경사항 추적
@@ -581,14 +602,21 @@ export default function SheetMusicEditor({
 
         // PDF 문서 로드 (캐싱)
         if (!pdfDocRef.current) {
-          const loadingTask = pdfjsLib.getDocument(effectiveFileUrl)
+          const loadingTask = pdfjsLib.getDocument({ url: effectiveFileUrl, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
           pdfDocRef.current = await loadingTask.promise
           if (isCancelled) return
-          setTotalPages(pdfDocRef.current.numPages)
+          // notebookMode + pdfPageNumber → 각 항목이 1페이지만 표시
+          if (notebookMode && currentSong?.pdfPageNumber) {
+            setTotalPages(1)
+          } else {
+            setTotalPages(pdfDocRef.current.numPages)
+          }
         }
 
         const pdf = pdfDocRef.current
-        const page = await pdf.getPage(currentPage)
+        // notebookMode에서 pdfPageNumber 지정 시 해당 페이지만 렌더링
+        const pageNum = (notebookMode && currentSong?.pdfPageNumber) ? currentSong.pdfPageNumber : currentPage
+        const page = await pdf.getPage(pageNum)
         if (isCancelled) return
 
         const viewport = page.getViewport({ scale: 2 }) // 고해상도
@@ -654,7 +682,7 @@ export default function SheetMusicEditor({
         }
       }
     }
-  }, [effectiveFileUrl, effectiveFileType, currentPage, fitToScreen])
+  }, [effectiveFileUrl, effectiveFileType, currentPage, fitToScreen, currentSongIndex])
 
   // ===== 이미지 렌더링 =====
   useEffect(() => {
@@ -715,6 +743,93 @@ export default function SheetMusicEditor({
     }
     img.src = effectiveFileUrl
   }, [effectiveFileUrl, effectiveFileType, fitToScreen])
+
+  // ===== notebookMode: blank/staff/upload 렌더링 =====
+  useEffect(() => {
+    if (!notebookMode) return
+    const pageType = currentSong?.pageType
+    if (!pageType || pageType === 'sheet') return
+    if (!pdfCanvasRef.current) return
+
+    const canvas = pdfCanvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) return
+
+    if (pageType === 'upload') {
+      const uploadUrl = currentSong?.uploadUrl
+      if (!uploadUrl) return
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        const MAX_DIM = isIOS ? 4096 : 16384
+        let sf = isTouchDevice ? 1 : 2
+        const w = img.naturalWidth, h = img.naturalHeight
+        if (w * sf > MAX_DIM || h * sf > MAX_DIM) sf = Math.min(MAX_DIM / w, MAX_DIM / h, sf)
+        sf = Math.max(0.5, sf)
+        canvas.width = w * sf
+        canvas.height = h * sf
+        context.scale(sf, sf)
+        context.drawImage(img, 0, 0)
+        if (canvasRef.current) {
+          canvasRef.current.width = w * sf
+          canvasRef.current.height = h * sf
+        }
+        setCanvasSize({ width: w * sf, height: h * sf })
+        setTotalPages(1)
+        if (!hasInitializedScale.current) {
+          hasInitializedScale.current = true
+          requestAnimationFrame(() => { setTimeout(() => { fitToScreen(w * sf, h * sf); setCanvasReady(true) }, 50) })
+        } else {
+          setCanvasReady(true)
+        }
+      }
+      img.src = uploadUrl
+    } else {
+      // blank or staff: A4 비율 캔버스 (1240×1754)
+      const W = 1240, H = 1754
+      canvas.width = W
+      canvas.height = H
+      if (canvasRef.current) {
+        canvasRef.current.width = W
+        canvasRef.current.height = H
+      }
+      context.fillStyle = '#FFFFFF'
+      context.fillRect(0, 0, W, H)
+      if (pageType === 'staff') {
+        // 오선지: 5줄 × 여러 행
+        context.strokeStyle = '#BBBBBB'
+        context.lineWidth = 1.5
+        const marginX = 60
+        const rowHeight = 44  // 5줄 총 높이 (4 간격 × 11px)
+        const lineSpacing = rowHeight / 4
+        const rowGap = 80     // 행 간 여백
+        const topMargin = 80
+        const totalRowHeight = rowHeight + rowGap
+        const numRows = Math.floor((H - topMargin * 2) / totalRowHeight) + 1
+        for (let row = 0; row < numRows; row++) {
+          const baseY = topMargin + row * totalRowHeight
+          if (baseY + rowHeight > H - topMargin) break
+          for (let line = 0; line < 5; line++) {
+            const y = baseY + line * lineSpacing
+            context.beginPath()
+            context.moveTo(marginX, y)
+            context.lineTo(W - marginX, y)
+            context.stroke()
+          }
+        }
+      }
+      setCanvasSize({ width: W, height: H })
+      setTotalPages(1)
+      if (!hasInitializedScale.current) {
+        hasInitializedScale.current = true
+        requestAnimationFrame(() => { setTimeout(() => { fitToScreen(W, H); setCanvasReady(true) }, 50) })
+      } else {
+        setCanvasReady(true)
+      }
+    }
+  }, [notebookMode, currentSong?.pageType, currentSong?.uploadUrl, currentSong?.song_id, fitToScreen, isTouchDevice])
 
   // ===== 피아노 악보 크기 조절 핸들러 =====
   useEffect(() => {
@@ -2053,7 +2168,7 @@ export default function SheetMusicEditor({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const pdfjsLib = (window as any).pdfjsLib
           if (pdfjsLib) {
-            pdfDoc = await pdfjsLib.getDocument(song.file_url).promise
+            pdfDoc = await pdfjsLib.getDocument({ url: song.file_url, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
             songTotalPages = pdfDoc.numPages
           }
         }
@@ -2099,7 +2214,7 @@ export default function SheetMusicEditor({
 
             await page.render({
               canvasContext: ctx,
-              viewport: viewport
+              viewport: viewport,
             }).promise
           } else {
             // 이미지인 경우
@@ -2923,6 +3038,240 @@ export default function SheetMusicEditor({
     }
   }, [isMultiSongMode, songs, songName, artistName, fileUrl, fileType, songForms, allAnnotations, songFormEnabled, songFormStyle, partTags, effectiveSongName, setlistTitle])
 
+  // ===== notebookMode: 다운로드 =====
+  const handleNotebookDownload = useCallback(async (selectedIndices: number[], fileName: string, format: 'pdf' | 'image' = 'pdf') => {
+    setNotebookDownloading(true)
+    try {
+      const A4_W = 1240, A4_H = 1754
+
+      // handleExport와 동일한 터치/iOS 감지 (에디터 렌더링과 일치시키기 위해)
+      const isIOSExport = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      const isTouchExport = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      const EXPORT_MAX_DIM = isIOSExport ? 4096 : 16384
+      const EXPORT_MAX_AREA = isIOSExport ? 16777216 : 268435456
+
+      // canvasDataUrls: pageId(= song.song_id) → [dataUrl] 매핑
+      const canvasDataUrls: { [pageId: string]: string[] } = {}
+      // PDFSong[] 배열 (generatePDFFromCanvas에 전달)
+      const pdfSongs: { id: string; song_name: string; team_name?: string }[] = []
+
+      for (const idx of selectedIndices) {
+        const song = songs[idx]
+        if (!song) continue
+
+        const pageAnnotations = allAnnotations[song.song_id] || []
+        const pageType = song.pageType || 'sheet'
+        const exportCanvas = document.createElement('canvas')
+        const ctx = exportCanvas.getContext('2d')
+        if (!ctx) continue
+
+        let baseWidth = A4_W, baseHeight = A4_H
+
+        if (pageType === 'blank') {
+          exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+
+        } else if (pageType === 'staff') {
+          exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+          ctx.strokeStyle = '#BBBBBB'; ctx.lineWidth = 1.5
+          const marginX = 60, topMargin = 80
+          const rowHeight = 44, lineSpacing = rowHeight / 4, rowGap = 80
+          const totalRowHeight = rowHeight + rowGap
+          const numRows = Math.floor((baseHeight - topMargin * 2) / totalRowHeight) + 1
+          for (let row = 0; row < numRows; row++) {
+            const baseY = topMargin + row * totalRowHeight
+            if (baseY + rowHeight > baseHeight - topMargin) break
+            for (let line = 0; line < 5; line++) {
+              const y = baseY + line * lineSpacing
+              ctx.beginPath(); ctx.moveTo(marginX, y); ctx.lineTo(baseWidth - marginX, y); ctx.stroke()
+            }
+          }
+
+        } else if (pageType === 'upload' && song.uploadUrl) {
+          // handleExport 이미지 렌더링과 동일한 로직
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); img.src = song.uploadUrl! })
+          let exportScale = isTouchExport ? 1 : 2
+          const w = img.naturalWidth || img.width || A4_W
+          const h = img.naturalHeight || img.height || A4_H
+          if (w * exportScale > EXPORT_MAX_DIM || h * exportScale > EXPORT_MAX_DIM) {
+            exportScale = Math.min(EXPORT_MAX_DIM / w, EXPORT_MAX_DIM / h, exportScale)
+          }
+          if (w * exportScale * h * exportScale > EXPORT_MAX_AREA) {
+            exportScale = Math.min(Math.sqrt(EXPORT_MAX_AREA / (w * h)), exportScale)
+          }
+          exportScale = Math.max(0.5, exportScale)
+          baseWidth = Math.round(w * exportScale)
+          baseHeight = Math.round(h * exportScale)
+          exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+          ctx.drawImage(img, 0, 0, baseWidth, baseHeight)
+
+        } else {
+          // sheet: file_url 기반 — handleExport와 동일한 렌더링 로직
+          if (song.file_type === 'pdf' && song.file_url) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pdfjsLib = (window as any).pdfjsLib
+            if (pdfjsLib) {
+              let pdfScale = isTouchExport ? 1.5 : 2
+              const pdfDoc = await pdfjsLib.getDocument({ url: song.file_url, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
+              const page = await pdfDoc.getPage(song.pdfPageNumber || 1)
+              let viewport = page.getViewport({ scale: pdfScale })
+              if (viewport.width > EXPORT_MAX_DIM || viewport.height > EXPORT_MAX_DIM) {
+                pdfScale = Math.min(EXPORT_MAX_DIM / (viewport.width / pdfScale), EXPORT_MAX_DIM / (viewport.height / pdfScale), pdfScale)
+              }
+              if (viewport.width * viewport.height > EXPORT_MAX_AREA) {
+                const pageW = viewport.width / pdfScale
+                const pageH = viewport.height / pdfScale
+                pdfScale = Math.min(Math.sqrt(EXPORT_MAX_AREA / (pageW * pageH)), pdfScale)
+              }
+              viewport = page.getViewport({ scale: Math.max(1, pdfScale) })
+              baseWidth = viewport.width; baseHeight = viewport.height
+              exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+              ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+              await page.render({ canvasContext: ctx, viewport }).promise
+            } else {
+              exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+              ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+            }
+          } else if (song.file_url) {
+            // 이미지: handleExport와 동일한 렌더링
+            const img = new Image()
+            img.crossOrigin = 'anonymous'
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve()
+              img.onerror = reject
+              img.src = song.file_url
+            })
+            let exportScale = isTouchExport ? 1 : 2
+            const w = img.naturalWidth || img.width
+            const h = img.naturalHeight || img.height
+            if (w * exportScale > EXPORT_MAX_DIM || h * exportScale > EXPORT_MAX_DIM) {
+              exportScale = Math.min(EXPORT_MAX_DIM / w, EXPORT_MAX_DIM / h, exportScale)
+            }
+            if (w * exportScale * h * exportScale > EXPORT_MAX_AREA) {
+              exportScale = Math.min(Math.sqrt(EXPORT_MAX_AREA / (w * h)), exportScale)
+            }
+            exportScale = Math.max(0.5, exportScale)
+            baseWidth = Math.round(w * exportScale)
+            baseHeight = Math.round(h * exportScale)
+            exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+            ctx.drawImage(img, 0, 0, baseWidth, baseHeight)
+          } else {
+            exportCanvas.width = baseWidth; exportCanvas.height = baseHeight
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, baseWidth, baseHeight)
+          }
+        }
+
+        // 2. 송폼 렌더링 (handleExport와 동일)
+        const formState = allSongFormStates[song.song_id]
+        const songFormLabels = [...(song.songForms || []), ...customSongForms]
+        if (exportOptions.includeSongForms && formState?.enabled && songFormLabels.length > 0) {
+          const songFormText = songFormLabels.join(' - ')
+          const adjustedFontSize = (formState.style.fontSize / 36) * (baseHeight * 0.025)
+          ctx.font = `900 ${adjustedFontSize}px Arial, sans-serif`
+          ctx.fillStyle = formState.style.color
+          ctx.globalAlpha = formState.style.opacity
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'top'
+          const formX = (formState.style.x / 100) * baseWidth
+          const formY = (formState.style.y / 100) * baseHeight
+          ctx.fillText(songFormText, formX, formY)
+          ctx.globalAlpha = 1
+        }
+
+        // 3. 파트 태그 렌더링 (handleExport와 동일)
+        const songPartTags = formState?.partTags || []
+        songPartTags.forEach(tag => {
+          const adjustedFontSize = (tag.fontSize / 36) * (baseHeight * 0.025)
+          ctx.font = `bold ${adjustedFontSize}px Arial, sans-serif`
+          ctx.fillStyle = tag.color
+          ctx.globalAlpha = tag.opacity
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          const tagX = (tag.x / 100) * baseWidth
+          const tagY = (tag.y / 100) * baseHeight
+          ctx.fillText(tag.label, tagX, tagY)
+          ctx.globalAlpha = 1
+        })
+
+        // 4. 필기(스트로크) 렌더링 — handleExport와 동일
+        const pageAnnotation = pageAnnotations.find(a => a.pageNumber === 1)
+        if (pageAnnotation) {
+          pageAnnotation.strokes.forEach(stroke => {
+            if (stroke.points.length < 2) return
+            const strokeOutline = getStroke(stroke.points, {
+              size: stroke.size * (stroke.tool === 'highlighter' ? 8 : 1),
+              thinning: stroke.tool === 'highlighter' ? 0 : 0.5,
+              smoothing: 0.5,
+              streamline: 0.5,
+            })
+            if (strokeOutline.length < 2) return
+            ctx.fillStyle = stroke.color
+            ctx.globalAlpha = stroke.opacity
+            ctx.beginPath()
+            ctx.moveTo(strokeOutline[0][0], strokeOutline[0][1])
+            for (let i = 1; i < strokeOutline.length; i++) {
+              ctx.lineTo(strokeOutline[i][0], strokeOutline[i][1])
+            }
+            ctx.closePath()
+            ctx.fill()
+            ctx.globalAlpha = 1
+          })
+          pageAnnotation.textElements.forEach(text => {
+            ctx.font = `${text.fontSize}px ${text.fontFamily || 'sans-serif'}`
+            ctx.fillStyle = text.color
+            ctx.textAlign = 'left'
+            ctx.textBaseline = 'top'
+            ctx.fillText(text.text, text.x, text.y)
+          })
+        }
+
+        // song.song_id를 pageId 키로 사용
+        canvasDataUrls[song.song_id] = [exportCanvas.toDataURL('image/png')]
+        pdfSongs.push({ id: song.song_id, song_name: song.song_name, team_name: song.team_name })
+      }
+
+      if (pdfSongs.length === 0) return
+
+      if (format === 'image') {
+        // 이미지 다운로드: 각 페이지를 개별 이미지로 다운로드
+        for (const song of pdfSongs) {
+          const dataUrls = canvasDataUrls[song.id]
+          if (!dataUrls || dataUrls.length === 0) continue
+          for (const dataUrl of dataUrls) {
+            const link = document.createElement('a')
+            link.href = dataUrl
+            const safeName = (song.song_name || '페이지').replace(/[\\/:*?"<>|]/g, '_')
+            link.download = `${fileName ? fileName.replace(/[\\/:*?"<>|]/g, '_') + '_' : ''}${safeName}.png`
+            link.click()
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
+        }
+      } else {
+        // PDF 다운로드: generatePDFFromCanvas 호출 (표지 없음)
+        await generatePDFFromCanvas({
+          title: setlistTitle || effectiveSongName || '노트',
+          date: new Date().toLocaleDateString('ko-KR'),
+          songs: pdfSongs,
+          canvasDataUrls,
+          includeCover: false,
+          customFileName: fileName,
+        })
+      }
+
+    } catch (err) {
+      console.error('노트북 다운로드 오류:', err)
+      alert('다운로드에 실패했습니다. 페이지를 새로고침 후 다시 시도해주세요.')
+    } finally {
+      setNotebookDownloading(false)
+    }
+  }, [songs, allAnnotations, allSongFormStates, customSongForms, exportOptions, setlistTitle, effectiveSongName])
+
   // ===== 전체 지우기 =====
   const clearCurrentPage = useCallback(() => {
     if (!confirm('현재 페이지의 모든 필기를 지우시겠습니까?')) return
@@ -3175,7 +3524,8 @@ export default function SheetMusicEditor({
 
           <div className={`h-5 md:h-8 w-px ${'bg-slate-200'}`} />
 
-          {/* 페이지 네비게이션 */}
+          {/* 페이지 네비게이션 (notebookMode에서는 각 페이지가 개별 항목이므로 숨김) */}
+          {!notebookMode && (
           <div className={`flex items-center rounded md:rounded-lg p-0.5 md:p-1 ${
             'bg-slate-100'
           }`}>
@@ -3199,6 +3549,7 @@ export default function SheetMusicEditor({
               <span className={`material-symbols-outlined leading-none ${isMobile ? 'text-sm' : 'text-lg'}`}>chevron_right</span>
             </button>
           </div>
+          )}
 
           {/* 다중 곡 모드: 곡 네비게이션 */}
           {isMultiSongMode && songs.length > 1 && (
@@ -3227,6 +3578,32 @@ export default function SheetMusicEditor({
                   }`}
                 >
                   <span className="material-symbols-outlined text-lg leading-none">skip_next</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* notebookMode: 페이지 추가/삭제 버튼 (데스크톱) */}
+          {notebookMode && (
+            <>
+              <div className="h-8 w-px mx-1 bg-slate-200 hidden md:block" />
+              <div className="hidden md:flex items-center gap-0.5">
+                <button
+                  onClick={() => setShowAddPageModal(true)}
+                  className="p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                  title="페이지 추가"
+                  style={{ minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}
+                >
+                  <span className="material-symbols-outlined text-lg leading-none">add</span>
+                </button>
+                <button
+                  onClick={() => onRemovePage?.(currentSongIndex)}
+                  disabled={songs.length <= 1}
+                  className="p-1.5 rounded-md hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30"
+                  title="현재 페이지 삭제"
+                  style={{ minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}
+                >
+                  <span className="material-symbols-outlined text-lg leading-none">delete</span>
                 </button>
               </div>
             </>
@@ -3274,8 +3651,14 @@ export default function SheetMusicEditor({
 
           {/* Export 버튼 */}
           <button
-            onClick={() => setShowExportModal(true)}
-            disabled={exporting}
+            onClick={() => {
+              setShowExportModal(true)
+              if (notebookMode) {
+                setExportPageMode('all')
+                setExportSelectedPages(new Set(songs.map((_, i) => i)))
+              }
+            }}
+            disabled={exporting || notebookDownloading}
             className={`flex items-center justify-center border rounded md:rounded-lg lg:rounded-xl transition-colors ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8 lg:w-auto lg:h-auto lg:gap-2 lg:px-4 lg:py-2'
             } ${
@@ -3326,6 +3709,34 @@ export default function SheetMusicEditor({
               className="p-1.5 rounded-md disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-lg">skip_next</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 모바일 notebookMode: 페이지 추가/삭제 바 */}
+      {isMobile && notebookMode && !hideToolbar && (
+        <div className="flex items-center justify-between px-4 py-1.5 border-b bg-white/80 border-slate-200">
+          <span className="text-xs text-slate-500 font-medium">
+            {isMultiSongMode ? `${currentSongIndex + 1} / ${songs.length} 페이지` : '1 / 1 페이지'}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowAddPageModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-medium"
+              style={{ minHeight: '44px', touchAction: 'manipulation' }}
+            >
+              <span className="material-symbols-outlined text-base leading-none">add</span>
+              추가
+            </button>
+            <button
+              onClick={() => onRemovePage?.(currentSongIndex)}
+              disabled={songs.length <= 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-500 text-xs font-medium disabled:opacity-30"
+              style={{ minHeight: '44px', touchAction: 'manipulation' }}
+            >
+              <span className="material-symbols-outlined text-base leading-none">delete</span>
+              삭제
             </button>
           </div>
         </div>
@@ -4466,6 +4877,59 @@ export default function SheetMusicEditor({
                 <p className={`text-xs mt-2 ${'text-slate-400'}`}>확장자는 자동으로 추가됩니다</p>
               </div>
 
+              {/* notebookMode: 페이지 선택 */}
+              {notebookMode && songs.length > 1 && (
+                <div className={`rounded-xl p-4 mb-5 ${'bg-slate-50'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className={`text-sm font-semibold ${'text-slate-700'}`}>내보낼 페이지</h3>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { setExportPageMode('all'); setExportSelectedPages(new Set(songs.map((_, i) => i))) }}
+                        className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${exportPageMode === 'all' ? 'bg-[#ff6b00] text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+                        style={{ minHeight: '32px', touchAction: 'manipulation' }}
+                      >전체</button>
+                      <button
+                        onClick={() => setExportPageMode('select')}
+                        className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${exportPageMode === 'select' ? 'bg-[#ff6b00] text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+                        style={{ minHeight: '32px', touchAction: 'manipulation' }}
+                      >선택</button>
+                    </div>
+                  </div>
+                  {exportPageMode === 'select' && (
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {songs.map((s, i) => {
+                        const pageType = s.pageType || 'sheet'
+                        const label = pageType === 'sheet' ? (s.song_name || `곡 ${i + 1}`)
+                          : pageType === 'blank' ? '빈 페이지'
+                          : pageType === 'staff' ? '오선지'
+                          : `업로드: ${s.uploadFileName || '파일'}`
+                        return (
+                          <label key={i} className="flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-lg hover:bg-white transition-colors" style={{ minHeight: '36px', touchAction: 'manipulation' }}>
+                            <input
+                              type="checkbox"
+                              checked={exportSelectedPages.has(i)}
+                              onChange={() => {
+                                setExportSelectedPages(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(i)) next.delete(i); else next.add(i)
+                                  return next
+                                })
+                              }}
+                              className="w-4 h-4 accent-[#ff6b00]"
+                              style={{ fontSize: '16px' }}
+                            />
+                            <span className={`text-sm ${'text-slate-700'}`}>{i + 1}. {label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {exportPageMode === 'select' && (
+                    <p className={`text-xs mt-2 ${'text-slate-400'}`}>{exportSelectedPages.size}/{songs.length} 페이지 선택됨</p>
+                  )}
+                </div>
+              )}
+
               {/* 다운로드 옵션 */}
               <div className={`rounded-xl p-4 mb-5 ${'bg-slate-50'}`}>
                 <h3 className={`text-sm font-semibold mb-4 ${'text-slate-700'}`}>옵션</h3>
@@ -4514,8 +4978,18 @@ export default function SheetMusicEditor({
                 <h3 className={`text-sm font-semibold mb-3 ${'text-slate-700'}`}>형식 선택</h3>
 
                 <button
-                  onClick={() => handleExport('pdf')}
-                  className={`w-full border-2 rounded-xl p-4 mb-3 text-left transition-all hover:scale-[1.02] ${
+                  onClick={() => {
+                    if (notebookMode) {
+                      const indices = Array.from(exportSelectedPages).sort((a, b) => a - b)
+                      if (indices.length === 0) { alert('내보낼 페이지를 선택해주세요.'); return }
+                      setShowExportModal(false)
+                      handleNotebookDownload(indices, exportFileName || setlistTitle || effectiveSongName || '노트')
+                    } else {
+                      handleExport('pdf')
+                    }
+                  }}
+                  disabled={notebookMode && exportPageMode === 'select' && exportSelectedPages.size === 0}
+                  className={`w-full border-2 rounded-xl p-4 mb-3 text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${
                     'border-blue-400 hover:bg-blue-50'
                   }`}
                 >
@@ -4523,12 +4997,26 @@ export default function SheetMusicEditor({
                     <span className="material-symbols-outlined text-blue-500">picture_as_pdf</span>
                     PDF 파일
                   </div>
-                  <p className={`text-sm mt-1 ${'text-slate-500'}`}>모든 곡을 하나의 PDF 문서로 통합</p>
+                  <p className={`text-sm mt-1 ${'text-slate-500'}`}>
+                    {notebookMode
+                      ? `${exportSelectedPages.size}페이지를 하나의 PDF로 내보내기`
+                      : '모든 곡을 하나의 PDF 문서로 통합'}
+                  </p>
                 </button>
 
                 <button
-                  onClick={() => handleExport('image')}
-                  className={`w-full border-2 rounded-xl p-4 text-left transition-all hover:scale-[1.02] ${
+                  onClick={() => {
+                    if (notebookMode) {
+                      const indices = Array.from(exportSelectedPages).sort((a, b) => a - b)
+                      if (indices.length === 0) { alert('내보낼 페이지를 선택해주세요.'); return }
+                      setShowExportModal(false)
+                      handleNotebookDownload(indices, exportFileName || setlistTitle || effectiveSongName || '노트', 'image')
+                    } else {
+                      handleExport('image')
+                    }
+                  }}
+                  disabled={notebookMode && exportPageMode === 'select' && exportSelectedPages.size === 0}
+                  className={`w-full border-2 rounded-xl p-4 text-left transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${
                     'border-green-500 hover:bg-green-50'
                   }`}
                 >
@@ -4536,7 +5024,11 @@ export default function SheetMusicEditor({
                     <span className="material-symbols-outlined text-green-500">image</span>
                     이미지 파일 (JPG/PNG)
                   </div>
-                  <p className={`text-sm mt-1 ${'text-slate-500'}`}>각 곡을 개별 이미지로 다운로드</p>
+                  <p className={`text-sm mt-1 ${'text-slate-500'}`}>
+                    {notebookMode
+                      ? `${exportSelectedPages.size}페이지를 개별 이미지로 다운로드`
+                      : '각 곡을 개별 이미지로 다운로드'}
+                  </p>
                 </button>
               </div>
 
@@ -4599,6 +5091,23 @@ export default function SheetMusicEditor({
           setEditingDrumScoreId(null)
         }}
       />
+
+      {/* ===== notebookMode: 페이지 추가 모달 ===== */}
+      {notebookMode && showAddPageModal && (
+        <AddPageModal
+          isOpen={showAddPageModal}
+          onClose={() => setShowAddPageModal(false)}
+          currentPageIndex={currentSongIndex}
+          userId={userId}
+          notebookId={notebookId}
+          onAddPage={(position, page) => {
+            onAddPage?.(position, page, currentSongIndex)
+            setShowAddPageModal(false)
+          }}
+        />
+      )}
+
+      {/* NotebookDownloadModal — 내보내기 모달에 통합됨 */}
 
       {/* ===== 저장 확인 모달 (새 디자인) ===== */}
       {showCloseConfirm && (
