@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
@@ -42,6 +42,7 @@ interface Setlist {
   creator_name?: string
   creator_email?: string
   canEdit?: boolean
+  songs?: { song_id: string; song_name: string; team_name: string; order_number: number }[]
 }
 
 interface FixedSong {
@@ -82,6 +83,9 @@ export default function TeamDetailPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all')
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'created'>('date_desc')
+
+  // 탭 상태
+  const [activeTab, setActiveTab] = useState<'setlists' | 'songs'>('setlists')
 
   // 삭제 확인 모달
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, setlistId: string, title: string}>({
@@ -323,7 +327,12 @@ export default function TeamDetailPage() {
           service_type,
           created_by,
           created_at,
-          users:created_by (name, email)
+          users:created_by (name, email),
+          team_setlist_songs (
+            song_id,
+            order_number,
+            songs (id, song_name, team_name)
+          )
         `)
         .eq('team_id', teamId)
         .order('service_date', { ascending: false })
@@ -332,24 +341,27 @@ export default function TeamDetailPage() {
 
       const setlistsWithDetails = await Promise.all(
         (data || []).map(async (setlist: any) => {
-          const { count } = await supabase
-            .from('team_setlist_songs')
-            .select('*', { count: 'exact', head: true })
-            .eq('setlist_id', setlist.id)
-
           const canEdit = await canEditSetlist(teamId, setlist.id, user.id)
+
+          const songs = (setlist.team_setlist_songs || []).map((s: any) => ({
+            song_id: s.song_id,
+            song_name: s.songs?.song_name || '',
+            team_name: s.songs?.team_name || '',
+            order_number: s.order_number
+          }))
 
           return {
             id: setlist.id,
             title: setlist.title,
             service_date: setlist.service_date,
             service_type: setlist.service_type,
-            song_count: count || 0,
+            song_count: songs.length,
             created_by: setlist.created_by,
             created_at: setlist.created_at,
             creator_name: setlist.users?.name,
             creator_email: setlist.users?.email,
-            canEdit
+            canEdit,
+            songs
           }
         })
       )
@@ -945,8 +957,10 @@ export default function TeamDetailPage() {
 
   const filteredSetlists = setlists
     .filter(setlist => {
+      const normalizedSearch = searchTerm.replace(/\s/g, '').toLowerCase()
       const matchesSearch = searchTerm === '' ||
-        setlist.title.toLowerCase().includes(searchTerm.toLowerCase())
+        setlist.title.replace(/\s/g, '').toLowerCase().includes(normalizedSearch) ||
+        setlist.songs?.some(s => s.song_name.replace(/\s/g, '').toLowerCase().includes(normalizedSearch))
 
       const matchesServiceType = serviceTypeFilter === 'all' ||
         setlist.service_type === serviceTypeFilter
@@ -965,6 +979,28 @@ export default function TeamDetailPage() {
           return 0
       }
     })
+
+  const songUsageMap = useMemo(() => {
+    const map = new Map<string, {
+      song_name: string
+      team_name: string
+      setlists: { id: string; title: string; service_date: string }[]
+    }>()
+
+    setlists.forEach(setlist => {
+      setlist.songs?.forEach(song => {
+        if (!map.has(song.song_id)) {
+          map.set(song.song_id, { song_name: song.song_name, team_name: song.team_name, setlists: [] })
+        }
+        map.get(song.song_id)!.setlists.push({
+          id: setlist.id, title: setlist.title, service_date: setlist.service_date
+        })
+      })
+    })
+
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].setlists.length - a[1].setlists.length)
+  }, [setlists])
 
   // 상대 날짜 계산
   const getRelativeDate = (dateString: string) => {
@@ -1399,8 +1435,34 @@ export default function TeamDetailPage() {
 
           {/* 콘티 목록 섹션 */}
           <section>
+            {/* 탭 UI */}
+            <div className="flex gap-1 mb-6 p-1 bg-slate-100 rounded-xl w-fit">
+              <button
+                onClick={() => setActiveTab('setlists')}
+                className={`min-h-[44px] px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  activeTab === 'setlists'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                콘티 목록
+              </button>
+              <button
+                onClick={() => setActiveTab('songs')}
+                className={`min-h-[44px] px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  activeTab === 'songs'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                곡별 사용 내역
+              </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500">콘티 목록</h2>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500">
+                {activeTab === 'setlists' ? '콘티 목록' : '곡별 사용 내역'}
+              </h2>
               <div className="flex items-center gap-2 sm:gap-4">
                 {/* 검색 */}
                 <div className="relative flex-1 sm:flex-none">
@@ -1413,18 +1475,20 @@ export default function TeamDetailPage() {
                     className="w-full sm:w-48 pl-9 pr-4 py-2 text-sm border-none bg-slate-50 rounded-lg focus:ring-1 focus:ring-blue-100"
                   />
                 </div>
-                {/* 필터 버튼 */}
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2 rounded-lg transition ${showFilters ? 'bg-blue-50 text-blue-500' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <FilterIcon size={18} />
-                </button>
+                {/* 필터 버튼 - 콘티 탭에서만 표시 */}
+                {activeTab === 'setlists' && (
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`p-2 rounded-lg transition ${showFilters ? 'bg-blue-50 text-blue-500' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    <FilterIcon size={18} />
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* 필터 옵션 */}
-            {showFilters && (
+            {/* 필터 옵션 - 콘티 탭에서만 표시 */}
+            {showFilters && activeTab === 'setlists' && (
               <div className="flex flex-wrap gap-3 mb-6 p-4 bg-slate-50 rounded-lg">
                 <select
                   value={serviceTypeFilter}
@@ -1448,7 +1512,56 @@ export default function TeamDetailPage() {
               </div>
             )}
 
-            {filteredSetlists.length === 0 ? (
+            {activeTab === 'songs' ? (
+              /* 곡별 사용 내역 탭 */
+              <>
+                {songUsageMap.filter(([, data]) =>
+                  searchTerm === '' || data.song_name.replace(/\s/g, '').toLowerCase().includes(searchTerm.replace(/\s/g, '').toLowerCase())
+                ).length === 0 ? (
+                  <div className="text-center py-16">
+                    <Music className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-500">곡 데이터가 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {songUsageMap
+                      .filter(([, data]) =>
+                        searchTerm === '' || data.song_name.replace(/\s/g, '').toLowerCase().includes(searchTerm.replace(/\s/g, '').toLowerCase())
+                      )
+                      .map(([songId, data]) => (
+                        <div key={songId} className="border border-slate-100 rounded-xl overflow-hidden">
+                          <div className="flex items-center justify-between px-5 py-4 bg-white">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-800 truncate">{data.song_name}</p>
+                              {data.team_name && (
+                                <p className="text-xs text-slate-400 mt-0.5 truncate">{data.team_name}</p>
+                              )}
+                            </div>
+                            <span className="ml-4 flex-shrink-0 text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full">
+                              {data.setlists.length}회
+                            </span>
+                          </div>
+                          <div className="border-t border-slate-100 divide-y divide-slate-50">
+                            {data.setlists.map(sl => (
+                              <button
+                                key={sl.id}
+                                onClick={() => router.push(`/my-team/${teamId}/setlist/${sl.id}`)}
+                                className="w-full flex items-center justify-between px-5 py-3 bg-slate-50 hover:bg-blue-50 transition-colors text-left"
+                              >
+                                <span className="text-sm text-slate-700 truncate">{sl.title}</span>
+                                <span className="ml-4 flex-shrink-0 text-xs text-slate-400">
+                                  {new Date(sl.service_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </>
+            ) : filteredSetlists.length === 0 ? (
               <div className="text-center py-16">
                 <FileText className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                 <p className="text-slate-500 mb-4">
@@ -1506,6 +1619,32 @@ export default function TeamDetailPage() {
                           <p className="text-xs text-slate-400 mt-0.5">
                             by {setlist.creator_name || setlist.creator_email || (team?.is_demo ? '홍길동' : '')}
                           </p>
+                        )}
+                        {setlist.songs && setlist.songs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {setlist.songs
+                              .slice()
+                              .sort((a, b) => a.order_number - b.order_number)
+                              .slice(0, 3)
+                              .map((song) => (
+                                <span
+                                  key={song.song_id}
+                                  className={`text-xs px-1.5 py-0.5 rounded truncate max-w-[120px] ${
+                                    searchTerm && song.song_name.replace(/\s/g, '').toLowerCase().includes(searchTerm.replace(/\s/g, '').toLowerCase())
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-slate-100 text-slate-500'
+                                  }`}
+                                >
+                                  {song.song_name}
+                                </span>
+                              ))
+                            }
+                            {setlist.songs.length > 3 && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-400">
+                                +{setlist.songs.length - 3}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                       <div className="col-span-2">
@@ -1605,6 +1744,32 @@ export default function TeamDetailPage() {
                           <h3 className="font-semibold text-slate-800 line-clamp-2 mb-1">
                             {setlist.title}
                           </h3>
+                          {setlist.songs && setlist.songs.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {setlist.songs
+                                .slice()
+                                .sort((a, b) => a.order_number - b.order_number)
+                                .slice(0, 3)
+                                .map((song) => (
+                                  <span
+                                    key={song.song_id}
+                                    className={`text-xs px-1.5 py-0.5 rounded truncate max-w-[100px] ${
+                                      searchTerm && song.song_name.replace(/\s/g, '').toLowerCase().includes(searchTerm.replace(/\s/g, '').toLowerCase())
+                                        ? 'bg-yellow-100 text-yellow-700'
+                                        : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                  >
+                                    {song.song_name}
+                                  </span>
+                                ))
+                              }
+                              {setlist.songs.length > 3 && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-400">
+                                  +{setlist.songs.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-slate-500">
                             <Calendar size={12} />
                             <span>
