@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 3월 12일
+**마지막 업데이트**: 2026년 3월 13일
 
 ---
 
@@ -85,25 +85,29 @@
 
 ---
 
-## 3. 최근 작업 (2026-03-12)
+## 3. 최근 작업 (2026-03-13)
 
 ### 완료된 작업
-- [x] **my-team 곡 이름 검색 및 곡별 사용 내역 탭 추가** — 커밋 완료 (`9c74dde`)
-  - fetchSetlists N+1 쿼리 → 단일 조인 쿼리로 성능 개선
-  - 콘티 검색에 곡 이름 검색 추가 (띄어쓰기 무시)
-  - 콘티 카드에 곡 미리보기 배지 표시 (최대 3곡 + 검색어 하이라이트)
-  - "곡별 사용 내역" 탭 추가 (곡별 사용 횟수, 클릭→콘티 이동)
-  - Agent Team(frontend + tester) 빌드 검증 PASS
-- [x] **전체공개 곡 업로드 시 관리자 승인 시스템 추가** — 미커밋 (로컬 테스트 중)
+- [x] **전체공개 곡 업로드 시 관리자 승인 시스템** — 커밋 완료 (`1011780`)
   - `visibility: 'public'` 업로드 시 `is_hidden: true` + `upload_status: 'pending'` 설정
-  - 관리자 `/admin/content-management?tab=approvals`에서 승인 → `is_hidden: false` + `upload_status: 'completed'`
-  - my-page에서 "승인 대기" 배지 표시 (amber 색상)
-  - 팀공개/비공개는 기존대로 즉시 등록
-  - 수정 파일: `src/app/main/page.tsx`, `src/app/admin/content-management/page.tsx`, `src/app/my-page/page.tsx`
+  - 관리자 승인 시 `is_hidden: false` + `upload_status: 'completed'`
+  - my-page에서 "승인 대기" 배지 표시
+- [x] **비로그인 다운로드 제한** — 커밋 완료 (`edc33e1`)
+  - PDF/PPT 다운로드 시 로그인 체크 + 로그인 유도 팝업
+  - 검색, 미리보기, 가사보기, 유튜브는 비로그인 허용
+- [x] **온보딩 가이드 개선** — 커밋 완료 (`edc33e1`)
+  - WORSHEEP 찬양팀 안내 스텝 추가 (데모 팀 체험 유도)
+  - 헤더 로고 옆 ? 버튼으로 가이드 다시 열기 가능
+- [x] **Vercel 빌드 에러 수정** — 커밋 완료 (`85c6913`)
+  - 미커밋 파일 3개 추가 (useDownloadHistory, DownloadHistoryDetailModal, downloadHistory 타입)
+  - 이전 세션 포함 총 4건의 Vercel 빌드 에러 모두 해결
 
 ---
 
 ## 4. 이전 작업 요약
+
+### 2026-03-12
+- my-team 곡 이름 검색 및 곡별 사용 내역 탭 추가 (fetchSetlists 조인 쿼리 개선, 띄어쓰기 무시 검색)
 
 ### 2026-03-10
 - 다운로드 내역 기능 구현 완료 (download_history 테이블, 타입, 훅, my-page UI, 재다운로드 모달)
@@ -138,9 +142,9 @@
 ## 5. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **전체공개 곡 승인 시스템 커밋/배포** — 로컬 테스트 완료 후 커밋 필요
-2. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
-3. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
+1. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
+2. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
+3. [ ] **미커밋 변경사항 정리** — CLAUDE.md, docs, src 등 unstaged 변경사항 확인 및 커밋 필요
 
 ### 단기 (베타 기간)
 - [ ] 자동 저장 기능 추가 (15~30초 디바운스 + dirty flag)
@@ -220,8 +224,9 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-03-13 | 비로그인 다운로드 제한 (PDF/PPT), 온보딩 가이드 개선 (WORSHEEP팀 안내 + ? 버튼) |
+| 2026-03-13 | 전체공개 곡 업로드 시 관리자 승인 필수 (is_hidden + upload_status 활용) |
 | 2026-03-12 | my-team 곡 이름 검색 + 곡별 사용 내역 탭 추가 (fetchSetlists 조인 쿼리 개선) |
-| 2026-03-12 | 전체공개 곡 업로드 시 관리자 승인 필수 (is_hidden + upload_status 활용, 미커밋) |
 | 2026-03-10 | download_history 테이블 추가 — 다운로드 내역 기록/조회 기능 구현 완료 |
 | 2026-02-25 | 독립 필기노트 서비스 Phase 1~6 전체 완료 — notebooks 독립 필기노트 서비스 구현 완료 |
 | 2026-02-23 | RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지) |
@@ -281,9 +286,10 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- **my-team 곡 검색 개선** 완료 (곡 이름 검색, 곡별 사용 내역 탭) — 커밋/배포 완료
-- **전체공개 곡 승인 시스템** 구현 완료 — 미커밋 (로컬 테스트 중)
-- 다음 작업: 승인 시스템 커밋, songs/users SELECT RLS 정책 수정
+- **전체공개 곡 승인 시스템** 배포 완료
+- **비로그인 다운로드 제한 + 온보딩 가이드 개선** 배포 완료
+- **Vercel 빌드 에러** 모두 해결 (미커밋 파일 추가)
+- 다음 작업: songs/users SELECT RLS 정책 수정, 미커밋 변경사항 정리
 
 ---
 
