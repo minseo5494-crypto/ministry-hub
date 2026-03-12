@@ -14,6 +14,8 @@ import { trackSetlistCreate, trackSongView, trackSongLike } from '@/lib/analytic
 import { getErrorMessage } from '@/lib/errorMessages'
 import { getTempoFromBPM, getBPMRangeFromTempo } from '@/lib/musicUtils'
 import { cleanSongText } from '@/lib/textUtils'
+import { useNotebooks } from '@/hooks/useNotebooks'
+import { NotebookPage } from '@/types/notebook'
 
 // Components
 import {
@@ -206,6 +208,7 @@ export default function MainPage() {
   const [editingSong, setEditingSong] = useState<Song | SongWithNote | null>(null)
   const [noteEditorMode, setNoteEditorMode] = useState<'view' | 'edit'>('edit')
   const { saveNote, notes: mySheetNotes, fetchNotes: fetchMyNotes } = useSheetMusicNotes()
+  const { createNotebook } = useNotebooks()
   const [matchingNotes, setMatchingNotes] = useState<typeof mySheetNotes>([])
 
   // Multi-song editor
@@ -1184,6 +1187,49 @@ export default function MainPage() {
     }
   }
 
+  const handleSaveToNotebook = async (): Promise<boolean> => {
+    if (!user) return false
+
+    const songsWithSheets = selectedSongs.filter(song => song.file_url)
+    if (songsWithSheets.length === 0) {
+      alert('악보가 있는 곡이 없습니다.')
+      return false
+    }
+
+    const today = new Date()
+    const title = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')} 필기노트`
+
+    const pages: NotebookPage[] = songsWithSheets.map((song, index) => ({
+      id: crypto.randomUUID(),
+      pageType: 'sheet' as const,
+      order: index,
+      songId: song.id,
+      songName: song.song_name,
+      teamName: song.team_name || '',
+      fileUrl: song.file_url!,
+      fileType: (song.file_type === 'pdf' ? 'pdf' : 'image') as 'pdf' | 'image',
+      songForms: songForms[song.id] || [],
+      annotations: [],
+      songFormEnabled: (songForms[song.id]?.length || 0) > 0,
+      songFormStyle: { x: 50, y: 10, fontSize: 24, color: '#000000', opacity: 1 },
+      partTags: [],
+    }))
+
+    const notebook = await createNotebook({
+      userId: user.id,
+      title,
+      pages,
+    })
+
+    if (notebook) {
+      alert(`필기노트가 생성되었습니다!\nmy-page > 나의 필기노트에서 확인하세요.`)
+      return true
+    } else {
+      alert('필기노트 생성에 실패했습니다.')
+      return false
+    }
+  }
+
   const handleCloseMultiSongEditor = () => {
     if (multiSongEditorSongs.length > 0) {
       if (!confirm('필기 내용이 저장되지 않습니다. 정말 닫으시겠습니까?')) return
@@ -1421,12 +1467,17 @@ export default function MainPage() {
         is_user_uploaded: true,
         is_official: isOfficial,
         publisher_id: publisherId,
-        is_hidden: false  // 새 곡은 기본적으로 표시
+        is_hidden: newSong.visibility === 'public' ? true : false,
+        upload_status: newSong.visibility === 'public' ? 'pending' : null,
       })
 
       if (insertError) throw insertError
 
-      alert('✅ 곡이 추가되었습니다!')
+      if (newSong.visibility === 'public') {
+        alert('✅ 곡이 등록되었습니다! 전체 공개 곡은 관리자 승인 후 공개됩니다.')
+      } else {
+        alert('✅ 곡이 추가되었습니다!')
+      }
       setShowAddSongModal(false)
       setNewSong(initialNewSong)
       setUploadingFile(null)
@@ -1591,6 +1642,7 @@ export default function MainPage() {
         setShowSaveModal={setShowSaveModal}
         setSelectedSongs={setSelectedSongs}
         setSongForms={setSongForms}
+        onSaveToNotebook={handleSaveToNotebook}
       />
 
       {/* 모바일/태블릿 필터 배경 오버레이 */}

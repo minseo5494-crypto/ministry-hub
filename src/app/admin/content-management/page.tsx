@@ -647,7 +647,7 @@ export default function ContentManagementPage() {
 
     const { error } = await supabase
       .from('songs')
-      .update({ upload_status: 'completed' })
+      .update({ upload_status: 'completed', is_hidden: false })
       .eq('id', songId)
 
     if (!error) {

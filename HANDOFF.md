@@ -1,6 +1,6 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 2월 25일
+**마지막 업데이트**: 2026년 3월 12일
 
 ---
 
@@ -85,29 +85,29 @@
 
 ---
 
-## 3. 최근 작업 (2026-02-25)
+## 3. 최근 작업 (2026-03-12)
 
 ### 완료된 작업
-- [x] **콘티 노트 저장 버그 수정** — 커밋 완료 (`01bc415`)
-  - 팀 페이지에서 저장 시 `useSheetMusicNotes` 대신 `useSetlistNotes` 사용하도록 수정
-  - `useSetlistNotes` 훅: SELECT→INSERT/UPDATE 패턴, 인증 확인, 에러 alert 추가
-  - 곡 순서 역전 버그 수정 (JSONB `order` 필드 추가)
-  - SheetMusicEditor `handleSave`를 async로 변경
-  - my-page에서 콘티 필기 order 기반 정렬
-- [x] **GoodNotes 통합 계획서 분석** — 3인 에이전트 팀으로 실현 가능성 분석
-  - DB 스키마 문제점 (RLS 서브쿼리 성능, song_id 타입 불일치 등)
-  - 프론트엔드 위험 (에디터 4659줄 확장 한계, iOS 메모리 문제)
-  - UX/비즈니스 (베타 11명에 10주 리팩토링은 과도)
-  - **결론: 원래 10주 계획은 현 단계에서 비현실적**
-- [x] **독립 필기노트 서비스 계획서 작성** — 커밋 완료 (`0c238e9`)
-  - GoodNotes 계획 축소: 테이블 4개→1개, 기간 10주→4일
-  - `notebooks` 테이블 1개 + JSONB pages 구조
-  - 콘티→필기노트 복사 방식 (독립 데이터)
-  - SheetMusicEditor 최소 수정 (+80줄)
+- [x] **my-team 곡 이름 검색 및 곡별 사용 내역 탭 추가** — 커밋 완료 (`9c74dde`)
+  - fetchSetlists N+1 쿼리 → 단일 조인 쿼리로 성능 개선
+  - 콘티 검색에 곡 이름 검색 추가 (띄어쓰기 무시)
+  - 콘티 카드에 곡 미리보기 배지 표시 (최대 3곡 + 검색어 하이라이트)
+  - "곡별 사용 내역" 탭 추가 (곡별 사용 횟수, 클릭→콘티 이동)
+  - Agent Team(frontend + tester) 빌드 검증 PASS
+- [x] **전체공개 곡 업로드 시 관리자 승인 시스템 추가** — 미커밋 (로컬 테스트 중)
+  - `visibility: 'public'` 업로드 시 `is_hidden: true` + `upload_status: 'pending'` 설정
+  - 관리자 `/admin/content-management?tab=approvals`에서 승인 → `is_hidden: false` + `upload_status: 'completed'`
+  - my-page에서 "승인 대기" 배지 표시 (amber 색상)
+  - 팀공개/비공개는 기존대로 즉시 등록
+  - 수정 파일: `src/app/main/page.tsx`, `src/app/admin/content-management/page.tsx`, `src/app/my-page/page.tsx`
 
 ---
 
 ## 4. 이전 작업 요약
+
+### 2026-03-10
+- 다운로드 내역 기능 구현 완료 (download_history 테이블, 타입, 훅, my-page UI, 재다운로드 모달)
+- 독립 필기노트 서비스 Phase 1~6 전체 완료 (notebooks 테이블, 에디터, 다운로드, 마이그레이션)
 
 ### 2026-02-24
 - 콘티 노트 저장 버그 수정 (팀 페이지→setlist_notes 연결, 곡 순서 수정)
@@ -138,11 +138,7 @@
 ## 5. 다음에 할 일
 
 ### 즉시 (다음 세션)
-1. [ ] **독립 필기노트 서비스 구현** — `docs/내부/독립_필기노트_서비스_계획서.md` 참고 (4일 계획)
-   - Phase 1: notebooks 테이블 마이그레이션 + useNotebooks 훅
-   - Phase 2: 콘티 저장 시 notebooks 복사 로직
-   - Phase 3: my-page 필기노트 UI 변경
-   - Phase 4: SheetMusicEditor notebookMode (+80줄)
+1. [ ] **전체공개 곡 승인 시스템 커밋/배포** — 로컬 테스트 완료 후 커밋 필요
 2. [ ] **songs SELECT RLS 정책 수정** — "Enable read access for all users" 삭제 + authenticated visibility 정책 검증
 3. [ ] **users SELECT RLS 정책 수정** — 일반 유저는 자기 데이터만, admin은 전체 조회
 
@@ -153,6 +149,10 @@
 - [ ] Next.js 미들웨어 추가
 - [ ] 중간 보안 항목 수정 (check-email Rate Limit, MIME 검증, invite_code 등)
 - [ ] 테스터 피드백 반영
+
+### 장기 과제
+- [ ] AddPageModal 업로드 로직을 `useNotebooks.uploadNotebookFile`로 통합 리팩토링
+- [ ] `generateNotebookPDF` 래퍼 정리 — SheetMusicEditor에서 미사용 (generatePDFFromCanvas 직접 호출 중)
 
 ### 중기
 - [ ] 악보 통합 관리 Phase 3 (song_sheets 활성화)
@@ -182,16 +182,36 @@
 | 콘티 필기 훅 (콘티 단위) | `src/hooks/useSetlistNotes.ts` |
 | 콘티 개인화 훅 | `src/hooks/usePersonalSetlistView.ts` |
 | 콘티 상세 페이지 | `src/app/my-team/[id]/setlist/[setlistId]/page.tsx` |
+| 관리자 콘텐츠 관리 | `src/app/admin/content-management/page.tsx` |
+
+### 독립 필기노트 서비스
+| 기능 | 경로 |
+|------|------|
+| 노트북 타입 정의 | `src/types/notebook.ts` |
+| 노트북 CRUD 훅 | `src/hooks/useNotebooks.ts` |
+| 페이지 추가 모달 | `src/components/AddPageModal.tsx` |
+| 노트북 다운로드 모달 | `src/components/NotebookDownloadModal.tsx` |
+| notebooks 테이블 마이그레이션 | `supabase/migrations/20260225_notebooks.sql` |
+| notebooks Storage RLS | `supabase/migrations/20260225_notebooks_storage_policy.sql` |
+| setlist_notes 마이그레이션 | `supabase/migrations/20260225_migrate_setlist_notes_to_notebooks.sql` |
+
+### 다운로드 내역 기능
+| 기능 | 경로 |
+|------|------|
+| 다운로드 내역 타입 정의 | `src/types/downloadHistory.ts` |
+| 다운로드 내역 훅 | `src/hooks/useDownloadHistory.ts` |
+| 다운로드 상세/재다운로드 모달 | `src/components/DownloadHistoryDetailModal.tsx` |
+| download_history 테이블 마이그레이션 | `supabase/migrations/20260310_download_history.sql` |
+| 다운로드 훅 (기록 저장 연동) | `src/hooks/useDownload.tsx` |
+| my-page (다운로드 탭 추가) | `src/app/my-page/page.tsx` |
 
 ### 문서
 | 문서 | 경로 |
 |------|------|
 | 악보 통합 관리 계획서 | `docs/내부/개인_악보_필기_버전관리_계획.md` |
 | 독립 필기노트 서비스 계획서 | `docs/내부/독립_필기노트_서비스_계획서.md` |
-| GoodNotes 통합 분석 (참고용) | `docs/내부/GoodNotes_통합_계획서.md` |
 | 서비스 인프라 현황 | `docs/내부/서비스_인프라_현황.md` |
 | 보안 점검 보고서 | `docs/내부/보안_점검_보고서.md` |
-| 사업자등록 업종분류 | `docs/내부/사업자등록_업종분류_가이드.md` |
 | 사업계획서 | `docs/사업계획서/` |
 
 ---
@@ -200,18 +220,13 @@
 
 | 날짜 | 변경 |
 |------|------|
-| 2026-02-25 | 독립 필기노트 서비스 계획서 작성 (notebooks 테이블 1개, 4일 계획) |
-| 2026-02-25 | 콘티 노트 저장 버그 수정 커밋 (setlist_notes 연결 + 곡 순서) |
-| 2026-02-24 | setlist_notes 테이블 생성 + 콘티 단위 필기 저장 기능 |
-| 2026-02-24 | 악보 버전/키/필기 통합 관리 기능 계획 수립 (Phase 1~3 로드맵) |
+| 2026-03-12 | my-team 곡 이름 검색 + 곡별 사용 내역 탭 추가 (fetchSetlists 조인 쿼리 개선) |
+| 2026-03-12 | 전체공개 곡 업로드 시 관리자 승인 필수 (is_hidden + upload_status 활용, 미커밋) |
+| 2026-03-10 | download_history 테이블 추가 — 다운로드 내역 기록/조회 기능 구현 완료 |
+| 2026-02-25 | 독립 필기노트 서비스 Phase 1~6 전체 완료 — notebooks 독립 필기노트 서비스 구현 완료 |
 | 2026-02-23 | RLS 보안 취약점 3건 수정 (activity_logs, songs INSERT, sheetmusic 스토리지) |
-| 2026-02-23 | 다운로드 모달 파일명 입력 포커스 유실 수정 |
-| 2026-02-20 | 관리자 페이지 데이터 정합성 이슈 11건 수정 |
-| 2026-02-20 | auth.users 삭제 트리거 추가 (public.users 자동 정리) |
-| 2026-02-20 | GA4 서비스 전용 계정 전환 |
-| 2026-02-19 | AI 검색 프롬프트 인젝션 3중 방어 추가 |
-| 2026-02-19 | 보안 취약점 6건 수정 |
-| 2026-02-19 | setup-user API 인증 추가 |
+| 2026-02-20 | 관리자 페이지 데이터 정합성 이슈 11건 수정, auth.users 삭제 트리거 추가 |
+| 2026-02-19 | AI 검색 프롬프트 인젝션 3중 방어, 보안 취약점 6건 수정 |
 | 2026-02-13 | 인증 콜백 PKCE 호환, 팀 생성/삭제 서버 API 전환 |
 
 ---
@@ -266,11 +281,9 @@ HANDOFF.md 읽어줘
 ```
 
 현재 상태:
-- 콘티 노트 저장 버그 수정 완료 (커밋됨 `01bc415`)
-- 독립 필기노트 서비스 계획서 작성 완료 → `docs/내부/독립_필기노트_서비스_계획서.md`
-  - notebooks 테이블 1개, JSONB pages, 콘티→복사 방식, 4일 계획
-- 다음 작업: 독립 필기노트 서비스 구현 (Phase 1~5)
-- RLS 중간 난이도 2건 남음 (songs SELECT, users SELECT)
+- **my-team 곡 검색 개선** 완료 (곡 이름 검색, 곡별 사용 내역 탭) — 커밋/배포 완료
+- **전체공개 곡 승인 시스템** 구현 완료 — 미커밋 (로컬 테스트 중)
+- 다음 작업: 승인 시스템 커밋, songs/users SELECT RLS 정책 수정
 
 ---
 

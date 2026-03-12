@@ -21,6 +21,9 @@ import { useNotebooks } from '@/hooks/useNotebooks'
 import { Notebook, NotebookPage } from '@/types/notebook'
 import { useCommunity } from '@/hooks/useCommunity'
 import type { SharedSetlist } from '@/types/community'
+import { useDownloadHistory } from '@/hooks/useDownloadHistory'
+import type { DownloadHistory } from '@/types/downloadHistory'
+import DownloadHistoryDetailModal from '@/components/DownloadHistoryDetailModal'
 import SheetMusicEditor, { EditorSong } from '@/components/SheetMusicEditor'
 import SheetMusicViewer from '@/components/SheetMusicViewer'
 
@@ -42,6 +45,8 @@ interface UploadedSong {
   shared_with_teams?: string[]
   uploaded_by: string
   created_at: string
+  upload_status?: string | null
+  is_hidden?: boolean
   // 사용 통계
   usage_count?: number
   usage_count_last_30_days?: number
@@ -126,12 +131,18 @@ export default function MyPagePage() {
   const [loading, setLoading] = useState(true)
   const [songs, setSongs] = useState<UploadedSong[]>([])
 const [userTeams, setUserTeams] = useState<Team[]>([])
-const [activeTab, setActiveTab] = useState<'uploaded' | 'liked' | 'notes' | 'bookmarks'>('uploaded')
+const [activeTab, setActiveTab] = useState<'uploaded' | 'liked' | 'notes' | 'bookmarks' | 'downloads'>('uploaded')
 
 // 🔖 저장한 콘티 관련 상태
 const [bookmarkedSetlists, setBookmarkedSetlists] = useState<SharedSetlist[]>([])
 const [loadingBookmarks, setLoadingBookmarks] = useState(false)
 const { fetchBookmarkedSetlists } = useCommunity()
+
+// 📥 다운로드 내역 관련 상태
+const [downloadHistories, setDownloadHistories] = useState<DownloadHistory[]>([])
+const [loadingDownloads, setLoadingDownloads] = useState(false)
+const [selectedDownloadHistory, setSelectedDownloadHistory] = useState<DownloadHistory | null>(null)
+const { fetchDownloadHistory, deleteDownloadHistory } = useDownloadHistory()
 
 // 🎵 좋아요한 곡 관련 상태
 const [likedSongs, setLikedSongs] = useState<UploadedSong[]>([])
@@ -636,6 +647,12 @@ const handleTeamNameChange = (value: string) => {
       fetchBookmarkedSetlists(user.id).then(data => {
         setBookmarkedSetlists(data)
         setLoadingBookmarks(false)
+      })
+      // 📥 다운로드 내역 불러오기
+      setLoadingDownloads(true)
+      fetchDownloadHistory(user.id).then(data => {
+        setDownloadHistories(data)
+        setLoadingDownloads(false)
       })
       // 📒 노트북 목록 불러오기
       setNotebooksLoading(true)
@@ -1183,6 +1200,14 @@ setNewSong({ ...newSong, tempo: tempoValue })
         </span>
       )
     } else if (song.visibility === 'public') {
+      if (song.upload_status === 'pending') {
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-bold uppercase">
+            <Globe className="w-3 h-3" />
+            승인 대기
+          </span>
+        )
+      }
       return (
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase">
           <Globe className="w-3 h-3" />
@@ -1265,6 +1290,17 @@ setNewSong({ ...newSong, tempo: tempoValue })
           >
             <Globe className="w-5 h-5" />
             <span>저장한 콘티</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('downloads')}
+            className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 rounded-lg ${
+              activeTab === 'downloads'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
+            }`}
+          >
+            <Download className="w-5 h-5" />
+            <span>다운로드</span>
           </button>
         </nav>
         <div className="p-4 border-t border-slate-100 space-y-2">
@@ -1373,10 +1409,10 @@ setNewSong({ ...newSong, tempo: tempoValue })
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 space-y-6">
               {/* 모바일 탭 (데스크톱에서는 사이드바로 전환) */}
-              <div className="flex items-center gap-8 border-b border-slate-100 lg:hidden">
+              <div className="flex items-center gap-6 border-b border-slate-100 lg:hidden overflow-x-auto scrollbar-hide -mx-6 px-6">
                 <button
                   onClick={() => setActiveTab('uploaded')}
-                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors whitespace-nowrap flex-shrink-0 ${
                     activeTab === 'uploaded'
                       ? 'text-slate-900 border-b-2 border-indigo-600'
                       : 'text-slate-400 hover:text-slate-600'
@@ -1386,7 +1422,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 </button>
                 <button
                   onClick={() => setActiveTab('liked')}
-                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors whitespace-nowrap flex-shrink-0 ${
                     activeTab === 'liked'
                       ? 'text-slate-900 border-b-2 border-indigo-600'
                       : 'text-slate-400 hover:text-slate-600'
@@ -1396,7 +1432,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 </button>
                 <button
                   onClick={() => setActiveTab('notes')}
-                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors whitespace-nowrap flex-shrink-0 ${
                     activeTab === 'notes'
                       ? 'text-slate-900 border-b-2 border-indigo-600'
                       : 'text-slate-400 hover:text-slate-600'
@@ -1406,13 +1442,23 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 </button>
                 <button
                   onClick={() => setActiveTab('bookmarks')}
-                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors ${
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors whitespace-nowrap flex-shrink-0 ${
                     activeTab === 'bookmarks'
                       ? 'text-slate-900 border-b-2 border-indigo-600'
                       : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
                   저장콘티
+                </button>
+                <button
+                  onClick={() => setActiveTab('downloads')}
+                  className={`text-sm font-bold pb-3 -mb-[1px] transition-colors whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'downloads'
+                      ? 'text-slate-900 border-b-2 border-indigo-600'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  다운로드
                 </button>
               </div>
 
@@ -1460,6 +1506,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 {activeTab === 'liked' && `좋아요 (${likedSongs.length})`}
                 {activeTab === 'notes' && `필기 노트 (${notebooks.length})`}
                 {activeTab === 'bookmarks' && `저장한 콘티 (${bookmarkedSetlists.length})`}
+                {activeTab === 'downloads' && `다운로드 내역 (${downloadHistories.length})`}
               </h2>
             </div>
 
@@ -1997,6 +2044,82 @@ setNewSong({ ...newSong, tempo: tempoValue })
                 )}
               </>
             )}
+
+            {/* 📥 다운로드 내역 탭 */}
+            {activeTab === 'downloads' && (
+              <>
+                {loadingDownloads ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                  </div>
+                ) : downloadHistories.length === 0 ? (
+                  <div className="text-center py-12 px-6">
+                    <Download className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">다운로드 내역이 없습니다</p>
+                    <p className="text-sm text-slate-400 mt-1">악보를 다운로드하면 여기에 기록이 남아요</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {downloadHistories.map((history) => {
+                      const songNames = history.songs.map(s => s.song_name)
+                      const displayNames = songNames.slice(0, 3)
+                      const extraCount = songNames.length - 3
+                      const dateStr = new Date(history.created_at).toLocaleDateString('ko-KR', {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                      })
+                      const formatBadgeColor = {
+                        pdf: 'bg-red-50 text-red-600',
+                        ppt: 'bg-orange-50 text-orange-600',
+                        image: 'bg-blue-50 text-blue-600',
+                      }[history.format]
+
+                      return (
+                        <div
+                          key={history.id}
+                          className="flex items-start gap-4 p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                          onClick={() => setSelectedDownloadHistory(history)}
+                          style={{ touchAction: 'manipulation' }}
+                        >
+                          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex-shrink-0 flex items-center justify-center">
+                            <Download className="w-5 h-5 text-indigo-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full uppercase ${formatBadgeColor}`}>
+                                {history.format}
+                              </span>
+                              <span className="text-xs text-slate-400">{dateStr}</span>
+                            </div>
+                            <p className="text-sm font-medium text-slate-900 truncate">
+                              {history.title}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">
+                              {displayNames.join(', ')}
+                              {extraCount > 0 && ` +${extraCount}곡`}
+                            </p>
+                          </div>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              if (!confirm('이 다운로드 내역을 삭제할까요?')) return
+                              const ok = await deleteDownloadHistory(history.id)
+                              if (ok) {
+                                setDownloadHistories(prev => prev.filter(h => h.id !== history.id))
+                              }
+                            }}
+                            className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            style={{ touchAction: 'manipulation' }}
+                            aria-label="내역 삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* 푸터 */}
@@ -2020,6 +2143,14 @@ setNewSong({ ...newSong, tempo: tempoValue })
       >
         <Plus className="w-6 h-6" />
       </button>
+
+      {/* 📥 다운로드 내역 상세 모달 */}
+      {selectedDownloadHistory && (
+        <DownloadHistoryDetailModal
+          history={selectedDownloadHistory}
+          onClose={() => setSelectedDownloadHistory(null)}
+        />
+      )}
 
       {/* 📝 필기 에디터 모달 */}
       {showNoteEditor && editingNote && (
