@@ -37,7 +37,7 @@ import {
 } from './components'
 import { AddSongModal, SaveSetlistModal, PreviewModal, PPTModal, YoutubeModal, LyricsModal } from './modals'
 import { useSheetMusicNotes } from '@/hooks/useSheetMusicNotes'
-import OnboardingGuide from '@/components/OnboardingGuide'
+import OnboardingGuide, { OnboardingGuideRef } from '@/components/OnboardingGuide'
 
 // Types
 import { Filters, SortBy, SongFilter, NewSongForm, UserTeam, LocalSheetMusicNote, SongWithNote, TeamSetlistCard } from './types'
@@ -248,6 +248,7 @@ export default function MainPage() {
   const [checkingDuplicate, setCheckingDuplicate] = useState(false)
   const duplicateCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const onboardingRef = useRef<OnboardingGuideRef>(null)
 
   // Team state
   const [userTeams, setUserTeams] = useState<UserTeam[]>([])
@@ -1577,6 +1578,7 @@ export default function MainPage() {
         setShowMobileMenu={setShowMobileMenu}
         setShowAddSongModal={setShowAddSongModal}
         handleSignOut={handleSignOut}
+        onOpenGuide={() => onboardingRef.current?.open()}
       />
 
       <MobileMenu
@@ -1988,7 +1990,7 @@ export default function MainPage() {
         </div>
       )}
 
-      <OnboardingGuide />
+      <OnboardingGuide ref={onboardingRef} />
     </div>
   )
 }

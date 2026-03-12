@@ -9,6 +9,8 @@ import { SECTION_ABBREVIATIONS } from '@/lib/supabase'
 import { SongFormStyle, PartTagStyle } from '@/components/SongFormPositionModal'
 import { DownloadProgress } from '@/components/DownloadLoadingModal'
 import { trackSongDownload } from '@/lib/analytics'
+import { supabase } from '@/lib/supabase'
+import { DownloadSong } from '@/types/downloadHistory'
 
 // 모바일 기기 감지
 const isMobileDevice = () => {
@@ -19,6 +21,52 @@ const isMobileDevice = () => {
 // 파일명에서 사용 불가능한 문자 제거
 const sanitizeFilename = (filename: string): string => {
   return filename.replace(/[\\/:*?"<>|]/g, '_')
+}
+
+// 다운로드 내역 제목 자동생성 (YYYY.MM.DD 다운로드)
+const buildDownloadHistoryTitle = (): string => {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}.${mm}.${dd} 다운로드`
+}
+
+// Song[] → DownloadSong[] 변환
+const toDownloadSongs = (songs: Song[], songForms: { [songId: string]: string[] }): DownloadSong[] => {
+  return songs.map(song => ({
+    song_id: song.id,
+    song_name: song.song_name,
+    team_name: song.team_name || '',
+    file_url: song.file_url || '',
+    file_type: (song.file_type === 'pdf' ? 'pdf' : 'image') as 'pdf' | 'image',
+    songForms: songForms[song.id] || [],
+  }))
+}
+
+// download_history에 기록 저장 (fire-and-forget, 실패해도 무시)
+const insertDownloadHistory = async (
+  userId: string,
+  format: 'pdf' | 'ppt' | 'image',
+  songs: DownloadSong[],
+  options?: Record<string, unknown>
+): Promise<void> => {
+  try {
+    const { error } = await supabase.from('download_history').insert({
+      user_id: userId,
+      title: buildDownloadHistoryTitle(),
+      format,
+      songs,
+      options: options ?? null,
+    })
+    if (error) {
+      console.error('❌ download_history 저장 실패:', error.message)
+    } else {
+      console.log('✅ download_history 저장 완료')
+    }
+  } catch (err) {
+    console.error('❌ download_history 저장 예외:', err)
+  }
 }
 
 interface UseDownloadProps {
@@ -248,7 +296,8 @@ export function useDownload({
   const downloadOptionsRef = useRef<DownloadOptions>(downloadOptions)
   const selectedSongsRef = useRef<Song[]>(selectedSongs)
   const songFormsRef = useRef<{ [songId: string]: string[] }>(songForms)
-  
+  const userIdRef = useRef<string | undefined>(userId)
+
   // 형식 선택 대기
   const pendingFormatRef = useRef<'pdf' | 'image' | null>(null)
   
@@ -264,6 +313,10 @@ export function useDownload({
   useEffect(() => {
     songFormsRef.current = songForms
   }, [songForms])
+
+  useEffect(() => {
+    userIdRef.current = userId
+  }, [userId])
   
   // 송폼이 있는 곡이 있는지 확인
   const hasSongsWithForms = useCallback(() => {
@@ -275,6 +328,12 @@ export function useDownload({
   
   // 다운로드 버튼 클릭
   const handleDownload = useCallback(() => {
+    if (!userId) {
+      if (confirm('다운로드하려면 로그인이 필요합니다.\n로그인 페이지로 이동하시겠습니까?')) {
+        window.location.href = '/login'
+      }
+      return
+    }
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
@@ -285,8 +344,8 @@ export function useDownload({
       customFileName: getDefaultFileName()
     }))
     setShowFormatModal(true)
-  }, [selectedSongs.length, getDefaultFileName])
-  
+  }, [userId, selectedSongs.length, getDefaultFileName])
+
   // 송폼 위치 선택 완료 → canvasDataUrls를 PDF/이미지 모두 사용
   const onPositionConfirm = useCallback((
     songFormStyles: { [key: string]: SongFormStyle },
@@ -564,6 +623,11 @@ export function useDownload({
         trackSongDownload(song.id, 'image')
       })
 
+      // 다운로드 내역 저장
+      if (userIdRef.current) {
+        await insertDownloadHistory(userIdRef.current, 'image', toDownloadSongs(currentSongs, songFormsRef.current))
+      }
+
       // 모바일에서 미리보기 모달 표시
       if (isMobile && collectedImages.length > 0) {
         setPreviewImages(collectedImages)
@@ -669,6 +733,8 @@ export function useDownload({
       console.log('🖼️ WYSIWYG PDF 생성 시작')
       console.log('📊 곡 수:', pdfSongs.length)
       console.log('📊 캔버스 데이터:', Object.keys(canvasDataUrls).length)
+      const currentUserId = userIdRef.current
+      console.log('📊 userId:', currentUserId)
 
       // 진행률 콜백 전달
       await generatePDFFromCanvas({
@@ -688,11 +754,15 @@ export function useDownload({
         }
       })
 
-      if (userId) {
+      if (currentUserId) {
         const songIds = currentSongs.map(s => s.id)
-        await logPDFDownload(songIds, undefined, userId).catch(err =>
+        await logPDFDownload(songIds, undefined, currentUserId).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
+        await insertDownloadHistory(currentUserId, 'pdf', toDownloadSongs(currentSongs, songFormsRef.current), {
+          includeCover: opts.includeCover,
+          customFileName: opts.customFileName,
+        })
       }
 
       // GA4 트래킹
@@ -754,11 +824,16 @@ export function useDownload({
         }
       })
 
-      if (userId) {
+      if (userIdRef.current) {
         const songIds = currentSongs.map(s => s.id)
-        await logPDFDownload(songIds, undefined, userId).catch(err =>
+        await logPDFDownload(songIds, undefined, userIdRef.current).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
+        await insertDownloadHistory(userIdRef.current, 'pdf', toDownloadSongs(currentSongs, songFormsRef.current), {
+          includeCover: opts.includeCover,
+          marginPercent: opts.marginPercent,
+          customFileName: opts.customFileName,
+        })
       }
 
       // GA4 트래킹
@@ -824,11 +899,17 @@ export function useDownload({
         }
       })
 
-      if (userId) {
+      if (userIdRef.current) {
         const songIds = currentSongs.map(s => s.id)
-        await logPDFDownload(songIds, undefined, userId).catch(err =>
+        await logPDFDownload(songIds, undefined, userIdRef.current).catch(err =>
           console.error('PDF 로깅 실패:', err)
         )
+        await insertDownloadHistory(userIdRef.current, 'pdf', toDownloadSongs(currentSongs, currentSongForms), {
+          includeCover: opts.includeCover,
+          includeSongForm: opts.includeSongForm,
+          marginPercent: opts.marginPercent,
+          customFileName: opts.customFileName,
+        })
       }
 
       // GA4 트래킹
@@ -916,6 +997,11 @@ export function useDownload({
       currentSongs.forEach(song => {
         trackSongDownload(song.id, 'image')
       })
+
+      // 다운로드 내역 저장
+      if (userIdRef.current) {
+        await insertDownloadHistory(userIdRef.current, 'image', toDownloadSongs(currentSongs, songFormsRef.current))
+      }
 
       // 모바일에서 미리보기 모달 표시
       if (isMobile && collectedImages.length > 0) {
@@ -1281,15 +1367,16 @@ export function useDownload({
       const fileName = `${setlistTitle || '찬양콘티'}_${new Date().toISOString().split('T')[0]}.pptx`
       await prs.writeFile({ fileName })
 
-      if (userId) {
+      if (userIdRef.current) {
         await logPPTDownload(
           selectedSongs.map(s => s.id),
           undefined,
-          userId,
+          userIdRef.current,
           undefined
         ).catch(error => {
           console.error('Error logging PPT download:', error)
         })
+        await insertDownloadHistory(userIdRef.current, 'ppt', toDownloadSongs(selectedSongs, songForms))
       }
 
       // GA4 트래킹
@@ -1316,6 +1403,12 @@ export function useDownload({
 
   // PPT 다운로드 시작
   const startPPTDownload = useCallback(() => {
+    if (!userId) {
+      if (confirm('다운로드하려면 로그인이 필요합니다.\n로그인 페이지로 이동하시겠습니까?')) {
+        window.location.href = '/login'
+      }
+      return
+    }
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
@@ -1332,7 +1425,7 @@ export function useDownload({
     } else {
       alert('가사가 있는 곡이 없습니다.')
     }
-  }, [selectedSongs])
+  }, [userId, selectedSongs])
   
   return {
     downloadingPDF,

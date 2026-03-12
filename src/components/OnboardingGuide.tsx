@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Search, ListMusic, Pencil, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react'
+import { X, Search, ListMusic, Pencil, Users, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const STORAGE_KEY = 'ministry_hub_onboarding_completed'
 
@@ -25,6 +25,12 @@ const STEPS = [
     tip: '💡 필기한 악보는 my-page > 내 필기 노트에 자동 저장됩니다.',
   },
   {
+    icon: Users,
+    title: 'WORSHEEP 찬양팀',
+    description: '가입하시면 WORSHEEP 찬양팀에 자동으로 참여돼요. 샘플 콘티를 열어보고 팀 기능을 체험해보세요!',
+    tip: '💡 익숙해지면 직접 팀을 만들어보세요. 데모 팀은 언제든 나갈 수 있어요.',
+  },
+  {
     icon: MessageSquare,
     title: '피드백 보내기',
     description: '사용하면서 불편한 점이나 원하는 기능이 있다면 알려주세요!',
@@ -32,9 +38,20 @@ const STEPS = [
   },
 ]
 
-export default function OnboardingGuide() {
+export interface OnboardingGuideRef {
+  open: () => void
+}
+
+const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(_, ref) {
   const [isVisible, setIsVisible] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
+
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      setCurrentStep(0)
+      setIsVisible(true)
+    }
+  }))
 
   useEffect(() => {
     // 첫 방문 여부 확인
@@ -179,4 +196,6 @@ export default function OnboardingGuide() {
       </div>
     </div>
   )
-}
+})
+
+export default OnboardingGuide

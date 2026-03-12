@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import {
   Music, Plus, Users, UserPlus, MoreVertical,
-  BarChart3, Menu, MessageSquare, Compass
+  BarChart3, Menu, MessageSquare, Compass, HelpCircle
 } from 'lucide-react'
 import { User } from '../types'
 
@@ -14,6 +14,7 @@ type HeaderProps = {
   setShowMobileMenu: (show: boolean) => void
   setShowAddSongModal: (show: boolean) => void
   handleSignOut: () => void
+  onOpenGuide?: () => void
 }
 
 export default function Header({
@@ -22,7 +23,8 @@ export default function Header({
   setShowMenu,
   setShowMobileMenu,
   setShowAddSongModal,
-  handleSignOut
+  handleSignOut,
+  onOpenGuide
 }: HeaderProps) {
   const router = useRouter()
 
@@ -39,6 +41,16 @@ export default function Header({
             >
               WORSHEEP
             </button>
+            {onOpenGuide && (
+              <button
+                onClick={onOpenGuide}
+                className="p-1.5 text-[#84B9C0] hover:text-[#6BA3AA] hover:bg-gray-100 rounded-full transition-colors"
+                title="사용 가이드"
+                style={{ minWidth: '36px', minHeight: '36px', touchAction: 'manipulation' }}
+              >
+                <HelpCircle size={18} />
+              </button>
+            )}
           </div>
 
           {/* 네비게이션 */}
