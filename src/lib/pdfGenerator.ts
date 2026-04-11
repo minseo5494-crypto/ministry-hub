@@ -673,6 +673,38 @@ export const generatePDFFromCanvas = async (options: {
       }
 
       if (!canvasDataUrlArray || canvasDataUrlArray.length === 0) {
+        // 캔버스 데이터 없는 곡 (송폼 미설정): 원본 파일에서 직접 PDF에 추가
+        try {
+          if (song.file_url) {
+            const response = await fetch(song.file_url)
+            const fileBytes = new Uint8Array(await response.arrayBuffer())
+
+            if (song.file_type === 'pdf') {
+              const sourcePdf = await PDFDocument.load(fileBytes)
+              const pageIndices = sourcePdf.getPageIndices()
+              const copiedPages = await mergedPdf.copyPages(sourcePdf, pageIndices)
+              copiedPages.forEach(page => mergedPdf.addPage(page))
+            } else {
+              // 이미지 파일
+              const isJpg = song.file_url.toLowerCase().match(/\.(jpg|jpeg)/)
+              const image = isJpg
+                ? await mergedPdf.embedJpg(fileBytes)
+                : await mergedPdf.embedPng(fileBytes)
+              const page = mergedPdf.addPage([A4_WIDTH, A4_HEIGHT])
+              const scale = Math.min(A4_WIDTH / image.width, A4_HEIGHT / image.height)
+              const w = image.width * scale
+              const h = image.height * scale
+              page.drawImage(image, {
+                x: (A4_WIDTH - w) / 2,
+                y: (A4_HEIGHT - h) / 2,
+                width: w,
+                height: h,
+              })
+            }
+          }
+        } catch (err) {
+          console.warn(`원본 파일 PDF 추가 실패 (${song.song_name}):`, err)
+        }
         continue
       }
 

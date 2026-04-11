@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ReactNode } from 'react'
+import { useTranslations } from 'next-intl'
 
 interface BackInfo {
   label: string  // 뒤로가기 대상 페이지 이름 (예: "메인", "팀 페이지")
@@ -35,6 +36,7 @@ export default function AppLayout({
   noPadding = false,
 }: AppLayoutProps) {
   const router = useRouter()
+  const t = useTranslations('common')
 
   const handleBack = () => {
     if (backInfo?.path) {
@@ -79,7 +81,7 @@ export default function AppLayout({
                 className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">arrow_back</span>
-                <span>뒤로가기 ({backInfo.label})</span>
+                <span>{t('backTo', { target: backInfo.label })}</span>
               </button>
             </div>
           )}
@@ -134,6 +136,7 @@ export function SimpleAppLayout({
   headerContent?: ReactNode
 }) {
   const router = useRouter()
+  const t = useTranslations('common')
 
   const handleBack = () => {
     if (backInfo?.path) {
@@ -156,7 +159,7 @@ export function SimpleAppLayout({
                 className="p-2 -ml-2 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-xl text-slate-600">arrow_back</span>
-                <span className="hidden sm:inline text-sm text-slate-600">뒤로가기 ({backInfo.label})</span>
+                <span className="hidden sm:inline text-sm text-slate-600">{t('backTo', { target: backInfo.label })}</span>
               </button>
             )}
             {/* 로고 */}

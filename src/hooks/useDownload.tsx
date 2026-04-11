@@ -328,12 +328,6 @@ export function useDownload({
   
   // 다운로드 버튼 클릭
   const handleDownload = useCallback(() => {
-    if (!userId) {
-      if (confirm('다운로드하려면 로그인이 필요합니다.\n로그인 페이지로 이동하시겠습니까?')) {
-        window.location.href = '/login'
-      }
-      return
-    }
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return
@@ -1403,12 +1397,6 @@ export function useDownload({
 
   // PPT 다운로드 시작
   const startPPTDownload = useCallback(() => {
-    if (!userId) {
-      if (confirm('다운로드하려면 로그인이 필요합니다.\n로그인 페이지로 이동하시겠습니까?')) {
-        window.location.href = '/login'
-      }
-      return
-    }
     if (selectedSongs.length === 0) {
       alert('찬양을 선택해주세요.')
       return

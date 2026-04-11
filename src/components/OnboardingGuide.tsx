@@ -2,40 +2,18 @@
 
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react'
 import { X, Search, ListMusic, Pencil, Users, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 const STORAGE_KEY = 'ministry_hub_onboarding_completed'
 
-const STEPS = [
-  {
-    icon: Search,
-    title: '악보 검색',
-    description: '찾고 싶은 곡을 검색해보세요. 곡 제목, 아티스트, 가사로 검색할 수 있어요.',
-    tip: '💡 AI 검색을 켜면 "빠른 템포의 찬양" 같은 자연어로도 검색됩니다!',
-  },
-  {
-    icon: ListMusic,
-    title: '콘티 만들기',
-    description: '곡을 클릭해서 선택하고, 상단 바에서 PDF/PPT로 다운로드하거나 콘티로 저장하세요.',
-    tip: '💡 곡 카드의 "송폼" 버튼으로 곡 순서(인트로, 1절, 브릿지 등)를 설정할 수 있어요.',
-  },
-  {
-    icon: Pencil,
-    title: '악보 필기',
-    description: '곡 카드의 연필 아이콘을 눌러 악보에 직접 필기할 수 있어요.',
-    tip: '💡 필기한 악보는 my-page > 내 필기 노트에 자동 저장됩니다.',
-  },
-  {
-    icon: Users,
-    title: 'WORSHEEP 찬양팀',
-    description: '가입하시면 WORSHEEP 찬양팀에 자동으로 참여돼요. 샘플 콘티를 열어보고 팀 기능을 체험해보세요!',
-    tip: '💡 익숙해지면 직접 팀을 만들어보세요. 데모 팀은 언제든 나갈 수 있어요.',
-  },
-  {
-    icon: MessageSquare,
-    title: '피드백 보내기',
-    description: '사용하면서 불편한 점이나 원하는 기능이 있다면 알려주세요!',
-    tip: '💡 화면 우측 하단의 말풍선 버튼을 눌러 피드백을 보낼 수 있어요.',
-  },
+const STEP_ICONS = [Search, ListMusic, Pencil, Users, MessageSquare]
+
+const STEP_KEYS = [
+  { title: 'step1Title', desc: 'step1Desc', tip: 'step1Tip' },
+  { title: 'step2Title', desc: 'step2Desc', tip: 'step2Tip' },
+  { title: 'step3Title', desc: 'step3Desc', tip: 'step3Tip' },
+  { title: 'step4Title', desc: 'step4Desc', tip: 'step4Tip' },
+  { title: 'step5Title', desc: 'step5Desc', tip: 'step5Tip' },
 ]
 
 export interface OnboardingGuideRef {
@@ -45,6 +23,7 @@ export interface OnboardingGuideRef {
 const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(_, ref) {
   const [isVisible, setIsVisible] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
+  const t = useTranslations()
 
   useImperativeHandle(ref, () => ({
     open: () => {
@@ -76,7 +55,7 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
   }
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < STEP_KEYS.length - 1) {
       setCurrentStep(currentStep + 1)
     } else {
       handleComplete()
@@ -91,7 +70,8 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
 
   if (!isVisible) return null
 
-  const CurrentIcon = STEPS[currentStep].icon
+  const CurrentIcon = STEP_ICONS[currentStep]
+  const stepKey = STEP_KEYS[currentStep]
 
   return (
     <div
@@ -108,7 +88,7 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
             onClick={handleSkip}
             className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/20 transition-colors"
             style={{ minWidth: '48px', minHeight: '48px', touchAction: 'manipulation' }}
-            aria-label="닫기"
+            aria-label={t('common.close')}
           >
             <X className="w-6 h-6" />
           </button>
@@ -119,10 +99,10 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
             </div>
             <div>
               <p className="text-white/80 text-sm" style={{ fontSize: '16px' }}>
-                {currentStep + 1} / {STEPS.length}
+                {currentStep + 1} / {STEP_KEYS.length}
               </p>
               <h2 className="text-xl font-bold" style={{ fontSize: '20px' }}>
-                {STEPS[currentStep].title}
+                {t(`onboarding.${stepKey.title}`)}
               </h2>
             </div>
           </div>
@@ -131,12 +111,12 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
         {/* 본문 */}
         <div className="px-6 py-6">
           <p className="text-gray-700 leading-relaxed mb-4" style={{ fontSize: '16px' }}>
-            {STEPS[currentStep].description}
+            {t(`onboarding.${stepKey.desc}`)}
           </p>
 
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
             <p className="text-gray-600" style={{ fontSize: '16px' }}>
-              {STEPS[currentStep].tip}
+              {t(`onboarding.${stepKey.tip}`)}
             </p>
           </div>
         </div>
@@ -145,7 +125,7 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
         <div className="px-6 pb-6">
           {/* 진행 인디케이터 */}
           <div className="flex justify-center gap-2 mb-4">
-            {STEPS.map((_, index) => (
+            {STEP_KEYS.map((_, index) => (
               <div
                 key={index}
                 className={`w-2 h-2 rounded-full transition-all ${
@@ -168,7 +148,7 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
                 style={{ minHeight: '48px', fontSize: '16px', touchAction: 'manipulation' }}
               >
                 <ChevronLeft className="w-5 h-5" />
-                이전
+                {t('common.previous')}
               </button>
             )}
 
@@ -182,13 +162,13 @@ const OnboardingGuide = forwardRef<OnboardingGuideRef>(function OnboardingGuide(
                 backgroundColor: '#84B9C0'
               }}
             >
-              {currentStep < STEPS.length - 1 ? (
+              {currentStep < STEP_KEYS.length - 1 ? (
                 <>
-                  다음
+                  {t('common.next')}
                   <ChevronRight className="w-5 h-5" />
                 </>
               ) : (
-                '시작하기'
+                t('common.start')
               )}
             </button>
           </div>

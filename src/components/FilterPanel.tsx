@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { Calendar, Tag, Music, Clock, Activity, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { ThemeCount, SeasonCount } from '@/lib/supabase'
 import { KEYS, TIME_SIGNATURES, TEMPOS } from '@/lib/constants'
+import { useTranslations } from 'next-intl'
 
 interface FilterPanelProps {
   filters: {
@@ -47,6 +48,23 @@ export default function FilterPanel({
   seasonsLoading = false
 }: FilterPanelProps) {
 
+  const t = useTranslations('filter')
+  const td = useTranslations('data')
+
+  // DB 값을 번역된 표시명으로 변환
+  const translateSeason = (name: string) => {
+    const key = `season_${name}` as any
+    return td.has(key) ? td(key) : name
+  }
+  const translateTheme = (name: string) => {
+    const key = `theme_${name}` as any
+    return td.has(key) ? td(key) : name
+  }
+  const translateTempo = (name: string) => {
+    const key = `tempo_${name}` as any
+    return td.has(key) ? td(key) : name
+  }
+
   // 테마 더 보기 상태
   const [showAllThemes, setShowAllThemes] = useState(false)
   const INITIAL_THEME_COUNT = 10
@@ -68,7 +86,7 @@ export default function FilterPanel({
       {/* 모바일 닫기 버튼 */}
       {isMobile && onClose && (
         <div className="flex items-center justify-between mb-4 pb-2 border-b md:hidden">
-          <h3 className="font-bold text-lg">필터</h3>
+          <h3 className="font-bold text-lg">{t('title')}</h3>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg"
@@ -79,12 +97,12 @@ export default function FilterPanel({
       )}
 
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-lg">필터</h3>
+        <h3 className="font-bold text-lg">{t('title')}</h3>
         <button
           onClick={onReset}
           className="text-sm text-blue-600 hover:underline"
         >
-          초기화
+          {t('reset')}
         </button>
       </div>
 
@@ -92,12 +110,12 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Calendar className="inline w-4 h-4 mr-1" />
-          시즌
+          {t('season')}
         </label>
         {seasonsLoading ? (
-          <div className="text-sm text-gray-500 py-2">시즌 로딩 중...</div>
+          <div className="text-sm text-gray-500 py-2">{t('seasonLoading')}</div>
         ) : seasonsList.length === 0 ? (
-          <div className="text-sm text-gray-500 py-2">등록된 시즌이 없습니다</div>
+          <div className="text-sm text-gray-500 py-2">{t('noSeasons')}</div>
         ) : (
           <div className="flex flex-wrap gap-2">
             <button
@@ -108,7 +126,7 @@ export default function FilterPanel({
                   : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
-              전체
+              {t('all')}
             </button>
             {seasonsList.map(season => (
               <button
@@ -120,7 +138,7 @@ export default function FilterPanel({
                     : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >
-                {season.name}
+                {translateSeason(season.name)}
                 <span className="ml-1 text-xs opacity-70">({season.count})</span>
               </button>
             ))}
@@ -132,12 +150,12 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Tag className="inline w-4 h-4 mr-1" />
-          테마 (다중 선택)
+          {t('theme')}
         </label>
         {themesLoading ? (
-          <div className="text-sm text-gray-500 py-2">테마 로딩 중...</div>
+          <div className="text-sm text-gray-500 py-2">{t('themeLoading')}</div>
         ) : themeCounts.length === 0 ? (
-          <div className="text-sm text-gray-500 py-2">등록된 테마가 없습니다</div>
+          <div className="text-sm text-gray-500 py-2">{t('noThemes')}</div>
         ) : (
           <>
             <div className="flex flex-wrap gap-2">
@@ -151,7 +169,7 @@ export default function FilterPanel({
                       : 'bg-gray-100 hover:bg-gray-200'
                   }`}
                 >
-                  {theme}
+                  {translateTheme(theme)}
                   <span className="ml-1 text-xs opacity-70">({count})</span>
                 </button>
               ))}
@@ -165,12 +183,12 @@ export default function FilterPanel({
                 {showAllThemes ? (
                   <>
                     <ChevronUp size={16} />
-                    접기
+                    {t('showLess')}
                   </>
                 ) : (
                   <>
                     <ChevronDown size={16} />
-                    더 보기 (+{themeCounts.length - INITIAL_THEME_COUNT}개)
+                    {t('showMore', { count: themeCounts.length - INITIAL_THEME_COUNT })}
                   </>
                 )}
               </button>
@@ -183,7 +201,7 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Music className="inline w-4 h-4 mr-1" />
-          Key
+          {t('key')}
         </label>
         <div className="grid grid-cols-4 gap-2">
           {KEYS.map(key => (
@@ -218,14 +236,14 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Clock className="inline w-4 h-4 mr-1" />
-          박자
+          {t('timeSignature')}
         </label>
         <select
           value={filters.timeSignature}
           onChange={(e) => onFilterChange('timeSignature', e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg"
         >
-          <option value="">전체</option>
+          <option value="">{t('all')}</option>
           {TIME_SIGNATURES.map(ts => (
             <option key={ts} value={ts}>{ts}</option>
           ))}
@@ -236,7 +254,7 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Activity className="inline w-4 h-4 mr-1" />
-          템포
+          {t('tempo')}
         </label>
         <div className="flex flex-wrap gap-2">
           {TEMPOS.map(tempo => (
@@ -249,7 +267,7 @@ export default function FilterPanel({
                   : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
-              {tempo}
+              {translateTempo(tempo)}
             </button>
           ))}
         </div>
@@ -259,12 +277,12 @@ export default function FilterPanel({
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <Activity className="inline w-4 h-4 mr-1" />
-          BPM 범위
+          {t('bpmRange')}
         </label>
         <div className="flex items-center gap-2">
           <input
             type="number"
-            placeholder="최소"
+            placeholder={t('bpmMin')}
             value={filters.bpmMin}
             onChange={(e) => onFilterChange('bpmMin', e.target.value)}
             className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -273,7 +291,7 @@ export default function FilterPanel({
           <span className="text-gray-500 flex-shrink-0">~</span>
           <input
             type="number"
-            placeholder="최대"
+            placeholder={t('bpmMax')}
             value={filters.bpmMax}
             onChange={(e) => onFilterChange('bpmMax', e.target.value)}
             className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -290,7 +308,7 @@ export default function FilterPanel({
             }}
             className="w-full mt-2 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
           >
-            BPM 필터 초기화
+            {t('bpmReset')}
           </button>
         )}
       </div>

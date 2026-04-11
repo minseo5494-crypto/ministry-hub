@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Fredoka } from 'next/font/google'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
-import Footer from '@/components/Footer'
-import FeedbackButtonWrapper from '@/components/FeedbackButtonWrapper'
-import InAppBrowserAlert from '@/components/InAppBrowserAlert'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 
@@ -47,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ko">
+    <html>
       <head>
         {/* PDF.js CDN */}
         <script
@@ -68,10 +65,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className={`${inter.className} ${fredoka.variable} flex flex-col min-h-screen`}>
-        <main className="flex-grow">{children}</main>
-        <Footer />
-        <FeedbackButtonWrapper />
-        <InAppBrowserAlert />
+        {children}
       </body>
       {GA_MEASUREMENT_ID && <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />}
     </html>

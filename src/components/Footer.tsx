@@ -1,6 +1,11 @@
+'use client'
+
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 
 export default function Footer() {
+  const t = useTranslations('footer')
+
   return (
     <footer className="bg-gray-100 border-t border-gray-200">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -8,22 +13,22 @@ export default function Footer() {
           {/* 로고 및 설명 */}
           <div className="text-center md:text-left">
             <h3 className="text-lg font-logo text-gray-900">WORSHEEP</h3>
-            <p className="text-sm text-gray-600 mt-1">예배팀을 위한 악보 관리 서비스</p>
+            <p className="text-sm text-gray-600 mt-1">{t('description')}</p>
           </div>
 
           {/* 링크 */}
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
             <Link href="/terms" className="text-gray-600 hover:text-gray-900">
-              이용약관
+              {t('terms')}
             </Link>
             <Link href="/privacy" className="text-gray-600 hover:text-gray-900">
-              개인정보처리방침
+              {t('privacy')}
             </Link>
             <Link href="/copyright" className="text-gray-600 hover:text-gray-900">
-              저작권 정책
+              {t('copyright')}
             </Link>
             <a href="mailto:support@worsheep.org" className="text-gray-600 hover:text-gray-900">
-              문의하기
+              {t('contact')}
             </a>
           </div>
         </div>

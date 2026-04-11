@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { X, ExternalLink } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 const STORAGE_KEY = 'inapp_browser_alert_dismissed'
 
 export default function InAppBrowserAlert() {
   const [show, setShow] = useState(false)
+  const t = useTranslations()
 
   useEffect(() => {
     // 인앱 브라우저 감지
@@ -57,25 +59,21 @@ export default function InAppBrowserAlert() {
 
         {/* 안내 문구 */}
         <h3 className="text-lg font-bold text-gray-900 text-center mb-2">
-          외부 브라우저를 이용해주세요
+          {t('inAppBrowser.title')}
         </h3>
-        <p className="text-sm text-gray-600 text-center leading-relaxed mb-1">
-          현재 앱 내 브라우저에서는 일부 기능이
-          <br />정상 작동하지 않을 수 있습니다.
+        <p className="text-sm text-gray-600 text-center leading-relaxed mb-1 whitespace-pre-line">
+          {t('inAppBrowser.description')}
         </p>
-        <p className="text-sm text-gray-500 text-center leading-relaxed mb-6">
-          <strong>Chrome</strong> 브라우저 또는{' '}
-          <strong>홈 화면에 추가</strong>하여
-          <br />앱처럼 사용하시면 최적의 환경을 제공합니다.
-        </p>
+        <p className="text-sm text-gray-500 text-center leading-relaxed mb-6 whitespace-pre-line"
+          dangerouslySetInnerHTML={{ __html: t('inAppBrowser.recommendation') }}
+        />
 
         {/* 홈 화면 추가 안내 */}
         <div className="bg-gray-50 rounded-xl p-3 mb-5">
           <p className="text-xs text-gray-500 text-center">
-            <span className="font-medium text-gray-700">홈 화면에 추가하는 방법</span>
+            <span className="font-medium text-gray-700">{t('inAppBrowser.howToAdd')}</span>
             <br />
-            Chrome 우측 상단 <span className="font-medium">⋮</span> 메뉴 →{' '}
-            <span className="font-medium">"홈 화면에 추가"</span>
+            {t('inAppBrowser.howToAddSteps')}
           </p>
         </div>
 
@@ -86,14 +84,14 @@ export default function InAppBrowserAlert() {
             className="w-full py-3 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 transition"
             style={{ touchAction: 'manipulation', minHeight: '44px' }}
           >
-            닫기
+            {t('common.close')}
           </button>
           <button
             onClick={handleDismiss24h}
             className="w-full py-3 text-gray-500 text-sm hover:text-gray-700 transition"
             style={{ touchAction: 'manipulation', minHeight: '44px' }}
           >
-            24시간 동안 보지 않기
+            {t('inAppBrowser.dismiss24h')}
           </button>
         </div>
       </div>

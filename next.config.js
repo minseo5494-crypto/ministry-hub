@@ -1,4 +1,6 @@
 const { withSentryConfig } = require('@sentry/nextjs');
+const createNextIntlPlugin = require('next-intl/plugin');
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const withPWA = require('next-pwa')({
   dest: 'public',
@@ -120,4 +122,4 @@ const sentryWebpackPluginOptions = {
 };
 
 // Make sure adding Sentry options is the last code to run before exporting
-module.exports = withSentryConfig(withPWA(nextConfig), sentryWebpackPluginOptions);
+module.exports = withSentryConfig(withNextIntl(withPWA(nextConfig)), sentryWebpackPluginOptions);
