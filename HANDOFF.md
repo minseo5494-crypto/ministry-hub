@@ -1,22 +1,36 @@
 # HANDOFF - 프로젝트 인수인계 문서
 
-**마지막 업데이트**: 2026년 7월 14일
+**마지막 업데이트**: 2026년 7월 14일 (2차 세션)
 
 ---
 
-## 0. 프로젝트 상태: 냉동 보존 + 저작권 대응 계획 수립
+## 0. 프로젝트 상태: 해동 → 팀 단위 폐쇄 공유로 전환 작업 중
 
-> **2026-04-11**: WORSHEEP 프로젝트는 **냉동 보존** 상태입니다.
-> - **사유**: 저작권 문제 미해결로 서비스 일시 중단
-> - **계획**: 저작권 해결 시 서비스 재개 / AI 악보 변환 플랫폼으로 피봇 가능
-> - **연습실 플랫폼**: 별도 프로젝트로 신규 개발 진행 중
-> - **코드베이스**: 이 상태 그대로 보존 (건드리지 않음)
-> - **Supabase**: ministry-hub 프로젝트 유지 (Free tier)
-> - **Vercel**: 배포 유지 가능 (필요시 랜딩 페이지로 전환)
->
-> **2026-07-14**: 저작권 대응 방향으로 **"전체공개 검색 폐지 → 팀 단위 공유 전환" 계획 수립 완료** (코드/DB 미변경, 계획만).
-> - 계획서: `docs/내부/팀단위공유_전환계획.md`
-> - 상세는 아래 섹션 3 참고. 서비스 재개 시 이 계획대로 착수 예정.
+> **2026-07-14 (2차 세션)**: 냉동 해제. **팀 단위 공유 전환에 실제로 착수했고 1단계(DB) 적용 완료.**
+
+### ★ 사업 모델 재정의 (이번 세션에서 확정 — 가장 중요)
+
+**"권리사와 협상해서 라이선스를 얻는다"가 아니라, "협상이 필요 없는 구조로 바꾼다"가 목표다.**
+
+- 팀이 **자기들이 쓰는 악보를 직접 업로드**하고, **그 팀 멤버만** 열람한다.
+- 팀 밖으로 나가지 않으므로 불법 유통에 해당하지 않는다는 것이 이 모델의 논리.
+- WORSHEEP은 유통자가 아니라 **저장 공간을 빌려주는 호스팅 사업자** 포지션.
+- 원래 비전인 "모두에게 악보를 쉽게 제공"은 권리사 협상이 선행돼야 하므로 **이번 전환에서 제외**.
+- **요금제: 당분간 전부 무료** 전제로 진행 (Free 요금제 재설계 항목 폐기).
+- 기존 기능은 **그대로 유지**. 레이아웃과 사용 흐름만 팀 중심으로 변경.
+
+> ⚠️ **이 논리는 기술적 격리가 실제로 작동할 때만 참이다.** 구멍이 하나라도 남으면
+> "팀끼리만 본다"는 주장 자체가 무너진다. 남은 기술 항목(특히 Storage 버킷)은
+> 부수 작업이 아니라 **모델의 성립 조건**이다.
+
+### 상태 요약
+
+| 항목 | 상태 |
+|------|------|
+| 코드베이스 | 정상 동작 (로그인 상태 기능 4종 검증 완료) |
+| Supabase | ministry-hub 유지 (Free tier) · **1단계 RLS 적용됨** |
+| Vercel | 배포 유지 |
+| 계획서 | `docs/내부/팀단위공유_전환계획.md` (2차 세션 기준 전면 갱신됨) |
 
 ---
 
@@ -101,27 +115,61 @@
 
 ---
 
-## 3. 최근 작업 (2026-07-14) — 팀 단위 공유 전환 계획 수립
+## 3. 최근 작업 (2026-07-14 2차 세션) — 1단계 anon 차단 적용 완료 ✅
 
-이번 세션은 **조사·계획만** 수행했고 코드/DB/기존 문서는 변경하지 않았다. `/team`으로 조사팀(backend/frontend/security/domain) 투입 + anon 키로 라이브 DB 직접 실측 병행.
+### 완료된 작업
+- [x] 라이브 DB `pg_policies` 전량 조회 → 배포된 RLS 실체 파악 (git에 없던 대시보드 수기 정책들)
+- [x] anon 키로 유출 실측 → **비로그인으로 songs 1,830건 / song_sheets 1,672건 조회 성공 확인**
+- [x] 악보 파일 직접 GET → **HTTP 200, 374KB PNG 다운로드 성공** (버킷 public 확증)
+- [x] **1단계 마이그레이션 작성 및 적용** — `supabase/migrations/20260714_team_isolation_step1_anon_lockdown.sql`
+- [x] 적용 후 anon 재실측 → **전부 0건 차단 확인**
+- [x] 로그인 상태 기능 검증 (메인 곡 목록 / 검색 / 악보 뷰어 / 팀) — **4종 정상 동작**
+- [x] 사업 모델 재정의 (섹션 0 참조)
+- [x] 계획서 전면 갱신
 
-### 라이브 실측 결과 (⚠️ 다음 세션에서 재조사 불필요, 확증됨)
-- **anon(비로그인) 키로 `songs` 1,830곡 전량 + `song_sheets` 1,672건 전량이 그대로 읽힘.** `visibility='teams'` 곡도 예외 없이 노출. → 섹션 9의 "songs SELECT 전체공개" 알려진 이슈가 라이브로 확증됨. 필터링이 서버(RLS)가 아니라 브라우저 JS(`useSongSearch.ts`, `main/page.tsx fetchSongs`)에서만 돌고 있음.
-- **Storage 버킷(`sheetmusic`, `song-sheets`)이 public이라 file_url 직접 GET 시 HTTP 200.** RLS를 조여도 파일은 샌다 (public 버킷 URL은 RLS를 안 탐).
-- **songs 1,830곡은 이미 전량 `visibility='teams'`, is_hidden=false.** 데이터 전환은 절반 되어 있고 강제(enforcement)만 안 됨.
-- `teams`/`team_members`/`users` 등은 anon 차단 정상. **`shared_setlists`는 비로그인에 2건 읽히는 RLS 드리프트 버그** (마이그레이션 의도와 라이브 동작 불일치).
-- `song_sheets` 테이블은 코드에서 SELECT 0건 = 사실상 미사용. 실파일은 `songs.file_url`. song_sheets 1,672건은 샘플 전부 team_id/uploaded_by NULL (레거시 벌크 = 고아 데이터).
+### 🔑 원인 규명 — RLS 부재가 아니라 "쓰레기 PERMISSIVE 정책"이었다
 
-### 확정된 결정 (대표 결정 완료)
-1. **전환 범위: 전체공개 완전 폐지 (b안)** — 모든 곡을 팀 안으로, 전체공개 옵션 제거.
-2. **기존 1,809곡: 업로더 기준 팀 자동 귀속** (업로더·팀 없는 고아는 비공개 격리 후 재검수).
-3. **explore + shared_setlists 크로스팀 공유: 내 팀 스코프로 축소** (폐지 아님).
-4. **긴급 지혈은 전체 계획에 통합** (냉동 상태라 실사용자 리스크 낮음).
+PERMISSIVE 정책은 **OR로 합쳐진다.** `qual=true` 짜리 하나가 올바른 정책을 통째로 무력화하고 있었다.
+**올바른 팀 격리 정책(`songs_select`)과 헬퍼 함수(`get_user_team_ids`, `user_has_access_to_shared_song`)는
+이미 제대로 만들어져 있었다.** 쓰레기 정책만 지우니 그 즉시 작동했다.
 
-### 후속 파급 (계획서 5번 섹션)
-- Free 요금제("검색·미리보기·월 10곡")는 공용 풀 소멸로 성립 불가 → 재설계 필요.
-- 파트너 MoU "추천 워십팀 노출" 조항 무효화 → 재협의 필요.
-- 사업계획서/소개서의 "1,700곡+ 통합 검색" 서술 전면 갱신 필요.
+| 삭제한 정책 | 문제 |
+|---|---|
+| `songs` / `Enable read access for all users` | `qual=true`, `{public}` → **비로그인 포함 전원 전곡 개방** (핵심 원인) |
+| `songs` / `Authenticated users can view songs` | 로그인만 하면 전곡 개방 |
+| `song_sheets` / `Public sheets are viewable by everyone` | `visibility` 기본값이 `'public'` → 1,672건 전량 개방 |
+| `shared_setlists` / `shared_setlists_select` | `{public}` → 비로그인에게 공유 콘티 노출 |
+| `shared_setlist_comments` / `comments_select` | `qual=true`, `{public}` |
+| `song_likes` / `Users can view all likes` | `qual=true`, `{public}` |
+
+`songs.visibility` 기본값 `'public'` → `'teams'`, `song_sheets.visibility` → `'private'` 로 변경.
+**롤백 SQL은 마이그레이션 파일 하단에 주석으로 동봉되어 있다.**
+
+### 📊 확정된 데이터 사실 (⚠️ 재조사 불필요)
+
+- **`shared_with_teams`가 1,830곡 전부 동일하게 `{고페르}`.** → **팀 귀속은 이미 끝나 있다.**
+  **기존 계획의 "업로더 기준 팀 자동 귀속 스크립트"는 통째로 불필요.** 데이터 마이그레이션 0건.
+- 업로더는 딱 2명: **조민서(admin) 1,811곡**, zion Park 19곡.
+- 팀 3개: `고페르`(멤버 2) / `WORSHEEP 찬양팀`(데모, 멤버 9) / `대학1부`(멤버 0). 유저 11명 전원 active.
+- 파일 버킷 분포: `sheetmusic` 1,671건 / `song-sheets` 156건 / NULL 3건.
+- `song_sheets` 1,672건은 `team_id`·`uploaded_by` 전부 NULL인 고아 데이터. 코드에서 SELECT 0건 = 미사용.
+
+### 적용 후 가시성
+
+| 대상 | 곡 수 |
+|---|---|
+| 비로그인 | **0곡** ✅ |
+| 조민서 (admin) | 1,830곡 (`admin_songs_all` 경로) |
+| 고페르 멤버 (2명) | 1,830곡 |
+| WORSHEEP 찬양팀 (9명) | **0곡** ← 의도된 결과 (대표 확인 완료) |
+
+### ⚠️ 모델과 현재 구조가 충돌하는 지점 (다음 세션에서 처리)
+
+1. **곡의 99%를 운영자가 올렸다** (조민서 1,811곡). "팀이 자기 악보를 올린다"가 아니라
+   "운영자가 라이브러리를 구축했다"로 읽힐 여지가 크다.
+2. **`upload/page.tsx` 관리자 벌크 업로드 도구**가 남아 있다 → 운영자 직접 유통의 증거. 제거/봉인 필요.
+3. **업로드 UI의 '전체공개' 옵션이 이미 죽은 옵션이 됐다** (`main/page.tsx:159` 기본값 아직 `'public'`).
+   지금 '전체공개'로 올리면 업로더·admin 외 아무에게도 안 보인다 → 사용자에겐 버그로 보임. **우선 제거 대상.**
 
 ---
 
@@ -165,35 +213,62 @@
 
 ## 5. 다음에 할 일
 
-### 즉시 (다음 세션) — 팀 단위 공유 전환 (계획서: `docs/내부/팀단위공유_전환계획.md`)
-1. [ ] **[대표 직접] Supabase 대시보드에서 `pg_policies` 조회** — `songs`/`teams`/`team_members`/`shared_setlists`의 실제 배포된 RLS를 뽑아 마이그레이션 파일로 백필 (git에 없어서 착수 전 필수). 계획서 6번 0단계에 SQL 있음.
-2. [ ] **[대표 직접] Storage 버킷 public→private 전환** (`sheetmusic`, `song-sheets`)
-3. [ ] **지혈 1단계**: songs/song_sheets RLS anon 차단 + 로그인·팀 멤버십 기반 교체, shared_setlists 노출 버그 수정
-4. [ ] **파일 재배관 2단계**: `file_url`(전체 URL) → 경로만 저장 + 서명 URL 발급 API (`getPublicUrl()` 10곳 교체). 코드 변경량 최대.
-5. [ ] **데이터 3단계**: 업로더 기준 팀 자동 귀속 스크립트 + 고아 격리, RLS `status='active'` 통일, teams/join 서버 API화
-6. [ ] **UX 4단계**: 메인 팀 대시보드형, 검색 내 팀 스코프화, 업로드 전체공개 옵션 제거, explore 축소, 카피 수정
-7. [ ] **문서 5단계**: Free 요금제 재설계, 파트너 MoU 재협의, 사업계획서/소개서 갱신
+> 계획서 상세: `docs/내부/팀단위공유_전환계획.md` 6번 섹션 (A~E단계로 재작성됨)
+> **대표 결정: 레이아웃(A단계)을 먼저 잡고, 그 다음 파일 재배관(B단계)으로 간다.**
 
-> 참고: 위 1~2는 대표가 대시보드에서 직접 해야 하고, 이 세션의 Claude는 Supabase MCP 미연결이라 라이브 DB를 직접 못 고침. 이전에 있던 "users SELECT RLS 수정"도 이 전환 작업과 함께 처리 권장.
+### 🎯 A단계 — 레이아웃 / 사용 흐름 개편 (**다음 세션 착수 지점**)
 
-### 단기 (베타 기간)
-- [ ] 자동 저장 기능 추가 (15~30초 디바운스 + dirty flag)
-- [ ] 필기노트 검색/정렬 기능
-- [ ] page.tsx 거대 컴포넌트 분리 (3500줄+)
-- [ ] Next.js 미들웨어 추가
-- [ ] 중간 보안 항목 수정 (check-email Rate Limit, MIME 검증, invite_code 등)
-- [ ] 테스터 피드백 반영
+기존 기능은 전부 유지. 화면 구성과 동선만 팀 중심으로 바꾼다.
 
-### 장기 과제
-- [ ] AddPageModal 업로드 로직을 `useNotebooks.uploadNotebookFile`로 통합 리팩토링
-- [ ] `generateNotebookPDF` 래퍼 정리 — SheetMusicEditor에서 미사용 (generatePDFFromCanvas 직접 호출 중)
+1. [ ] **업로드 '전체공개' 옵션 제거** (`main/page.tsx:159` 기본값 `'public'` → `'teams'`)
+   — 이미 죽은 옵션이라 버그로 보임. **가장 먼저, 5분이면 됨.**
+2. [ ] **메인 페이지 팀 대시보드형 전환** (`src/app/[locale]/main/page.tsx`, 3,500줄+)
+   - 비로그인 → 검색바 없는 랜딩 + 로그인 CTA
+   - 로그인+팀 있음 → 팀 전환기 / 내 팀 악보함 / 다가오는 콘티
+   - 로그인+팀 없음 → "팀 만들기 / 초대코드로 참여" 온보딩
+   - 재사용 가능: `TeamSharedSection`, `fetchTeamSetlists`, `my-team` 빈 상태 패턴
+3. [ ] **검색을 "내 팀 악보함 내 검색"으로 스코프 축소** (`fetchSongs`의 전량 `.select('*')` 폐지)
+4. [ ] **관리자 벌크 업로드 도구 제거/봉인** (`upload/page.tsx`) — 운영자 직접 유통의 증거가 됨
+5. [ ] **explore / 커뮤니티 UI 정리** — RLS는 이미 내 팀 스코프로 좁혔으나 UI는 그대로. 노출/제거 결정 필요
+6. [ ] **카피 수정** — `messages/ko.json:198-200` "지금 바로 검색하세요", `:70-72` 온보딩 "악보 검색"
 
-### 중기
-- [ ] 악보 통합 관리 Phase 3 (song_sheets 활성화)
-- [ ] 관리자 페이지 서버 API 전환
-- [ ] sheetmusic 버킷 비공개 전환 (API Proxy 구축)
-- [ ] 디자이너와 UI/UX 리뉴얼
-- [ ] 파트너십 연락
+### 🔴 B단계 — 파일 재배관 (**모델의 성립 조건. A단계 직후 필수**)
+
+> **현재 Storage 버킷 `sheetmusic`/`song-sheets` 둘 다 `public: true`.**
+> RLS를 조여도 **file_url만 알면 로그인 없이 악보 파일이 받아진다** (HTTP 200 실측).
+> 만료도 없고 추적도 안 된다. **"팀끼리만 본다"는 모델의 논리가 여기서 깨진다.**
+
+7. [ ] `songs.file_url`(전체 URL, 1,827건) → 경로만 저장하도록 스키마 변경 + 백필
+8. [ ] `getPublicUrl()` **10곳** → 서버 발급 `createSignedUrl()` API 경유로 교체
+9. [ ] 버킷 private 전환 + `Public Access` / `sheetmusic_select_public` 정책 삭제
+10. [ ] Service Worker PDF 7일 캐시 축소 (`next.config.js`)
+
+### 🟠 C단계 — 팀 경계 마무리
+
+11. [ ] **`/api/teams/join` 서버 API 신설** → `teams_select_for_authenticated`(`qual=true`) 제거
+    - 지금은 로그인한 아무나 **모든 팀의 `invite_code`** 를 볼 수 있음
+    - 완화 요인: 가입은 `status:'pending'` + 리더 승인 필요 → 즉시 열람은 불가
+    - 별건: `invite_code` 생성이 `Math.random()` (`admin/approvals/page.tsx:115`) → `crypto`로 교체
+12. [ ] **`team_fixed_songs` 정책 3개 교체** — 팀 체크 없이 `auth.role()='authenticated'`만 검사 (30분)
+13. [ ] **`/api/songs/weekly-popular`** — 인증 0건 + service_role. 팀 스코프화 또는 폐지
+
+### 🟡 D단계 — `users` PII (저작권과 무관한 별건)
+
+14. [ ] **`users_select_authenticated`(`qual=true`) 교체** — 로그인한 아무나 전 회원의
+    **이메일·전화번호·실명·교회명** 조회 가능. 누구나 가입 가능하므로 실질 위험.
+    → "본인 + 같은 팀 active 멤버 + admin"으로 축소 (팀원 목록/관리자 페이지가 users를 조인하므로 주의)
+
+### 📄 E단계 — 코드 밖 (호스팅 사업자 포지션)
+
+15. [ ] 이용약관에 **업로드 권리 책임은 업로더에게** 명시
+16. [ ] 권리사 신고 시 **takedown 절차** 마련 + 반복 침해 팀 제재 규정
+17. [ ] 사업계획서/소개서의 "1,700곡+ 통합 검색" 서술 갱신, 파트너 MoU 재협의
+
+### 기타 (기존 백로그)
+- [ ] 자동 저장 (15~30초 디바운스 + dirty flag), 필기노트 검색/정렬
+- [ ] `main/page.tsx` 거대 컴포넌트 분리 (3,500줄+) — A단계와 함께 하면 효율적
+- [ ] Next.js 미들웨어 추가 (RLS를 고쳐서 심각도는 낮아짐)
+- [ ] check-email Rate Limit, my-page MIME 검증
 
 ---
 
@@ -254,6 +329,7 @@
 
 | 날짜 | 변경 |
 |------|------|
+| 2026-07-14 (2차) | **1단계 RLS 적용** — songs/song_sheets/shared_setlists/song_likes의 anon 개방 정책 삭제. 비로그인 유출 0건 확인. `songs.visibility` 기본값 `public`→`teams`. 사업모델 재정의(팀 폐쇄 공유) |
 | 2026-07-14 | 팀 단위 공유 전환 계획 수립 (계획만, 코드 미변경). anon 실측으로 songs/song_sheets 전량 노출 + 버킷 public 확증 |
 | 2026-03-13 | 비로그인 다운로드 제한 (PDF/PPT), 온보딩 가이드 개선 (WORSHEEP팀 안내 + ? 버튼) |
 | 2026-03-13 | 전체공개 곡 업로드 시 관리자 승인 필수 (is_hidden + upload_status 활용) |
@@ -293,20 +369,30 @@
 
 ---
 
-## 9. 알려진 이슈: RLS 문제
+## 9. 알려진 이슈: RLS
 
-현재 일부 Supabase 테이블에서 **클라이언트(anon key)의 CRUD가 RLS에 의해 차단**됨. 서버 API(service role key)로 우회 중:
+### 남아있는 유출 (다음 세션 처리 대상, 섹션 5 참조)
 
-| 테이블 | 문제 | 우회 방법 |
+| 대상 | 문제 | 단계 |
+|---|---|---|
+| **Storage 버킷 2개** | `public: true` → file_url만 알면 **로그인 없이 악보 파일 다운로드** (HTTP 200 실측) | B |
+| `teams` | `teams_select_for_authenticated`(`qual=true`) → 로그인한 아무나 **모든 팀 invite_code** 조회 | C |
+| `team_fixed_songs` | 팀 체크 없이 `auth.role()='authenticated'`만 → 남의 팀 고정곡 조작 가능 | C |
+| `/api/songs/weekly-popular` | 인증 체크 0건 + service_role (반환은 `{id, rank}`뿐이라 피해는 작음) | C |
+| `users` | `users_select_authenticated`(`qual=true`) → 로그인한 아무나 **전 회원 이메일·전화번호** 조회 | D |
+
+### 서버 API로 우회 중인 항목 (RLS가 클라이언트 CRUD를 막음)
+
+| 테이블 | 문제 | 우회 |
 |--------|------|-----------|
 | teams | INSERT/DELETE 차단 | `/api/teams/create`, `/api/teams/delete` |
 | team_members | INSERT 차단 | `/api/teams/join-demo` |
-| team_roles | INSERT/DELETE 차단 (트리거 포함) | service role 사용 |
+| team_roles | INSERT/DELETE 차단 (트리거 포함) | service role |
 | team_setlists | INSERT/DELETE 차단 | `/api/setlists/create`, `/api/setlists/delete` |
 | activity_logs | SELECT 차단 | `/api/songs/weekly-popular` |
 | users | UPDATE 차단 (세션 없는 경우) | `/api/auth/setup-user` |
 
-근본적 해결: RLS 정책 전면 점검 또는 모든 DB 작업을 서버 API로 전환
+> ✅ **해결됨**: "songs SELECT 전체공개" 이슈는 2026-07-14 1단계 마이그레이션으로 차단 완료.
 
 ---
 
@@ -316,12 +402,19 @@
 HANDOFF.md 읽어줘
 ```
 
-현재 상태:
-- **프로젝트 냉동 보존** (2026-04-11)
-- 저작권 문제 미해결로 서비스 일시 중단
-- 코드베이스는 i18n 마이그레이션 완료 상태로 보존
-- 연습실 플랫폼은 별도 프로젝트로 진행
-- 서비스 재개 시: 저작권 해결 후 AI 악보 변환(OMR) 플랫폼으로 피봇 검토
+**현재 상태 (2026-07-14 2차 세션 종료 시점)**
+- **냉동 해제.** 팀 단위 폐쇄 공유 모델로 전환 작업 중.
+- **모델**: 권리사 협상을 피하기 위해, 팀이 자기 악보를 올려 그 팀만 보는 구조. 운영자는 호스팅만.
+- **요금제**: 전부 무료 전제.
+- **1단계(anon 차단 RLS) 적용 완료** — 비로그인 유출 0건 확인.
+- **다음 착수: A단계 레이아웃/사용 흐름 개편** (섹션 5의 1~6번).
+- ⚠️ **Storage 버킷이 아직 public** — 파일은 여전히 URL로 새고 있음. A단계 끝나면 B단계 필수.
+
+### 다음 세션 착수 팁
+- **Supabase MCP가 이 프로젝트 경로에 미연결.** 붙이면 라이브 DB를 직접 쿼리/수정 가능:
+  `claude mcp add --transport http supabase https://mcp.supabase.com/mcp` → `/mcp`로 인증
+  (`~/.claude.json`에 옛 경로 `/Users/cho/Desktop/WORSHEEP`으로만 등록돼 있음)
+- MCP 없이도 **anon 키(`.env.local`)로 REST를 직접 호출해 유출 검증 가능** — 이번 세션에서 이 방법으로 실측했다.
 
 ---
 
