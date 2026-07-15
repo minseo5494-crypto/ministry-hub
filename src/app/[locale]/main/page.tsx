@@ -156,7 +156,7 @@ const initialNewSong: NewSongForm = {
   season: '',
   youtube_url: '',
   lyrics: '',
-  visibility: 'public',
+  visibility: 'teams', // 팀 단위 폐쇄 공유 모델. 전체 공개('public')는 AddSongModal에서 숨김 처리됨
   shared_with_teams: []
 }
 
@@ -1610,6 +1610,7 @@ export default function MainPage() {
       />
 
       <HeroSection
+        user={user}
         songs={songs}
         selectedSongs={selectedSongs}
         filters={filters}
@@ -1652,6 +1653,9 @@ export default function MainPage() {
         />
       )}
 
+      {/* 검색 / 곡 목록 영역 — 로그인 + 소속 팀이 있을 때만 노출 (팀 단위 폐쇄 공유) */}
+      {user && userTeams.length > 0 && (
+      <>
       <SelectedSongsBar
         user={user}
         selectedSongs={selectedSongs}
@@ -1753,6 +1757,8 @@ export default function MainPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modals */}
       <AddSongModal

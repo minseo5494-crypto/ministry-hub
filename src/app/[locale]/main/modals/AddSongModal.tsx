@@ -6,6 +6,11 @@ import { SEASONS, TIME_SIGNATURES, KEYS, TEMPOS } from '@/lib/constants'
 import { getBPMRangeFromTempo } from '@/lib/musicUtils'
 import { Song, ThemeCount, UserTeam, NewSongForm } from '../types'
 
+// 전체 공개 업로드 옵션 노출 여부.
+// 현재는 팀 단위 폐쇄 공유 모델이라 사용자에게 숨김. 권리사 협상 후 다시 true로 되살릴 수 있음.
+// (RLS도 'public' 경로를 막아둔 상태이므로, 이 값을 true로 되돌릴 때는 songs_select 정책도 함께 복원해야 함)
+const SHOW_PUBLIC_VISIBILITY_OPTION = false
+
 type AddSongModalProps = {
   isOpen: boolean
   newSong: NewSongForm
@@ -139,20 +144,22 @@ export default function AddSongModal({
               공유 범위 <span className="text-red-500">*</span>
             </label>
             <div className="space-y-2">
-              <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${newSong.visibility === 'public' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-                <input
-                  type="radio"
-                  name="visibility"
-                  value="public"
-                  checked={newSong.visibility === 'public'}
-                  onChange={() => setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })}
-                  className="mr-3 accent-blue-500"
-                />
-                <div>
-                  <div className={`font-medium ${newSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
-                  <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
-                </div>
-              </label>
+              {SHOW_PUBLIC_VISIBILITY_OPTION && (
+                <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${newSong.visibility === 'public' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="public"
+                    checked={newSong.visibility === 'public'}
+                    onChange={() => setNewSong({ ...newSong, visibility: 'public', shared_with_teams: [] })}
+                    className="mr-3 accent-blue-500"
+                  />
+                  <div>
+                    <div className={`font-medium ${newSong.visibility === 'public' ? 'text-blue-700' : 'text-gray-900'}`}>전체 공개</div>
+                    <div className="text-sm text-gray-500">모든 사용자가 이 곡을 볼 수 있습니다</div>
+                  </div>
+                </label>
+              )}
 
               <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition ${newSong.visibility === 'teams' ? 'border-violet-500 bg-violet-50' : 'border-gray-200 hover:bg-gray-50'}`}>
                 <input

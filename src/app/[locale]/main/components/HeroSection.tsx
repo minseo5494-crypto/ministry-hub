@@ -2,8 +2,9 @@
 
 import { useRef } from 'react'
 import Image from 'next/image'
-import { Search } from 'lucide-react'
-import { Song, Filters, UserTeam } from '../types'
+import { useRouter } from 'next/navigation'
+import { Search, Plus, UserPlus, Music, ListMusic, Users, Tv } from 'lucide-react'
+import { Song, Filters, UserTeam, User } from '../types'
 import StatsRow from './StatsRow'
 import { useTranslations } from 'next-intl'
 
@@ -22,6 +23,7 @@ type AISearchResult = {
 }
 
 type HeroSectionProps = {
+  user: User | null
   songs: Song[]
   selectedSongs: Song[]
   filters: Filters
@@ -37,7 +39,41 @@ type HeroSectionProps = {
   userTeams: UserTeam[]
 }
 
+// 양 캐릭터 + 제목을 감싸는 히어로 셸. 세 상태(비로그인/팀없음/팀있음)가 공유한다.
+function HeroShell({
+  title,
+  children
+}: {
+  title: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative bg-gradient-to-b from-gray-50 to-white pt-10 pb-6 md:pt-12 md:pb-8">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="text-center mb-8 md:mb-12 mt-3 md:mt-0 pt-[2px] md:pt-0">
+          <div className="w-28 h-28 md:w-36 md:h-36 mx-auto mb-2 pointer-events-none">
+            <Image
+              src="/images/inside.png"
+              alt="WORSHEEP 양 캐릭터"
+              width={160}
+              height={160}
+              className="object-contain"
+              style={{ width: '100%', height: '100%' }}
+              priority
+            />
+          </div>
+          <h1 className="text-2xl md:text-4xl font-normal text-gray-900 leading-tight md:leading-snug">
+            {title}
+          </h1>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function HeroSection({
+  user,
   songs,
   selectedSongs,
   filters,
@@ -53,9 +89,116 @@ export default function HeroSection({
   userTeams
 }: HeroSectionProps) {
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
   const t = useTranslations('main')
   const tc = useTranslations('common')
 
+  // 상태 1 — 비로그인: 검색바 없이 랜딩 + 서비스 소개 + 가입 유도.
+  // (팀 단위 폐쇄 공유 모델이라 비로그인에게 노출할 공개 검색이 존재하지 않는다)
+  if (!user) {
+    const features = [
+      { Icon: Music, title: t('landingFeature1Title'), desc: t('landingFeature1Desc'), color: 'text-violet-600 bg-violet-50' },
+      { Icon: ListMusic, title: t('landingFeature2Title'), desc: t('landingFeature2Desc'), color: 'text-indigo-600 bg-indigo-50' },
+      { Icon: Users, title: t('landingFeature3Title'), desc: t('landingFeature3Desc'), color: 'text-teal-600 bg-teal-50' },
+      { Icon: Tv, title: t('landingFeature4Title'), desc: t('landingFeature4Desc'), color: 'text-amber-600 bg-amber-50' },
+    ]
+    return (
+      <>
+        <HeroShell
+          title={t.rich('landingTitle', { bold: (chunks) => <span className="font-bold">{chunks}</span> })}
+        >
+          <p className="text-center text-gray-600 text-base md:text-lg max-w-xl mx-auto mb-8">
+            {t('landingSubtitle')}
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
+            <button
+              onClick={() => router.push('/login')}
+              className="w-full sm:w-auto px-8 py-3 bg-violet-500 text-white rounded-xl font-semibold hover:bg-violet-600 transition shadow-lg shadow-violet-500/20"
+              style={{ touchAction: 'manipulation' }}
+            >
+              {t('landingLogin')}
+            </button>
+            <button
+              onClick={() => router.push('/signup')}
+              className="w-full sm:w-auto px-8 py-3 bg-white text-violet-600 border border-violet-200 rounded-xl font-semibold hover:bg-violet-50 transition"
+              style={{ touchAction: 'manipulation' }}
+            >
+              {t('landingSignup')}
+            </button>
+          </div>
+        </HeroShell>
+
+        {/* 기능 소개 섹션 */}
+        <div className="bg-white py-14 md:py-20">
+          <div className="max-w-5xl mx-auto px-4">
+            <h2 className="text-center text-xl md:text-3xl font-bold text-gray-900 mb-10 md:mb-14">
+              {t('landingFeaturesTitle')}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
+              {features.map(({ Icon, title, desc, color }) => (
+                <div
+                  key={title}
+                  className="flex items-start gap-4 p-5 md:p-6 rounded-2xl border border-gray-100 bg-gray-50/60"
+                >
+                  <div className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
+                    <Icon size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{title}</h3>
+                    <p className="text-sm md:text-base text-gray-600 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 하단 CTA */}
+            <div className="text-center mt-12 md:mt-16">
+              <button
+                onClick={() => router.push('/signup')}
+                className="px-10 py-4 bg-violet-500 text-white rounded-xl font-bold text-lg hover:bg-violet-600 transition shadow-lg shadow-violet-500/20"
+                style={{ touchAction: 'manipulation' }}
+              >
+                {t('landingCTA')} →
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // 상태 2 — 로그인했지만 팀 없음: 검색 대신 팀 만들기/참여 온보딩.
+  if (userTeams.length === 0) {
+    return (
+      <HeroShell title={t('onboardingTitle')}>
+        <p className="text-center text-gray-600 text-base md:text-lg max-w-xl mx-auto mb-8">
+          {t('onboardingSubtitle')}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          <button
+            onClick={() => router.push('/teams/create')}
+            className="p-6 bg-white border-2 border-violet-200 rounded-xl hover:bg-violet-50 transition text-left"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <Plus className="w-8 h-8 text-violet-600 mb-3" />
+            <h3 className="font-bold text-lg text-gray-900 mb-1">{t('onboardingCreate')}</h3>
+            <p className="text-sm text-gray-600">{t('onboardingCreateDesc')}</p>
+          </button>
+          <button
+            onClick={() => router.push('/teams/join')}
+            className="p-6 bg-white border-2 border-teal-200 rounded-xl hover:bg-teal-50 transition text-left"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <UserPlus className="w-8 h-8 text-teal-600 mb-3" />
+            <h3 className="font-bold text-lg text-gray-900 mb-1">{t('onboardingJoin')}</h3>
+            <p className="text-sm text-gray-600">{t('onboardingJoinDesc')}</p>
+          </button>
+        </div>
+      </HeroShell>
+    )
+  }
+
+  // 상태 3 — 로그인 + 팀 있음: 기존 검색 히어로.
   return (
     <div className="relative bg-gradient-to-b from-gray-50 to-white pt-10 pb-6 md:pt-12 md:pb-8">
       <div className="max-w-7xl mx-auto px-4">
