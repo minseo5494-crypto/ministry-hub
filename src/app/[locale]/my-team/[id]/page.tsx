@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
 import { getCurrentUser } from '@/lib/auth'
 import { canEditSetlist } from '@/lib/teamOperations'
+import TeamCalendar from './components/TeamCalendar'
 import { logSetlistCreate, logSetlistView } from '@/lib/activityLogger'
 import {
   ArrowLeft, Plus, Calendar, FileText, Settings,
@@ -92,7 +93,7 @@ export default function TeamDetailPage() {
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'created'>('date_desc')
 
   // 탭 상태
-  const [activeTab, setActiveTab] = useState<'setlists' | 'songs'>('setlists')
+  const [activeTab, setActiveTab] = useState<'setlists' | 'songs' | 'calendar'>('setlists')
 
   // 삭제 확인 모달
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, setlistId: string, title: string}>({
@@ -1464,8 +1465,29 @@ export default function TeamDetailPage() {
               >
                 {t('songUsageTab')}
               </button>
+              <button
+                onClick={() => setActiveTab('calendar')}
+                className={`min-h-[44px] px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  activeTab === 'calendar'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('calendar.tab')}
+              </button>
             </div>
 
+            {activeTab === 'calendar' && (
+              <TeamCalendar
+                teamId={teamId}
+                currentUserId={user?.id}
+                isLeader={isTeamLeaderOrAdmin}
+                memberCount={team?.member_count ?? 0}
+              />
+            )}
+
+            {activeTab !== 'calendar' && (
+            <>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
               <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500">
                 {activeTab === 'setlists' ? t('setlistTab') : t('songUsageTab')}
@@ -1845,6 +1867,8 @@ export default function TeamDetailPage() {
                   ))}
                 </div>
               </>
+            )}
+            </>
             )}
           </section>
         </main>
