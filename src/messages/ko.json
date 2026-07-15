@@ -818,7 +818,8 @@
       "confirmDelete": "이 일정을 삭제할까요?",
       "titleRequired": "제목을 입력해주세요.",
       "linkedSetlist": "연결된 콘티",
-      "openSetlist": "콘티 열기"
+      "openSetlist": "콘티 열기",
+      "setlistBadge": "콘티"
     },
     "pageTitle": "My Team",
     "loading": "로딩 중...",

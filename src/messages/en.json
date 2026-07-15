@@ -818,7 +818,8 @@
       "confirmDelete": "Delete this event?",
       "titleRequired": "Please enter a title.",
       "linkedSetlist": "Linked setlist",
-      "openSetlist": "Open setlist"
+      "openSetlist": "Open setlist",
+      "setlistBadge": "Setlist"
     },
     "pageTitle": "My Team",
     "loading": "Loading...",

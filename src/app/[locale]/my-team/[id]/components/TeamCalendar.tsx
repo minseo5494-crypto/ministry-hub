@@ -18,7 +18,10 @@ type Props = {
 }
 
 type Member = { user_id: string; name: string }
-type SetlistOption = { id: string; title: string }
+type SetlistOption = { id: string; title: string; service_date: string | null }
+type AgendaItem =
+  | { kind: 'event'; event: TeamEvent }
+  | { kind: 'setlist'; setlist: SetlistOption }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -75,11 +78,11 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
 
       const { data: sl } = await supabase
         .from('team_setlists')
-        .select('id, title')
+        .select('id, title, service_date')
         .eq('team_id', teamId)
         .order('service_date', { ascending: false })
-        .limit(50)
-      setSetlists(((sl as any[]) ?? []).map((r) => ({ id: r.id, title: r.title })))
+        .limit(200)
+      setSetlists(((sl as any[]) ?? []).map((r) => ({ id: r.id, title: r.title, service_date: r.service_date })))
     })()
   }, [teamId])
 
@@ -113,16 +116,36 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
     return st
   }
 
-  // 목록 뷰용: 날짜별 그룹
+  const openSetlist = useCallback((setlistId: string) => {
+    router.push(`/my-team/${teamId}/setlist/${setlistId}`)
+  }, [router, teamId])
+
+  // 이미 일정에 연결된 콘티는 캘린더에 중복 표시하지 않는다
+  const linkedSetlistIds = useMemo(
+    () => new Set(events.filter((e) => e.setlist_id).map((e) => e.setlist_id as string)),
+    [events]
+  )
+
+  // service_date가 현재 조회 범위 안이고, 아직 일정에 연결 안 된 콘티
+  const setlistItems = useMemo(() => {
+    const lo = range.start.slice(0, 10)
+    const hi = range.end.slice(0, 10)
+    return setlists.filter(
+      (s) => s.service_date && s.service_date >= lo && s.service_date <= hi && !linkedSetlistIds.has(s.id)
+    )
+  }, [setlists, range, linkedSetlistIds])
+
+  // 목록 뷰용: 날짜별 그룹 (일정 + 콘티 병합)
   const grouped = useMemo(() => {
-    const map = new Map<string, TeamEvent[]>()
-    for (const ev of events) {
-      const key = ymd(new Date(ev.start_at))
+    const map = new Map<string, AgendaItem[]>()
+    const add = (key: string, item: AgendaItem) => {
       if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(ev)
+      map.get(key)!.push(item)
     }
+    for (const ev of events) add(ymd(new Date(ev.start_at)), { kind: 'event', event: ev })
+    for (const s of setlistItems) add(s.service_date as string, { kind: 'setlist', setlist: s })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [events])
+  }, [events, setlistItems])
 
   const myStatus: AttendanceStatus =
     attendance.find((a) => a.user_id === currentUserId)?.status ?? 'no_response'
@@ -171,7 +194,7 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
 
       {loading ? (
         <div className="text-center py-16 text-slate-400">···</div>
-      ) : events.length === 0 && view === 'agenda' ? (
+      ) : grouped.length === 0 && view === 'agenda' ? (
         <div className="text-center py-16">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4"><Clock className="text-slate-300" /></div>
           <p className="text-slate-500 font-medium">{t('noEvents')}</p>
@@ -180,7 +203,7 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
       ) : view === 'agenda' ? (
         /* ── 목록(아젠다) 뷰 ── */
         <div className="space-y-6">
-          {grouped.map(([dateKey, evs]) => {
+          {grouped.map(([dateKey, items]) => {
             const d = new Date(dateKey + 'T00:00:00')
             const isToday = dateKey === ymd(new Date())
             return (
@@ -192,21 +215,31 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
                   {isToday && <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-600 rounded-full">{t('today')}</span>}
                 </div>
                 <div className="space-y-2">
-                  {evs.map((ev) => (
-                    <button key={ev.id} onClick={() => openDetail(ev)} className="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-violet-200 hover:bg-violet-50/30 transition">
-                      <div className="flex items-start gap-3">
-                        <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-lg ${EVENT_TYPE_META[ev.event_type].colorClass}`}>{typeLabel(ev.event_type)}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-slate-800 truncate">{ev.title}</p>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
-                            <span className="flex items-center gap-1"><Clock size={13} /> {fmtTime(ev)}</span>
-                            {ev.location && <span className="flex items-center gap-1"><MapPin size={13} /> {ev.location}</span>}
-                            {ev.setlist_id && <span className="flex items-center gap-1 text-indigo-500"><FileText size={13} /> {t('linkedSetlist')}</span>}
+                  {items.map((item) =>
+                    item.kind === 'event' ? (
+                      <button key={`e-${item.event.id}`} onClick={() => openDetail(item.event)} className="w-full text-left p-4 rounded-xl border border-slate-100 hover:border-violet-200 hover:bg-violet-50/30 transition">
+                        <div className="flex items-start gap-3">
+                          <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-lg ${EVENT_TYPE_META[item.event.event_type].colorClass}`}>{typeLabel(item.event.event_type)}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-800 truncate">{item.event.title}</p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
+                              <span className="flex items-center gap-1"><Clock size={13} /> {fmtTime(item.event)}</span>
+                              {item.event.location && <span className="flex items-center gap-1"><MapPin size={13} /> {item.event.location}</span>}
+                              {item.event.setlist_id && <span className="flex items-center gap-1 text-indigo-500"><FileText size={13} /> {t('linkedSetlist')}</span>}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    ) : (
+                      <button key={`s-${item.setlist.id}`} onClick={() => openSetlist(item.setlist.id)} className="w-full text-left p-4 rounded-xl border border-indigo-100 bg-indigo-50/40 hover:bg-indigo-50 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-indigo-100 text-indigo-600 flex items-center gap-1"><FileText size={13} /> {t('setlistBadge')}</span>
+                          <p className="font-semibold text-slate-800 truncate flex-1">{item.setlist.title}</p>
+                          <ChevronRight size={16} className="text-indigo-400 shrink-0" />
+                        </div>
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
             )
@@ -214,7 +247,7 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
         </div>
       ) : (
         /* ── 월 그리드 뷰 ── */
-        <MonthGrid year={cursor.y} month={cursor.m} events={events} onSelect={openDetail} typeLabel={typeLabel} />
+        <MonthGrid year={cursor.y} month={cursor.m} events={events} setlists={setlistItems} onSelect={openDetail} onOpenSetlist={openSetlist} />
       )}
 
       {/* 생성/수정 모달 */}
@@ -317,12 +350,19 @@ export default function TeamCalendar({ teamId, currentUserId, isLeader, memberCo
   )
 }
 
-// 월 그리드
+// 월 그리드 — 일정 + 콘티 병합 표시
+type DayItem =
+  | { kind: 'event'; ev: TeamEvent }
+  | { kind: 'setlist'; id: string; title: string }
+
 function MonthGrid({
-  year, month, events, onSelect, typeLabel,
+  year, month, events, setlists, onSelect, onOpenSetlist,
 }: {
-  year: number; month: number; events: TeamEvent[]
-  onSelect: (ev: TeamEvent) => void; typeLabel: (tp: EventType) => string
+  year: number; month: number
+  events: TeamEvent[]
+  setlists: { id: string; title: string; service_date: string | null }[]
+  onSelect: (ev: TeamEvent) => void
+  onOpenSetlist: (id: string) => void
 }) {
   const first = new Date(year, month, 1)
   const startOffset = first.getDay()
@@ -332,12 +372,13 @@ function MonthGrid({
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const byDay = new Map<string, TeamEvent[]>()
-  for (const ev of events) {
-    const key = ymd(new Date(ev.start_at))
+  const byDay = new Map<string, DayItem[]>()
+  const add = (key: string, item: DayItem) => {
     if (!byDay.has(key)) byDay.set(key, [])
-    byDay.get(key)!.push(ev)
+    byDay.get(key)!.push(item)
   }
+  for (const ev of events) add(ymd(new Date(ev.start_at)), { kind: 'event', ev })
+  for (const s of setlists) if (s.service_date) add(s.service_date, { kind: 'setlist', id: s.id, title: s.title })
   const todayKey = ymd(new Date())
 
   return (
@@ -350,19 +391,25 @@ function MonthGrid({
       <div className="grid grid-cols-7 gap-px bg-slate-100 rounded-lg overflow-hidden">
         {cells.map((date, i) => {
           const key = date ? ymd(date) : `e${i}`
-          const dayEvents = date ? (byDay.get(key) ?? []) : []
+          const dayItems = date ? (byDay.get(key) ?? []) : []
           return (
             <div key={key} className={`min-h-[76px] bg-white p-1 ${date && key === todayKey ? 'ring-1 ring-inset ring-violet-300' : ''}`}>
               {date && (
                 <>
                   <div className={`text-xs mb-1 ${key === todayKey ? 'font-bold text-violet-600' : 'text-slate-400'}`}>{date.getDate()}</div>
                   <div className="space-y-0.5">
-                    {dayEvents.slice(0, 3).map((ev) => (
-                      <button key={ev.id} onClick={() => onSelect(ev)} className={`w-full truncate text-left text-[10px] px-1 py-0.5 rounded ${EVENT_TYPE_META[ev.event_type].colorClass}`}>
-                        {ev.title}
-                      </button>
-                    ))}
-                    {dayEvents.length > 3 && <div className="text-[10px] text-slate-400 px-1">+{dayEvents.length - 3}</div>}
+                    {dayItems.slice(0, 3).map((item) =>
+                      item.kind === 'event' ? (
+                        <button key={`e-${item.ev.id}`} onClick={() => onSelect(item.ev)} className={`w-full truncate text-left text-[10px] px-1 py-0.5 rounded ${EVENT_TYPE_META[item.ev.event_type].colorClass}`}>
+                          {item.ev.title}
+                        </button>
+                      ) : (
+                        <button key={`s-${item.id}`} onClick={() => onOpenSetlist(item.id)} className="w-full truncate text-left text-[10px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-600">
+                          📋 {item.title}
+                        </button>
+                      )
+                    )}
+                    {dayItems.length > 3 && <div className="text-[10px] text-slate-400 px-1">+{dayItems.length - 3}</div>}
                   </div>
                 </>
               )}
