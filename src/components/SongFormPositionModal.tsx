@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { X, ChevronLeft, ChevronRight, Trash2, Download } from 'lucide-react'
+import { toProxyUrl } from '@/lib/fileUrl'
 
 // 전역 타입 선언
 declare global {
@@ -248,7 +249,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             return
           }
 
-          const loadingTask = pdfjsLib.getDocument({ url: fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
+          const loadingTask = pdfjsLib.getDocument({ url: toProxyUrl(fileUrl), cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
           const pdf = await loadingTask.promise
 
           if (isCancelled) return
@@ -337,7 +338,7 @@ export default function SongFormPositionModal({ songs, songForms, onConfirm, onC
             setIsLoadingFile(false)
           }
 
-          img.src = fileUrl
+          img.src = toProxyUrl(fileUrl)
         }
 
       } catch (error) {

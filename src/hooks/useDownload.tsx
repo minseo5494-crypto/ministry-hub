@@ -11,6 +11,7 @@ import { DownloadProgress } from '@/components/DownloadLoadingModal'
 import { trackSongDownload } from '@/lib/analytics'
 import { supabase } from '@/lib/supabase'
 import { DownloadSong } from '@/types/downloadHistory'
+import { toProxyUrl } from '@/lib/fileUrl'
 
 // 모바일 기기 감지
 const isMobileDevice = () => {
@@ -676,7 +677,7 @@ export function useDownload({
     if (!song.file_url) return
 
     try {
-      const response = await fetch(song.file_url)
+      const response = await fetch(toProxyUrl(song.file_url))
       const blob = await response.blob()
 
       // 단일 곡이고 사용자 지정 파일명이 있으면 사용
@@ -1065,7 +1066,7 @@ export function useDownload({
       }
 
       img.onerror = () => reject(new Error('이미지 로드 실패'))
-      img.src = song.file_url!
+      img.src = toProxyUrl(song.file_url)
     })
   }
 
@@ -1079,7 +1080,7 @@ export function useDownload({
         throw new Error('PDF.js 라이브러리가 로드되지 않았습니다.')
       }
 
-      const loadingTask = pdfjsLib.getDocument({ url: song.file_url, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
+      const loadingTask = pdfjsLib.getDocument({ url: toProxyUrl(song.file_url), cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
       const pdf = await loadingTask.promise
       const pageCount = pdf.numPages
 

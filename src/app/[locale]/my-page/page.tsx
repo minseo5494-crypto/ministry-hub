@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
@@ -705,7 +706,7 @@ const handleTeamNameChange = (value: string) => {
         // pdfPageNumber가 없는 PDF sheet → 펼침 대상
         if (page.pageType === 'sheet' && page.fileType === 'pdf' && page.fileUrl && !page.pdfPageNumber && pdfjsLib) {
           try {
-            const pdfDoc = await pdfjsLib.getDocument({ url: page.fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
+            const pdfDoc = await pdfjsLib.getDocument({ url: toProxyUrl(page.fileUrl), cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
             const numPages = pdfDoc.numPages
             if (numPages > 1) {
               needsMigration = true
@@ -1623,7 +1624,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             </div>
                             {song.file_type === 'pdf' ? (
                               <iframe
-                                src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                                src={`${toProxyUrl(song.file_url)}#toolbar=0&navpanes=0&scrollbar=1`}
                                 className="w-full h-[500px] border border-slate-200 rounded-lg cursor-pointer"
                                 onDoubleClick={(e) => {
                                   e.stopPropagation()
@@ -1632,7 +1633,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                               />
                             ) : (
                               <img
-                                src={song.file_url}
+                                src={toProxyUrl(song.file_url)}
                                 alt={t('sheetMusicAlt', { name: song.song_name })}
                                 className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer"
                                 onDoubleClick={(e) => {
@@ -1785,7 +1786,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                             </div>
                             {song.file_type === 'pdf' ? (
                               <iframe
-                                src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                                src={`${toProxyUrl(song.file_url)}#toolbar=0&navpanes=0&scrollbar=1`}
                                 className="w-full h-[500px] border border-slate-200 rounded-lg cursor-pointer"
                                 onDoubleClick={(e) => {
                                   e.stopPropagation()
@@ -1794,7 +1795,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
                               />
                             ) : (
                               <img
-                                src={song.file_url}
+                                src={toProxyUrl(song.file_url)}
                                 alt={t('sheetMusicAlt', { name: song.song_name })}
                                 className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer"
                                 onDoubleClick={(e) => {
@@ -2224,7 +2225,7 @@ setNewSong({ ...newSong, tempo: tempoValue })
               try {
                 const pdfjsLib = (window as any).pdfjsLib
                 if (pdfjsLib) {
-                  const pdfDoc = await pdfjsLib.getDocument({ url: page.fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
+                  const pdfDoc = await pdfjsLib.getDocument({ url: toProxyUrl(page.fileUrl), cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' }).promise
                   const numPages = pdfDoc.numPages
                   if (numPages > 1) {
                     // N개 페이지로 펼침
@@ -3048,7 +3049,7 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   setSharing(true)
                   try {
                     // PDF 파일 가져오기
-                    const response = await fetch(shareNote.file_url)
+                    const response = await fetch(toProxyUrl(shareNote.file_url))
                     const blob = await response.blob()
                     const file = new File([blob], `${shareFileName.trim()}.pdf`, { type: 'application/pdf' })
 
@@ -3101,7 +3102,7 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   setSharing(true)
                   try {
                     // 이미지로 변환하여 공유
-                    const response = await fetch(shareNote.file_url)
+                    const response = await fetch(toProxyUrl(shareNote.file_url))
                     const blob = await response.blob()
 
                     // 이미지인 경우 그대로 사용
@@ -3164,7 +3165,7 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                     }
                     setSharing(true)
                     try {
-                      const response = await fetch(shareNote.file_url)
+                      const response = await fetch(toProxyUrl(shareNote.file_url))
                       const blob = await response.blob()
                       const url = window.URL.createObjectURL(blob)
                       const a = document.createElement('a')
@@ -3200,7 +3201,7 @@ className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                     }
                     setSharing(true)
                     try {
-                      const response = await fetch(shareNote.file_url)
+                      const response = await fetch(toProxyUrl(shareNote.file_url))
                       const blob = await response.blob()
                       const url = window.URL.createObjectURL(blob)
                       const a = document.createElement('a')

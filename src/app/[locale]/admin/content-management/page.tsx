@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -1843,7 +1844,7 @@ export default function ContentManagementPage() {
                       <div className="flex items-center gap-1 shrink-0">
                         {song.file_url && (
                           <a
-                            href={song.file_url}
+                            href={toProxyUrl(song.file_url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition"
@@ -1919,7 +1920,7 @@ export default function ContentManagementPage() {
                       {/* 악보 보기 */}
                       {song.file_url && (
                         <a
-                          href={song.file_url}
+                          href={toProxyUrl(song.file_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition"

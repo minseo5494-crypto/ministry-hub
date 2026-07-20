@@ -1,4 +1,5 @@
 import { loadKoreanFont } from './fontLoader'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { NotebookPage } from '@/types/notebook'
 
 // XSS 방어: HTML 이스케이프
@@ -240,7 +241,7 @@ export const generatePDF = async (options: PDFGenerateOptions) => {
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             // cache: 'no-store'로 캐시 무시, 네트워크 직접 요청
-            const response = await fetch(song.file_url, {
+            const response = await fetch(toProxyUrl(song.file_url), {
               cache: 'no-store',
               mode: 'cors',
             })
@@ -676,7 +677,7 @@ export const generatePDFFromCanvas = async (options: {
         // 캔버스 데이터 없는 곡 (송폼 미설정): 원본 파일에서 직접 PDF에 추가
         try {
           if (song.file_url) {
-            const response = await fetch(song.file_url)
+            const response = await fetch(toProxyUrl(song.file_url))
             const fileBytes = new Uint8Array(await response.arrayBuffer())
 
             if (song.file_type === 'pdf') {

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import getStroke from 'perfect-freehand'
+import { toProxyUrl } from '@/lib/fileUrl'
 
 // PDF.js 설정 (CMap + Standard Font)
 const PDFJS_CMAP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
@@ -602,7 +603,7 @@ export default function SheetMusicEditor({
 
         // PDF 문서 로드 (캐싱)
         if (!pdfDocRef.current) {
-          const loadingTask = pdfjsLib.getDocument({ url: effectiveFileUrl, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
+          const loadingTask = pdfjsLib.getDocument({ url: toProxyUrl(effectiveFileUrl), cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
           pdfDocRef.current = await loadingTask.promise
           if (isCancelled) return
           // notebookMode + pdfPageNumber → 각 항목이 1페이지만 표시
@@ -741,7 +742,7 @@ export default function SheetMusicEditor({
         setCanvasReady(true) // 이미 초기화된 경우에도 canvasReady 설정
       }
     }
-    img.src = effectiveFileUrl
+    img.src = toProxyUrl(effectiveFileUrl)
   }, [effectiveFileUrl, effectiveFileType, fitToScreen])
 
   // ===== notebookMode: blank/staff/upload 렌더링 =====
@@ -2168,7 +2169,7 @@ export default function SheetMusicEditor({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const pdfjsLib = (window as any).pdfjsLib
           if (pdfjsLib) {
-            pdfDoc = await pdfjsLib.getDocument({ url: song.file_url, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
+            pdfDoc = await pdfjsLib.getDocument({ url: toProxyUrl(song.file_url), cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
             songTotalPages = pdfDoc.numPages
           }
         }
@@ -2223,7 +2224,7 @@ export default function SheetMusicEditor({
             await new Promise<void>((resolve, reject) => {
               img.onload = () => resolve()
               img.onerror = reject
-              img.src = song.file_url
+              img.src = toProxyUrl(song.file_url)
             })
             let exportScale = isTouchExport ? 1 : 2
             const w = img.naturalWidth || img.width
@@ -3117,7 +3118,7 @@ export default function SheetMusicEditor({
             const pdfjsLib = (window as any).pdfjsLib
             if (pdfjsLib) {
               let pdfScale = isTouchExport ? 1.5 : 2
-              const pdfDoc = await pdfjsLib.getDocument({ url: song.file_url, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
+              const pdfDoc = await pdfjsLib.getDocument({ url: toProxyUrl(song.file_url), cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL }).promise
               const page = await pdfDoc.getPage(song.pdfPageNumber || 1)
               let viewport = page.getViewport({ scale: pdfScale })
               if (viewport.width > EXPORT_MAX_DIM || viewport.height > EXPORT_MAX_DIM) {
@@ -3144,7 +3145,7 @@ export default function SheetMusicEditor({
             await new Promise<void>((resolve, reject) => {
               img.onload = () => resolve()
               img.onerror = reject
-              img.src = song.file_url
+              img.src = toProxyUrl(song.file_url)
             })
             let exportScale = isTouchExport ? 1 : 2
             const w = img.naturalWidth || img.width
