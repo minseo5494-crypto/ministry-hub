@@ -7,6 +7,15 @@
 // 외부 라이브러리 없음. iOS 대응: AudioContext 는 재생(사용자 제스처) 시점에 생성/resume.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { sectionEnglishName } from '@/lib/songSection'
+
+const NUM_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+  'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+]
+function numberWord(n: number): string {
+  return NUM_WORDS[n] || String(n)
+}
 
 export interface GuideSection {
   label: string
@@ -46,7 +55,6 @@ interface BarPlan {
 
 const LOOKAHEAD_MS = 25 // 스케줄러 폴링 간격
 const SCHEDULE_AHEAD = 0.12 // 미리 스케줄할 시간(초)
-const CUE_LEAD_BEATS = 1 // 섹션 시작 몇 박 전에 음성 큐
 
 function parseBeatsPerBar(timeSignature: string | undefined, fallback = 4): number {
   if (!timeSignature) return fallback
@@ -69,7 +77,7 @@ function speak(text: string, lang: string) {
 }
 
 export function useClickTrack(options: UseClickTrackOptions) {
-  const { bpm, beatsPerBar, sections, countInBars, voiceCue, lang = 'ko-KR' } = options
+  const { bpm, beatsPerBar, sections, countInBars, voiceCue, lang = 'en-US' } = options
 
   const [state, setState] = useState<ClickTrackState>({
     isPlaying: false,
@@ -188,16 +196,17 @@ export function useClickTrack(options: UseClickTrackOptions) {
         setState((s) => (s.isPlaying ? { ...s, ...snapshot } : s))
       }, uiDelay)
 
-      // 섹션 음성 큐: 섹션 시작 CUE_LEAD_BEATS 박 전에 발화
+      // 음성 큐: 섹션이 바뀌기 직전 마디에서 "[섹션명] one, two, three, four" 카운트인.
+      // 1박: 다가올 섹션 영어명 + "one", 나머지 박: "two/three/four…" → 다음 마디 다운비트에 섹션 진입.
       if (voiceCue) {
-        const cueBeatIndex = beatIndex + CUE_LEAD_BEATS
-        const cueBarIndex = Math.floor(cueBeatIndex / beatsPerBar)
-        const cueBeatInBar = cueBeatIndex % beatsPerBar
-        const cueBar = plan[cueBarIndex]
-        if (cueBar && cueBar.isSectionStart && cueBeatInBar === 0) {
+        const nextBar = plan[barIndex + 1]
+        if (nextBar && nextBar.isSectionStart) {
           const cueDelay = Math.max(0, (noteTime - ctx.currentTime) * 1000)
-          const label = cueBar.label
-          setTimeout(() => speak(label, lang), cueDelay)
+          const text =
+            beatInBar === 0
+              ? `${sectionEnglishName(nextBar.label)} one`
+              : numberWord(beatInBar + 1)
+          setTimeout(() => speak(text, lang), cueDelay)
         }
       }
 

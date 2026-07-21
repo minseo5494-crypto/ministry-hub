@@ -246,7 +246,7 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
               style={{ minHeight: 44 }}
             >
               {voiceCue ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              음성 큐 {voiceCue ? 'ON' : 'OFF'}
+음성 카운트인 {voiceCue ? 'ON' : 'OFF'}
             </button>
           </div>
 
@@ -286,8 +286,9 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
           </div>
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            ※ BPM·박자표는 곡 정보에서 자동으로 채워집니다. 섹션별 마디 수는 나중에 코드악보 변환
-            기능과 연동되어 자동으로 채워질 예정입니다. (모바일은 재생 버튼을 눌러야 소리가 시작됩니다.)
+            ※ 섹션이 바뀌기 한 마디 전에 다음 섹션 이름(영어)과 &quot;one, two, three, four&quot; 카운트인이
+            음성으로 나옵니다. 섹션별 마디 수는 나중에 코드악보 변환 기능과 연동되어 자동으로 채워질 예정입니다.
+            (모바일은 재생 버튼을 눌러야 소리가 시작됩니다.)
           </p>
         </div>
       </div>

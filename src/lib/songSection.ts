@@ -69,3 +69,26 @@ const FAMILY_DEFAULT_BARS: Record<SectionFamily, number> = {
 export function defaultBarsFor(abbr: string): number {
   return FAMILY_DEFAULT_BARS[sectionFamily(abbr)]
 }
+
+// 계열별 영어 풀네임 (음성 큐용)
+const FAMILY_ENGLISH: Record<SectionFamily, string> = {
+  intro: 'Intro',
+  verse: 'Verse',
+  prechorus: 'Pre-Chorus',
+  chorus: 'Chorus',
+  bridge: 'Bridge',
+  interlude: 'Interlude',
+  tag: 'Tag',
+  outro: 'Outro',
+  default: '',
+}
+
+// 약어 → 영어 섹션명. 끝의 숫자는 보존(V1 → "Verse 1", C2 → "Chorus 2").
+export function sectionEnglishName(abbr: string): string {
+  const s = (abbr || '').trim()
+  if (!s) return ''
+  const numMatch = s.match(/(\d+)\s*$/)
+  const suffix = numMatch ? ` ${numMatch[1]}` : ''
+  const base = FAMILY_ENGLISH[sectionFamily(s)]
+  return base ? `${base}${suffix}` : s
+}
