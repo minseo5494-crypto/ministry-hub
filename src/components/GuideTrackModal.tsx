@@ -3,10 +3,11 @@
 // src/components/GuideTrackModal.tsx
 //
 // 클릭(가이드) 트랙 모달. 선택된 송폼(섹션 배열)을 가로 색상 타임라인으로 보여주고,
-// BPM·박자표에 맞춰 클릭 메트로놈을 재생한다. 섹션 진입 시 음성 큐, 재생 중 플레이헤드 이동.
+// BPM·박자표에 맞춰 클릭 메트로놈을 재생한다. 섹션 전환 시 음성 카운트인, 재생 중 플레이헤드 이동.
 //
-// 섹션별 "마디 수"는 사용자가 편집한다. (후속: 코드악보 변환[기능1] 결과로 자동 채움 — 연동 지점)
-// MVP: 앱 내 재생 + TTS 음성 큐. WAV 내보내기는 후속.
+// - 타임라인의 파트를 클릭하면 그 섹션 처음부터 재생(시크).
+// - 시작 시 2마디 리드인: 섹션명 → "one,two,three,four" → 섹션 진입.
+// - 섹션별 "마디 수"는 사용자가 편집. (후속: 코드악보 변환[기능1] 결과로 자동 채움)
 
 import { useMemo, useState } from 'react'
 import { X, Play, Square, Volume2, VolumeX } from 'lucide-react'
@@ -37,7 +38,6 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
   const [bpm, setBpm] = useState<number>(song.bpm && song.bpm > 0 ? song.bpm : 90)
   const [timeSignature, setTimeSignature] = useState<string>(song.time_signature || '4/4')
   const [sections, setSections] = useState<GuideSection[]>(() => sectionsFromForm(form))
-  const [countInBars, setCountInBars] = useState<number>(1)
   const [voiceCue, setVoiceCue] = useState<boolean>(true)
 
   const beatsPerBar = useMemo(() => parseBeatsPerBar(timeSignature), [timeSignature])
@@ -46,13 +46,7 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
     [sections]
   )
 
-  const { state, play, stop } = useClickTrack({
-    bpm,
-    beatsPerBar,
-    sections,
-    countInBars,
-    voiceCue,
-  })
+  const { state, play, stop } = useClickTrack({ bpm, beatsPerBar, sections, voiceCue })
 
   if (!isOpen) return null
 
@@ -62,12 +56,19 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
   const updateBars = (idx: number, bars: number) =>
     setSections((prev) => prev.map((s, i) => (i === idx ? { ...s, bars: Math.max(1, bars) } : s)))
 
-  // 재생 진행률(마디 기준, 카운트인 제외)
+  // 섹션 idx 앞까지 누적 마디 수
+  const cumBefore = (idx: number) =>
+    sections.slice(0, idx).reduce((s, x) => s + Math.max(0, Math.floor(x.bars)), 0)
+
+  // 재생 진행률(마디 기준)
   const playedBars =
-    state.isPlaying && !state.inCountIn
-      ? state.currentBar - countInBars - 1 + (state.currentBeat - 1) / beatsPerBar
+    state.isPlaying && !state.inLead && state.currentSectionIndex >= 0
+      ? cumBefore(state.currentSectionIndex) + (state.barInSection - 1) + (state.currentBeat - 1) / beatsPerBar
       : 0
   const progressPct = totalBars > 0 ? Math.min(100, Math.max(0, (playedBars / totalBars) * 100)) : 0
+
+  const currentBarNum =
+    state.currentSectionIndex >= 0 ? cumBefore(state.currentSectionIndex) + state.barInSection : 0
 
   return (
     <div
@@ -104,16 +105,16 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
         </div>
 
         <div className="p-5 space-y-5">
-          {/* 가로 타임라인 (송폼 색상 블록 + 플레이헤드) */}
+          {/* 가로 타임라인 (송폼 색상 블록 + 플레이헤드, 클릭 시 그 섹션부터 시작) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-sm font-semibold text-gray-700">송폼 타임라인</span>
               <span className="text-xs text-gray-400">
                 {state.isPlaying
-                  ? state.inCountIn
+                  ? state.inLead
                     ? '카운트인…'
-                    : `${currentSection?.label ?? ''} · ${Math.max(1, state.currentBar - countInBars)}/${totalBars}마디`
-                  : `총 ${totalBars}마디`}
+                    : `${currentSection?.label ?? ''} · ${currentBarNum}/${totalBars}마디`
+                  : '파트를 누르면 거기부터 재생'}
               </span>
             </div>
             <div className="relative w-full h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex">
@@ -122,26 +123,27 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
                 const widthPct = totalBars > 0 ? (Math.max(1, sec.bars) / totalBars) * 100 : 0
                 const active = state.isPlaying && state.currentSectionIndex === idx
                 return (
-                  <div
+                  <button
                     key={idx}
-                    className="relative h-full flex flex-col items-center justify-center overflow-hidden border-r border-white/40 last:border-r-0"
+                    onClick={() => play(idx)}
+                    className="relative h-full flex flex-col items-center justify-center overflow-hidden border-r border-white/40 last:border-r-0 hover:brightness-110 focus:outline-none focus:brightness-125"
                     style={{
                       width: `${widthPct}%`,
                       backgroundColor: style.hex,
                       opacity: active ? 1 : 0.82,
                       boxShadow: active ? 'inset 0 0 0 2px rgba(255,255,255,0.9)' : 'none',
                     }}
-                    title={`${sec.label} · ${sec.bars}마디`}
+                    title={`${sec.label} · ${sec.bars}마디 — 클릭하면 여기부터 재생`}
                   >
                     <span className="text-white text-xs font-bold drop-shadow truncate px-1 max-w-full">
                       {sec.label}
                     </span>
                     <span className="text-white/80 text-[10px] leading-none">{sec.bars}</span>
-                  </div>
+                  </button>
                 )
               })}
               {/* 플레이헤드 */}
-              {state.isPlaying && !state.inCountIn && (
+              {state.isPlaying && !state.inLead && (
                 <div
                   className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_4px_rgba(0,0,0,0.6)] pointer-events-none transition-[left] duration-75"
                   style={{ left: `${progressPct}%` }}
@@ -168,9 +170,9 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
             </div>
           )}
 
-          {/* 재생/정지 */}
+          {/* 재생/정지 (처음부터) */}
           <button
-            onClick={() => (state.isPlaying ? stop() : play())}
+            onClick={() => (state.isPlaying ? stop() : play(0))}
             disabled={totalBars === 0}
             className={`w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-white transition ${
               state.isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
@@ -183,7 +185,7 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
               </>
             ) : (
               <>
-                <Play className="w-5 h-5" /> 재생
+                <Play className="w-5 h-5" /> 처음부터 재생
               </>
             )}
           </button>
@@ -220,25 +222,11 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="text-xs font-medium text-gray-600">카운트인 (마디)</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={4}
-                value={countInBars}
-                disabled={disabled}
-                onChange={(e) => setCountInBars(Math.max(0, Math.min(4, Number(e.target.value) || 0)))}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
-                style={{ fontSize: 16 }}
-              />
-            </label>
             <button
               type="button"
               disabled={disabled}
               onClick={() => setVoiceCue((v) => !v)}
-              className={`mt-5 flex items-center justify-center gap-2 py-2 rounded-lg border transition ${
+              className={`col-span-2 flex items-center justify-center gap-2 py-2 rounded-lg border transition ${
                 voiceCue
                   ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
                   : 'bg-gray-50 border-gray-300 text-gray-500'
@@ -246,7 +234,7 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
               style={{ minHeight: 44 }}
             >
               {voiceCue ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-음성 카운트인 {voiceCue ? 'ON' : 'OFF'}
+              음성 카운트인 {voiceCue ? 'ON' : 'OFF'}
             </button>
           </div>
 
@@ -286,9 +274,9 @@ export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTr
           </div>
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            ※ 섹션이 바뀌기 한 마디 전에 다음 섹션 이름(영어)과 &quot;one, two, three, four&quot; 카운트인이
-            음성으로 나옵니다. 섹션별 마디 수는 나중에 코드악보 변환 기능과 연동되어 자동으로 채워질 예정입니다.
-            (모바일은 재생 버튼을 눌러야 소리가 시작됩니다.)
+            ※ 재생을 시작하면 2마디 리드인(섹션명 → &quot;one, two, three, four&quot;) 후 첫 섹션이 시작됩니다.
+            섹션이 바뀌기 한 마디 전에도 다음 섹션 이름과 카운트인이 음성으로 나옵니다. 타임라인의 파트를
+            누르면 그 섹션부터 재생됩니다. (모바일은 재생을 눌러야 소리가 시작됩니다.)
           </p>
         </div>
       </div>
