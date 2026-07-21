@@ -54,7 +54,8 @@ interface BarPlan {
 }
 
 const LOOKAHEAD_MS = 25 // 스케줄러 폴링 간격
-const SCHEDULE_AHEAD = 0.12 // 미리 스케줄할 시간(초)
+const SCHEDULE_AHEAD = 0.18 // 미리 스케줄할 시간(초)
+const SPEECH_LEAD = 0.12 // TTS 시작 지연 보정(초) — 음성 큐를 살짝 앞당김
 
 function parseBeatsPerBar(timeSignature: string | undefined, fallback = 4): number {
   if (!timeSignature) return fallback
@@ -196,17 +197,22 @@ export function useClickTrack(options: UseClickTrackOptions) {
         setState((s) => (s.isPlaying ? { ...s, ...snapshot } : s))
       }, uiDelay)
 
-      // 음성 큐: 섹션이 바뀌기 직전 마디에서 "[섹션명] one, two, three, four" 카운트인.
-      // 1박: 다가올 섹션 영어명 + "one", 나머지 박: "two/three/four…" → 다음 마디 다운비트에 섹션 진입.
+      // 음성 큐 (TTS 지연 보정 위해 SPEECH_LEAD 만큼 앞당겨 스케줄)
       if (voiceCue) {
-        const nextBar = plan[barIndex + 1]
-        if (nextBar && nextBar.isSectionStart) {
-          const cueDelay = Math.max(0, (noteTime - ctx.currentTime) * 1000)
-          const text =
-            beatInBar === 0
-              ? `${sectionEnglishName(nextBar.label)} one`
-              : numberWord(beatInBar + 1)
-          setTimeout(() => speak(text, lang), cueDelay)
+        const speechDelay = Math.max(0, (noteTime - ctx.currentTime - SPEECH_LEAD) * 1000)
+
+        // (1) 카운트인: 다음 마디가 섹션 시작이면 이 마디에서 one, two, three, four
+        const countBar = plan[barIndex + 1]
+        if (countBar && countBar.isSectionStart) {
+          const word = numberWord(beatInBar + 1)
+          setTimeout(() => speak(word, lang), speechDelay)
+        }
+
+        // (2) 섹션명: 카운트 "one"보다 한 박 먼저(= 카운트 마디 직전 마디의 마지막 박)에 announce
+        const sectionBar = plan[barIndex + 2]
+        if (sectionBar && sectionBar.isSectionStart && beatInBar === beatsPerBar - 1) {
+          const name = sectionEnglishName(sectionBar.label)
+          if (name) setTimeout(() => speak(name, lang), speechDelay)
         }
       }
 
