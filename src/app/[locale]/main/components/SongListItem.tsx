@@ -2,8 +2,10 @@
 
 import {
   Eye, EyeOff, Pencil, Youtube, Shield, UserPlus,
-  FileText, Presentation, Heart, NotebookPen, Users, Lock
+  FileText, Presentation, Heart, NotebookPen, Users, Lock, Music
 } from 'lucide-react'
+import { useState } from 'react'
+import GuideTrackModal from '@/components/GuideTrackModal'
 import ResponsiveImage from '@/components/ResponsiveImage'
 import AnnotatedPreview from '@/components/AnnotatedPreview'
 import { Song, SongWithNote } from '../types'
@@ -61,6 +63,7 @@ export default function SongListItem({
 }: SongListItemProps) {
   const t = useTranslations('main')
   const td = useTranslations('data')
+  const [showGuideTrack, setShowGuideTrack] = useState(false)
   const translateTempo = (name: string) => {
     const key = `tempo_${name}` as any
     return td.has(key) ? td(key) : name
@@ -237,6 +240,26 @@ export default function SongListItem({
           >
             <FileText size={16} className="md:w-[18px] md:h-[18px]" />
           </button>
+
+          {/* 클릭 가이드 트랙 버튼 */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowGuideTrack(true)
+            }}
+            className="p-1.5 md:p-2 text-purple-500 hover:bg-purple-100 rounded-lg transition-colors"
+            title="클릭 가이드 트랙"
+          >
+            <Music size={16} className="md:w-[18px] md:h-[18px]" />
+          </button>
+
+          {showGuideTrack && (
+            <GuideTrackModal
+              isOpen={showGuideTrack}
+              onClose={() => setShowGuideTrack(false)}
+              song={song}
+            />
+          )}
 
           {/* 유튜브 영상 토글 버튼 */}
           <button
