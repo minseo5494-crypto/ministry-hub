@@ -241,23 +241,33 @@ export default function SongListItem({
             <FileText size={16} className="md:w-[18px] md:h-[18px]" />
           </button>
 
-          {/* 클릭 가이드 트랙 버튼 */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowGuideTrack(true)
-            }}
-            className="p-1.5 md:p-2 text-purple-500 hover:bg-purple-100 rounded-lg transition-colors"
-            title="클릭 가이드 트랙"
-          >
-            <Music size={16} className="md:w-[18px] md:h-[18px]" />
-          </button>
+          {/* 클릭 가이드 트랙 버튼 — 송폼 선택 시에만 활성화 */}
+          {(() => {
+            const hasForm = (songForms[song.id]?.length || 0) > 0
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (hasForm) setShowGuideTrack(true)
+                }}
+                className={`p-1.5 md:p-2 rounded-lg transition-colors ${
+                  hasForm
+                    ? 'text-purple-500 hover:bg-purple-100 cursor-pointer'
+                    : 'text-gray-300 cursor-not-allowed'
+                }`}
+                title={hasForm ? '클릭 가이드 트랙' : '송폼을 선택하세요'}
+              >
+                <Music size={16} className="md:w-[18px] md:h-[18px]" />
+              </button>
+            )
+          })()}
 
           {showGuideTrack && (
             <GuideTrackModal
               isOpen={showGuideTrack}
               onClose={() => setShowGuideTrack(false)}
               song={song}
+              form={songForms[song.id] || []}
             />
           )}
 

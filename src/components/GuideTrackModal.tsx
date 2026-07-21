@@ -2,42 +2,41 @@
 
 // src/components/GuideTrackModal.tsx
 //
-// 클릭(가이드) 트랙 모달. 곡의 BPM·박자표를 받아 클릭 메트로놈을 재생하고,
-// 섹션(수동 입력) 진입 시 음성 큐를 낸다. 현재 마디/섹션을 표시한다.
-// (MVP: 앱 내 재생 + TTS 음성 큐. WAV 내보내기는 후속.)
+// 클릭(가이드) 트랙 모달. 선택된 송폼(섹션 배열)을 가로 색상 타임라인으로 보여주고,
+// BPM·박자표에 맞춰 클릭 메트로놈을 재생한다. 섹션 진입 시 음성 큐, 재생 중 플레이헤드 이동.
+//
+// 섹션별 "마디 수"는 사용자가 편집한다. (후속: 코드악보 변환[기능1] 결과로 자동 채움 — 연동 지점)
+// MVP: 앱 내 재생 + TTS 음성 큐. WAV 내보내기는 후속.
 
 import { useMemo, useState } from 'react'
-import { X, Play, Square, Plus, Trash2, ChevronUp, ChevronDown, Volume2, VolumeX } from 'lucide-react'
+import { X, Play, Square, Volume2, VolumeX } from 'lucide-react'
 import { useClickTrack, parseBeatsPerBar, GuideSection } from '@/hooks/useClickTrack'
+import { sectionStyle, defaultBarsFor } from '@/lib/songSection'
 
 interface GuideTrackSong {
   song_name?: string
   bpm?: number
   time_signature?: string
-  song_structure?: { [key: string]: string }
 }
 
 interface GuideTrackModalProps {
   isOpen: boolean
   onClose: () => void
   song: GuideTrackSong
+  /** 선택된 송폼(섹션 약어 배열). 예: ["I","V1","Pc","C","B"] */
+  form: string[]
 }
 
 const TIME_SIGNATURES = ['4/4', '3/4', '6/8', '2/4', '12/8']
-const PRESET_SECTIONS = ['인트로', '벌스', '프리코러스', '코러스', '브릿지', '간주', '아웃트로']
 
-function initialSections(song: GuideTrackSong): GuideSection[] {
-  const keys = song.song_structure ? Object.keys(song.song_structure) : []
-  if (keys.length > 0) {
-    return keys.map((k) => ({ label: k, bars: 8 }))
-  }
-  return [{ label: '벌스', bars: 8 }]
+function sectionsFromForm(form: string[]): GuideSection[] {
+  return form.map((abbr) => ({ label: abbr, bars: defaultBarsFor(abbr) }))
 }
 
-export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackModalProps) {
+export default function GuideTrackModal({ isOpen, onClose, song, form }: GuideTrackModalProps) {
   const [bpm, setBpm] = useState<number>(song.bpm && song.bpm > 0 ? song.bpm : 90)
   const [timeSignature, setTimeSignature] = useState<string>(song.time_signature || '4/4')
-  const [sections, setSections] = useState<GuideSection[]>(() => initialSections(song))
+  const [sections, setSections] = useState<GuideSection[]>(() => sectionsFromForm(form))
   const [countInBars, setCountInBars] = useState<number>(1)
   const [voiceCue, setVoiceCue] = useState<boolean>(true)
 
@@ -57,27 +56,18 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
 
   if (!isOpen) return null
 
-  // 재생 중 설정 변경 방지용
   const disabled = state.isPlaying
+  const currentSection = state.currentSectionIndex >= 0 ? sections[state.currentSectionIndex] : null
 
-  const updateSection = (idx: number, patch: Partial<GuideSection>) => {
-    setSections((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
-  }
-  const removeSection = (idx: number) => setSections((prev) => prev.filter((_, i) => i !== idx))
-  const addSection = (label = '') =>
-    setSections((prev) => [...prev, { label: label || '섹션', bars: 8 }])
-  const moveSection = (idx: number, dir: -1 | 1) => {
-    setSections((prev) => {
-      const next = [...prev]
-      const j = idx + dir
-      if (j < 0 || j >= next.length) return prev
-      ;[next[idx], next[j]] = [next[j], next[idx]]
-      return next
-    })
-  }
+  const updateBars = (idx: number, bars: number) =>
+    setSections((prev) => prev.map((s, i) => (i === idx ? { ...s, bars: Math.max(1, bars) } : s)))
 
-  const currentSection =
-    state.currentSectionIndex >= 0 ? sections[state.currentSectionIndex] : null
+  // 재생 진행률(마디 기준, 카운트인 제외)
+  const playedBars =
+    state.isPlaying && !state.inCountIn
+      ? state.currentBar - countInBars - 1 + (state.currentBeat - 1) / beatsPerBar
+      : 0
+  const progressPct = totalBars > 0 ? Math.min(100, Math.max(0, (playedBars / totalBars) * 100)) : 0
 
   return (
     <div
@@ -88,16 +78,16 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
       }}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{ touchAction: 'manipulation' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between rounded-t-2xl">
-          <div>
+        <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between rounded-t-2xl z-10">
+          <div className="min-w-0">
             <h3 className="text-lg font-bold text-gray-900">🎵 클릭 가이드 트랙</h3>
             {song.song_name && (
-              <p className="text-sm text-gray-500 truncate max-w-[20rem]">{song.song_name}</p>
+              <p className="text-sm text-gray-500 truncate max-w-[24rem]">{song.song_name}</p>
             )}
           </div>
           <button
@@ -114,41 +104,71 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
         </div>
 
         <div className="p-5 space-y-5">
-          {/* 재생 상태 표시 */}
-          <div className="rounded-xl bg-gray-900 text-white p-4 text-center">
-            {state.isPlaying ? (
-              <>
-                <div className="text-xs text-gray-400 mb-1">
-                  {state.inCountIn ? '카운트인' : currentSection?.label || '재생 중'}
-                </div>
-                <div className="text-3xl font-bold tabular-nums">
-                  {state.inCountIn ? '·' : `${state.currentBar - countInBars} / ${totalBars}`}
-                  <span className="text-base text-gray-400"> 마디</span>
-                </div>
-                {/* 박 표시 */}
-                <div className="flex items-center justify-center gap-2 mt-3">
-                  {Array.from({ length: beatsPerBar }).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`w-3 h-3 rounded-full transition-colors ${
-                        state.currentBeat === i + 1
-                          ? i === 0
-                            ? 'bg-red-400'
-                            : 'bg-green-400'
-                          : 'bg-gray-600'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-sm text-gray-300 py-2">
-                {bpm} BPM · {timeSignature} · 총 {totalBars}마디
-              </div>
-            )}
+          {/* 가로 타임라인 (송폼 색상 블록 + 플레이헤드) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-semibold text-gray-700">송폼 타임라인</span>
+              <span className="text-xs text-gray-400">
+                {state.isPlaying
+                  ? state.inCountIn
+                    ? '카운트인…'
+                    : `${currentSection?.label ?? ''} · ${Math.max(1, state.currentBar - countInBars)}/${totalBars}마디`
+                  : `총 ${totalBars}마디`}
+              </span>
+            </div>
+            <div className="relative w-full h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex">
+              {sections.map((sec, idx) => {
+                const style = sectionStyle(sec.label)
+                const widthPct = totalBars > 0 ? (Math.max(1, sec.bars) / totalBars) * 100 : 0
+                const active = state.isPlaying && state.currentSectionIndex === idx
+                return (
+                  <div
+                    key={idx}
+                    className="relative h-full flex flex-col items-center justify-center overflow-hidden border-r border-white/40 last:border-r-0"
+                    style={{
+                      width: `${widthPct}%`,
+                      backgroundColor: style.hex,
+                      opacity: active ? 1 : 0.82,
+                      boxShadow: active ? 'inset 0 0 0 2px rgba(255,255,255,0.9)' : 'none',
+                    }}
+                    title={`${sec.label} · ${sec.bars}마디`}
+                  >
+                    <span className="text-white text-xs font-bold drop-shadow truncate px-1 max-w-full">
+                      {sec.label}
+                    </span>
+                    <span className="text-white/80 text-[10px] leading-none">{sec.bars}</span>
+                  </div>
+                )
+              })}
+              {/* 플레이헤드 */}
+              {state.isPlaying && !state.inCountIn && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_4px_rgba(0,0,0,0.6)] pointer-events-none transition-[left] duration-75"
+                  style={{ left: `${progressPct}%` }}
+                />
+              )}
+            </div>
           </div>
 
-          {/* 재생/정지 버튼 */}
+          {/* 박 표시 */}
+          {state.isPlaying && (
+            <div className="flex items-center justify-center gap-2">
+              {Array.from({ length: beatsPerBar }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`w-3 h-3 rounded-full transition-colors ${
+                    state.currentBeat === i + 1
+                      ? i === 0
+                        ? 'bg-red-500'
+                        : 'bg-green-500'
+                      : 'bg-gray-300'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 재생/정지 */}
           <button
             onClick={() => (state.isPlaying ? stop() : play())}
             disabled={totalBars === 0}
@@ -219,7 +239,9 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
               disabled={disabled}
               onClick={() => setVoiceCue((v) => !v)}
               className={`mt-5 flex items-center justify-center gap-2 py-2 rounded-lg border transition ${
-                voiceCue ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-gray-50 border-gray-300 text-gray-500'
+                voiceCue
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : 'bg-gray-50 border-gray-300 text-gray-500'
               } disabled:opacity-50`}
               style={{ minHeight: 44 }}
             >
@@ -228,32 +250,23 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
             </button>
           </div>
 
-          {/* 섹션 편집 */}
+          {/* 섹션별 마디 수 편집 (송폼 순서) */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-gray-700">섹션 구성</span>
-              <span className="text-xs text-gray-400">총 {totalBars}마디</span>
+              <span className="text-sm font-semibold text-gray-700">섹션별 마디 수</span>
+              <span className="text-xs text-gray-400">송폼: {form.join('-')}</span>
             </div>
-
-            <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
               {sections.map((sec, idx) => {
-                const active = state.isPlaying && state.currentSectionIndex === idx
+                const style = sectionStyle(sec.label)
                 return (
                   <div
                     key={idx}
-                    className={`flex items-center gap-2 p-2 rounded-lg border ${
-                      active ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'
-                    }`}
+                    className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border border-gray-200"
                   >
-                    <input
-                      type="text"
-                      value={sec.label}
-                      disabled={disabled}
-                      onChange={(e) => updateSection(idx, { label: e.target.value })}
-                      placeholder="섹션 이름"
-                      className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded disabled:bg-gray-100"
-                      style={{ fontSize: 16 }}
-                    />
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${style.chip}`}>
+                      {sec.label}
+                    </span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -261,63 +274,20 @@ export default function GuideTrackModal({ isOpen, onClose, song }: GuideTrackMod
                       max={64}
                       value={sec.bars}
                       disabled={disabled}
-                      onChange={(e) => updateSection(idx, { bars: Math.max(1, Number(e.target.value) || 1) })}
-                      className="w-16 px-2 py-1.5 border border-gray-300 rounded text-center disabled:bg-gray-100"
+                      onChange={(e) => updateBars(idx, Number(e.target.value) || 1)}
+                      className="w-12 px-1.5 py-1 border border-gray-300 rounded text-center disabled:bg-gray-100"
                       style={{ fontSize: 16 }}
-                      aria-label="마디 수"
+                      aria-label={`${sec.label} 마디 수`}
                     />
-                    <span className="text-xs text-gray-400">마디</span>
-                    <div className="flex flex-col">
-                      <button
-                        onClick={() => moveSection(idx, -1)}
-                        disabled={disabled || idx === 0}
-                        className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                        aria-label="위로"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => moveSection(idx, 1)}
-                        disabled={disabled || idx === sections.length - 1}
-                        className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                        aria-label="아래로"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => removeSection(idx)}
-                      disabled={disabled}
-                      className="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30"
-                      aria-label="삭제"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 )
               })}
             </div>
-
-            {/* 프리셋 빠른 추가 */}
-            {!disabled && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {PRESET_SECTIONS.map((label) => (
-                  <button
-                    key={label}
-                    onClick={() => addSection(label)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700"
-                  >
-                    <Plus className="w-3 h-3" />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            ※ BPM·박자표는 곡 정보에서 자동으로 채워집니다. 섹션별 마디 수를 입력하면 해당 지점에서
-            음성으로 안내합니다. (모바일은 재생 버튼을 눌러야 소리가 시작됩니다.)
+            ※ BPM·박자표는 곡 정보에서 자동으로 채워집니다. 섹션별 마디 수는 나중에 코드악보 변환
+            기능과 연동되어 자동으로 채워질 예정입니다. (모바일은 재생 버튼을 눌러야 소리가 시작됩니다.)
           </p>
         </div>
       </div>
