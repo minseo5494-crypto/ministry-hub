@@ -19,13 +19,38 @@ import { supabase } from '@/lib/supabase'
 const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
 const PUBLIC_PREFIX = '/storage/v1/object/public/'
 
+// 프로젝트 ref (supabase-js 의 localStorage 세션 키 구성용)
+const PROJECT_REF = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname.split('.')[0]
+  } catch {
+    return ''
+  }
+})()
+const AUTH_STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`
+
 // 현재 세션 access token 을 메모리에 캐시 (동기 접근용).
 let cachedAccessToken: string | null = null
 
+// supabase-js 가 localStorage 에 저장한 세션에서 토큰을 동기적으로 읽는다.
+// (모듈 초기화 시점이나 getSession() async 해소 전의 레이스를 없애기 위함)
+function readTokenFromStorage(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed?.access_token ?? parsed?.currentSession?.access_token ?? null
+  } catch {
+    return null
+  }
+}
+
 if (typeof window !== 'undefined') {
-  // 초기 로드 시 세션 복원
+  // 초기 동기 로드(레이스 방지) + 비동기 세션 복원
+  cachedAccessToken = readTokenFromStorage()
   supabase.auth.getSession().then(({ data }) => {
-    cachedAccessToken = data.session?.access_token ?? null
+    cachedAccessToken = data.session?.access_token ?? cachedAccessToken
   })
   // 로그인/로그아웃/토큰 갱신 시 최신 토큰 유지
   supabase.auth.onAuthStateChange((_event, session) => {
@@ -56,8 +81,9 @@ export function parseStorageRef(fileUrl: string): StorageRef | null {
 /**
  * 저장된 스토리지 URL 을 프록시 URL(/api/files/<bucket>/<path>?token=...)로 변환한다.
  * - 스토리지 URL 이 아니면(youtube 등 외부 URL, 이미 프록시 URL) 그대로 반환.
- * - 토큰이 아직 없으면 원본 URL 을 그대로 반환(버킷 public 유지 중이므로 안전).
- *   ⚠️ 3단계 전환 시 이 fallback 제거 필요.
+ * - 토큰은 메모리 캐시 → localStorage 동기 읽기 순으로 확보한다. 토큰이 전혀 없으면
+ *   토큰 없이 프록시 URL 을 반환하고(프록시가 401 처리), 세션 로드 후 재렌더 시 붙는다.
+ *   (버킷 private 전환됨 → 원본 public URL fallback 은 죽은 링크이므로 사용하지 않는다.)
  *
  * ⚠️ 프래그먼트(#toolbar=0 등)는 이 함수가 붙이지 않는다. 호출부에서
  *    `toProxyUrl(url) + '#toolbar=0...'` 처럼 뒤에 붙일 것(쿼리 뒤 프래그먼트가 정상 순서).
@@ -69,8 +95,8 @@ export function toProxyUrl(fileUrl: string | null | undefined): string {
   const ref = parseStorageRef(fileUrl)
   if (!ref) return fileUrl // 외부 URL — 변환하지 않음
   const base = `/api/files/${ref.bucket}/${ref.encodedPath}`
-  if (!cachedAccessToken) return fileUrl // 토큰 미로드 — public URL 로 fallback
-  return `${base}?token=${encodeURIComponent(cachedAccessToken)}`
+  const token = cachedAccessToken || readTokenFromStorage()
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base
 }
 
 /** 서버에서 프록시 경로 후보의 원본 public URL 을 재구성한다(접근확인용 file_url 매칭). */
