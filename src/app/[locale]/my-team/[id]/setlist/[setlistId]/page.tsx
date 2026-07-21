@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 // 🆕 드래그 앤 드롭 라이브러리 추가
 import {
   DndContext,
@@ -341,12 +342,12 @@ function SortableSongItem({
               >
                 {song.songs.file_type === 'pdf' ? (
                   <iframe
-                    src={`${song.songs.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                    src={`${toProxyUrl(song.songs.file_url)}#toolbar=0&navpanes=0&scrollbar=1`}
                     className="w-full h-[700px] rounded-lg border border-gray-200 pointer-events-none"
                   />
                 ) : (
                   <img
-                    src={song.songs.file_url}
+                    src={toProxyUrl(song.songs.file_url)}
                     alt={`${song.songs.song_name} sheet`}
                     className="w-full h-auto rounded-lg border border-gray-200"
                   />

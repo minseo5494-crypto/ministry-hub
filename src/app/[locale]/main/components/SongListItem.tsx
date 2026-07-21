@@ -7,6 +7,7 @@ import {
 import ResponsiveImage from '@/components/ResponsiveImage'
 import AnnotatedPreview from '@/components/AnnotatedPreview'
 import { Song, SongWithNote } from '../types'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { useTranslations } from 'next-intl'
 
 type SongListItemProps = {
@@ -361,14 +362,14 @@ export default function SongListItem({
                   }}
                 >
                   <iframe
-                    src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                    src={`${toProxyUrl(song.file_url)}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
                     className="w-full h-full border sm:rounded pointer-events-none"
                   />
                   <div className="absolute inset-0" />
                 </div>
               ) : (
                 <ResponsiveImage
-                  src={song.file_url}
+                  src={toProxyUrl(song.file_url)}
                   alt={`${song.song_name} 악보`}
                   className="rounded shadow-sm cursor-pointer"
                   onDoubleClick={(e) => {

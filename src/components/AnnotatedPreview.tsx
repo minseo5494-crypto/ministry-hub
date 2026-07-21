@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import getStroke from 'perfect-freehand'
 import { PageAnnotation, Stroke, TextElement } from '@/lib/supabase'
+import { toProxyUrl } from '@/lib/fileUrl'
 
 interface AnnotatedPreviewProps {
   fileUrl: string
@@ -135,7 +136,7 @@ export default function AnnotatedPreview({
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve()
         img.onerror = () => reject(new Error('이미지 로드 실패'))
-        img.src = fileUrl
+        img.src = toProxyUrl(fileUrl)
       })
 
       // 에디터와 동일한 scaleFactor: 2 적용
@@ -192,7 +193,7 @@ export default function AnnotatedPreview({
 
       // PDF 문서 캐싱
       if (!pdfDocRef.current) {
-        const loadingTask = (window as any).pdfjsLib.getDocument({ url: fileUrl, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
+        const loadingTask = (window as any).pdfjsLib.getDocument({ url: toProxyUrl(fileUrl), cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true, standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/' })
         pdfDocRef.current = await loadingTask.promise
         setTotalPages(pdfDocRef.current.numPages)
       }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toProxyUrl } from '@/lib/fileUrl';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -237,7 +238,7 @@ export default function PersonalPage() {
                     <div className="flex gap-2">
                       {song.file_url && (
                         <a
-                          href={song.file_url}
+                          href={toProxyUrl(song.file_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100"

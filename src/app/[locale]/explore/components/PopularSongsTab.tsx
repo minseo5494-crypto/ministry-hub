@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { Loader2, TrendingUp, Heart, Youtube, Eye, EyeOff } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useWeeklyPopular } from '@/hooks/useWeeklyPopular'
@@ -253,14 +254,14 @@ export default function PopularSongsTab() {
                       }}
                     >
                       <iframe
-                        src={`${song.file_url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                        src={`${toProxyUrl(song.file_url)}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
                         className="w-full h-full border sm:rounded pointer-events-none"
                       />
                       <div className="absolute inset-0" />
                     </div>
                   ) : (
                     <ResponsiveImage
-                      src={song.file_url}
+                      src={toProxyUrl(song.file_url)}
                       alt={t('sheetAlt', { name: song.song_name })}
                       className="rounded shadow-sm cursor-pointer"
                       onDoubleClick={(e) => {

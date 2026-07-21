@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import getStroke from 'perfect-freehand'
 import { PageAnnotation, Stroke, TextElement } from '@/lib/supabase'
+import { toProxyUrl } from '@/lib/fileUrl'
 
 // PDF.js 설정 (CMap + Standard Font)
 const PDFJS_CMAP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
@@ -170,7 +171,7 @@ export default function SheetMusicViewer({
         }
 
         if (!pdfDocRef.current) {
-          const loadingTask = pdfjsLib.getDocument({ url: fileUrl, cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
+          const loadingTask = pdfjsLib.getDocument({ url: toProxyUrl(fileUrl), cMapUrl: PDFJS_CMAP_URL, cMapPacked: PDFJS_CMAP_PACKED, standardFontDataUrl: PDFJS_STANDARD_FONT_DATA_URL })
           pdfDocRef.current = await loadingTask.promise
           if (isCancelled) return
           setTotalPages(pdfDocRef.current.numPages)
@@ -279,7 +280,7 @@ export default function SheetMusicViewer({
         })
       }
     }
-    img.src = fileUrl
+    img.src = toProxyUrl(fileUrl)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileUrl, fileType, fitToScreen])
 

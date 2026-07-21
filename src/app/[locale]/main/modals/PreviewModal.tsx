@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useCallback } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { X, ChevronLeft, ChevronRight, Music, Maximize2 } from 'lucide-react'
 import { Song } from '../types'
 
@@ -90,13 +91,13 @@ export default function PreviewModal({
               <div className="p-4">
                 {song.file_type === 'pdf' ? (
                   <iframe
-                    src={`${song.file_url}#toolbar=0`}
+                    src={`${toProxyUrl(song.file_url)}#toolbar=0`}
                     className="w-full h-full min-h-[600px] border-0"
                     title={song.song_name}
                   />
                 ) : (
                   <img
-                    src={song.file_url}
+                    src={toProxyUrl(song.file_url)}
                     alt={song.song_name}
                     className="max-w-full h-auto mx-auto"
                   />

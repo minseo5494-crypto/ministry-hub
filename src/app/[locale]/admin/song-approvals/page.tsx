@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
@@ -403,7 +404,7 @@ export default function SongApprovalsPage() {
             <div className="p-6">
               {previewSong.file_url && (
                 <iframe
-                  src={previewSong.file_url}
+                  src={toProxyUrl(previewSong.file_url)}
                   className="w-full h-[600px] border rounded"
                 />
               )}

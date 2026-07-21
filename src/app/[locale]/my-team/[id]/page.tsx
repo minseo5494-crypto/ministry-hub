@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
@@ -519,7 +520,7 @@ export default function TeamDetailPage() {
         const song = fixedSong.song
         if (!song.file_url) continue
 
-        const response = await fetch(song.file_url)
+        const response = await fetch(toProxyUrl(song.file_url))
         const blob = await response.blob()
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
@@ -2238,13 +2239,13 @@ export default function TeamDetailPage() {
             <div className="p-4 overflow-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
               {previewFixedSong.song.file_type === 'pdf' ? (
                 <iframe
-                  src={`${previewFixedSong.song.file_url}#toolbar=0&navpanes=0&scrollbar=1`}
+                  src={`${toProxyUrl(previewFixedSong.song.file_url)}#toolbar=0&navpanes=0&scrollbar=1`}
                   className="w-full h-[70vh]"
                   title={previewFixedSong.song.song_name}
                 />
               ) : (
                 <img
-                  src={previewFixedSong.song.file_url}
+                  src={toProxyUrl(previewFixedSong.song.file_url)}
                   alt={previewFixedSong.song.song_name}
                   className="max-w-full mx-auto"
                 />

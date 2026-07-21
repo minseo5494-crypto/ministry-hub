@@ -1,6 +1,7 @@
 'use client'
 
 import { Eye, Pencil, Youtube, Shield, UserPlus } from 'lucide-react'
+import { toProxyUrl } from '@/lib/fileUrl'
 import ResponsiveImage from '@/components/ResponsiveImage'
 import { Song, ViewMode } from '../types'
 
@@ -110,7 +111,7 @@ export default function SongGridItem({
           )}
           {song.file_url && (
             <ResponsiveImage
-              src={song.file_url}
+              src={toProxyUrl(song.file_url)}
               alt={song.song_name}
               className="mt-2 rounded cursor-pointer"
               onDoubleClick={(e) => {
