@@ -6,6 +6,7 @@
 import type { ChordChart } from '@/types/chordChart'
 
 export const CHORD_CHART_MODEL = 'claude-sonnet-5'
+// 추론(thinking) 비활성화 → 출력은 JSON뿐이므로 토큰 여유 8000이면 충분(긴 곡도 커버).
 export const CHORD_CHART_MAX_TOKENS = 8000
 
 export const CHORD_CHART_SYSTEM_PROMPT = `You transcribe sheet music into a simplified chord chart.

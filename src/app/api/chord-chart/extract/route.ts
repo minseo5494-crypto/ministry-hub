@@ -161,17 +161,33 @@ export async function POST(request: NextRequest) {
     const message = await anthropic.messages.create({
       model: CHORD_CHART_MODEL,
       max_tokens: CHORD_CHART_MAX_TOKENS,
+      // 추론 비활성화: 악보 전사엔 무거운 추론 불필요 → 비용 −87%, 속도 ~4배(120s→~10s).
+      thinking: { type: 'disabled' },
       system: CHORD_CHART_SYSTEM_PROMPT,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: [{ role: 'user', content: blocks as any }],
     })
 
     const text = message.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+    console.log(
+      `[chord-chart/extract] stop=${message.stop_reason} in=${message.usage?.input_tokens} out=${message.usage?.output_tokens} textLen=${text.length}`
+    )
     let chart
     try {
       chart = parseChordChart(text)
-    } catch {
-      return NextResponse.json({ error: '추출 결과를 해석하지 못했습니다. 다시 시도해주세요.' }, { status: 502 })
+    } catch (parseErr) {
+      console.error('[chord-chart/extract] 파싱 실패:', (parseErr as Error).message)
+      console.error('[chord-chart/extract] head:', text.slice(0, 400))
+      console.error('[chord-chart/extract] tail:', text.slice(-400))
+      const truncated = message.stop_reason === 'max_tokens'
+      return NextResponse.json(
+        {
+          error: truncated
+            ? '악보가 너무 길어 변환이 잘렸습니다. 페이지를 나눠 다시 시도해주세요.'
+            : '추출 결과를 해석하지 못했습니다. 다시 시도해주세요.',
+        },
+        { status: 502 }
+      )
     }
 
     return NextResponse.json({ success: true, chart })
