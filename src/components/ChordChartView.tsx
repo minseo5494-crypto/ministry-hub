@@ -2,11 +2,12 @@
 
 // src/components/ChordChartView.tsx
 //
-// ChordChart(마디별 코드+가사)를 "싱잉기타" 스타일 마디 그리드로 렌더.
-// 한 줄에 bars_per_line(기본 4) 마디, 마디 위 코드 / 아래 가사 / 줄 시작에 마디번호 / 섹션 색상 tint.
+// ChordChart 렌더 — 두 가지 레이아웃 자동 선택:
+//  1) 섹션이 있는 곡(섹션 라벨 2개 이상): 섹션별 카드 + "코드 위/가사 아래" (가사 읽기 쉬움)
+//  2) 섹션이 없는 곡: 가로 선 + 마디 구분선(barline), 선 위 코드 / 선 아래 가사
 
 import type { ChordChart, ChordMeasure } from '@/types/chordChart'
-import { sectionStyle } from '@/lib/songSection'
+import { sectionStyle, sectionFamily } from '@/lib/songSection'
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -14,17 +15,40 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out
 }
 
-export default function ChordChartView({ chart }: { chart: ChordChart }) {
-  const perLine = Math.max(1, chart.bars_per_line || 4)
-  const rows = chunk(chart.measures, perLine)
-
-  // 섹션 carry-forward (라벨은 시작 마디에만 있으므로 이전 섹션을 이어받음)
-  let carry = ''
-  const effSection = new Map<number, string>()
-  for (const m of chart.measures) {
-    if (m.section) carry = m.section
-    effSection.set(m.index, carry)
+// 섹션명 → 짧은 배지 라벨 (Intro→I, Verse 1→V1, Pre-Chorus→Pc, Chorus→C …)
+function sectionAbbr(name: string): string {
+  const fam = sectionFamily(name)
+  const base: Record<string, string> = {
+    intro: 'I',
+    verse: 'V',
+    prechorus: 'Pc',
+    chorus: 'C',
+    bridge: 'B',
+    interlude: '간주',
+    tag: 'T',
+    outro: 'O',
+    default: '·',
   }
+  const num = name.match(/(\d+)/)?.[1] || ''
+  return (base[fam] || '·') + num
+}
+
+interface Grouped {
+  section: string
+  measures: ChordMeasure[]
+}
+
+export default function ChordChartView({ chart }: { chart: ChordChart }) {
+  const measures = chart.measures || []
+
+  // 섹션 carry-forward
+  let carry = ''
+  const withSec = measures.map((m) => {
+    if (m.section) carry = m.section
+    return { m, sec: carry }
+  })
+  const distinct = Array.from(new Set(withSec.map((x) => x.sec).filter(Boolean)))
+  const sectioned = distinct.length >= 2
 
   return (
     <div className="w-full">
@@ -32,62 +56,117 @@ export default function ChordChartView({ chart }: { chart: ChordChart }) {
       <div className="flex items-center gap-3 mb-3 text-sm text-gray-500">
         <span className="font-semibold text-gray-700">{chart.time_signature || '4/4'}</span>
         {chart.key && <span>Key: {chart.key}</span>}
-        <span>{chart.measures.length}마디</span>
+        <span>{measures.length}마디</span>
       </div>
 
-      <div className="border-t border-gray-300">
-        {rows.map((row, r) => (
-          <div key={r} className="flex border-b border-gray-300">
-            {row.map((m) => (
-              <MeasureCell key={m.index} m={m} section={effSection.get(m.index) || ''} />
-            ))}
-            {/* 마지막 줄이 덜 찼으면 빈 칸으로 균형 */}
-            {row.length < perLine &&
-              Array.from({ length: perLine - row.length }).map((_, i) => (
-                <div key={`pad-${i}`} className="flex-1 border-l border-gray-200" />
-              ))}
-          </div>
-        ))}
+      {sectioned ? <SectionedView withSec={withSec} /> : <LineView measures={measures} perLine={chart.bars_per_line || 4} />}
+    </div>
+  )
+}
+
+// ── 섹션 있는 곡: 섹션 카드 + 코드 위/가사 아래 ──────────────────────────
+function SectionedView({ withSec }: { withSec: { m: ChordMeasure; sec: string }[] }) {
+  // 연속 구간을 섹션 그룹으로 묶기
+  const groups: Grouped[] = []
+  for (const { m, sec } of withSec) {
+    const last = groups[groups.length - 1]
+    if (!last || last.section !== sec) {
+      groups.push({ section: sec, measures: [m] })
+    } else {
+      last.measures.push(m)
+    }
+  }
+
+  return (
+    <div>
+      {/* 섹션 순서 배지 */}
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {groups.map((g, i) => {
+          const style = sectionStyle(g.section)
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold border"
+              style={{ color: style.hex, borderColor: style.hex }}
+              title={g.section}
+            >
+              {sectionAbbr(g.section)}
+            </span>
+          )
+        })}
+      </div>
+
+      {/* 섹션 카드 (2열) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {groups.map((g, i) => {
+          const style = sectionStyle(g.section)
+          return (
+            <div key={i} className="rounded-xl border border-gray-200 overflow-hidden">
+              <div
+                className="flex items-center gap-2 px-3 py-2 border-b"
+                style={{ borderColor: `${style.hex}33`, backgroundColor: `${style.hex}0f` }}
+              >
+                <span
+                  className="inline-flex items-center justify-center min-w-6 h-6 px-1 rounded-full text-[11px] font-bold text-white"
+                  style={{ backgroundColor: style.hex }}
+                >
+                  {sectionAbbr(g.section)}
+                </span>
+                <span className="font-bold text-gray-800 text-sm">{g.section}</span>
+              </div>
+              <div className="p-3">
+                <div className="flex flex-wrap gap-x-3 gap-y-2">
+                  {g.measures.map((m, j) => (
+                    <div key={j} className="align-top">
+                      <div className="text-sm font-bold text-gray-900 leading-tight min-h-[1.1rem] whitespace-nowrap">
+                        {(m.chords || []).join('  ')}
+                      </div>
+                      <div className="text-[15px] text-gray-700 leading-snug whitespace-nowrap">
+                        {m.lyric || ' '}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function MeasureCell({ m, section }: { m: ChordMeasure; section: string }) {
-  const style = sectionStyle(section)
-  const isSectionStart = !!m.section
+// ── 섹션 없는 곡: 가로 선 + barline, 선 위 코드 / 선 아래 가사 ────────────
+function LineView({ measures, perLine }: { measures: ChordMeasure[]; perLine: number }) {
+  const rows = chunk(measures, Math.max(1, perLine))
   return (
-    <div
-      className="flex-1 min-w-0 border-l border-gray-300 px-1.5 pt-5 pb-2 relative"
-      style={{ backgroundColor: section ? `${style.hex}14` : undefined }}
-    >
-      {/* 마디 번호 */}
-      <span className="absolute top-0.5 left-1 text-[10px] text-gray-400 tabular-nums">{m.index}</span>
-
-      {/* 섹션 라벨(시작 마디에만) */}
-      {isSectionStart && (
-        <span
-          className={`absolute -top-0.5 right-1 text-[10px] font-bold px-1 rounded ${style.chip}`}
-        >
-          {m.section}
-        </span>
-      )}
-
-      {/* 반복/엔딩 표시 */}
-      {(m.repeat_start || m.repeat_end || m.ending) && (
-        <span className="absolute bottom-0.5 right-1 text-[10px] text-gray-500">
-          {m.repeat_start ? '‖:' : ''}
-          {m.ending ? ` ${m.ending}.` : ''}
-          {m.repeat_end ? ' :‖' : ''}
-        </span>
-      )}
-
-      {/* 코드 */}
-      <div className="min-h-[1.25rem] font-bold text-gray-900 text-sm leading-tight truncate">
-        {(m.chords || []).join('  ')}
-      </div>
-      {/* 가사 */}
-      <div className="min-h-[1rem] text-xs text-gray-600 leading-tight break-words">{m.lyric}</div>
+    <div className="space-y-5">
+      {rows.map((row, r) => (
+        <div key={r}>
+          {/* 코드 행 (아래 테두리 = 가로 선) */}
+          <div className="flex border-b-2 border-gray-500 border-r-2">
+            {row.map((m, i) => (
+              <div
+                key={i}
+                className="flex-1 min-w-0 border-l-2 border-gray-500 px-2 pb-1 min-h-[1.75rem] flex items-end"
+              >
+                <span className="text-sm font-bold text-gray-900 truncate">
+                  {(m.chords || []).join('  ')}
+                </span>
+              </div>
+            ))}
+            {/* 빈 칸 채우기 */}
+            {row.length < perLine &&
+              Array.from({ length: perLine - row.length }).map((_, i) => (
+                <div key={`p-${i}`} className="flex-1 border-l-2 border-gray-500" />
+              ))}
+          </div>
+          {/* 가사 행 */}
+          <div className="text-[15px] text-gray-700 leading-relaxed pl-2 pt-1 break-words">
+            {row.map((m) => m.lyric).filter(Boolean).join(' ') || ' '}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
