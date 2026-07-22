@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import getStroke from 'perfect-freehand'
 import { toProxyUrl } from '@/lib/fileUrl'
+import ChordChartPanel from '@/components/ChordChartPanel'
 
 // PDF.js 설정 (CMap + Standard Font)
 const PDFJS_CMAP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'
@@ -69,6 +70,9 @@ export default function SheetMusicEditor({
   fileType,
   songName,
   artistName,
+  songId,
+  bpm,
+  timeSignature,
   initialAnnotations = [],
   onSave,
   onClose,
@@ -102,6 +106,10 @@ export default function SheetMusicEditor({
   // ===== 보기/편집 모드 상태 =====
   const [editorMode, setEditorMode] = useState<'view' | 'edit'>(initialMode)
   const isViewMode = editorMode === 'view'
+  // 코드악보 오버레이(단일 곡 컨텍스트에서만)
+  const [showChordChart, setShowChordChart] = useState(false)
+  // 코드악보 집중 모드(탭 시 상단바 숨김)
+  const [chordFocus, setChordFocus] = useState(false)
   const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
   // ===== 보기 모드 전용: 툴바 숨기기 =====
@@ -3508,6 +3516,44 @@ export default function SheetMusicEditor({
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden ${'editor-light'} ${'bg-slate-100'}`}>
+      {/* ===== 코드악보 / 연주 모드 오버레이 ===== */}
+      {showChordChart && songId && (
+        <div className="fixed inset-0 z-[60] bg-white flex flex-col">
+          {/* 상단바 (집중 모드에선 숨김) */}
+          <div className={`h-14 border-b flex items-center gap-2 px-4 shrink-0 ${chordFocus ? 'hidden' : ''}`}>
+            <button
+              onClick={() => setShowChordChart(false)}
+              className="p-2 rounded-lg hover:bg-gray-100 flex items-center gap-1 text-gray-700"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+              <span className="text-sm font-medium">악보</span>
+            </button>
+            <h3 className="font-bold text-gray-900 truncate">🎼 코드악보</h3>
+            <span className="ml-auto text-xs text-gray-400 hidden sm:inline">화면을 탭하면 집중 모드</span>
+          </div>
+          {/* 내용 — 빈 영역 탭 시 상단바 토글(버튼/입력 제외) */}
+          <div
+            className="flex-1 overflow-y-auto p-4"
+            onClick={(e) => {
+              const t = e.target as HTMLElement
+              if (t.closest('button, input, select, textarea, a, [role="button"]')) return
+              setChordFocus((f) => !f)
+            }}
+          >
+            <ChordChartPanel
+              song={{
+                id: songId,
+                song_name: songName,
+                file_url: fileUrl,
+                bpm,
+                time_signature: timeSignature,
+              }}
+              form={songForms}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ===== 헤더 (새 디자인) ===== */}
       <header className={`h-9 md:h-16 border-b px-1.5 md:px-6 flex items-center justify-between z-50 overflow-hidden ${
         'bg-white/80 border-slate-200'
@@ -3647,6 +3693,21 @@ export default function SheetMusicEditor({
               <span className={`material-symbols-outlined ${isMobile ? 'text-sm' : 'text-base lg:text-lg'}`}>edit</span>
             </button>
           </div>
+
+          {/* 코드악보 탭 (단일 곡 컨텍스트) */}
+          {songId && (
+            <button
+              onClick={() => {
+                setChordFocus(false)
+                setShowChordChart(true)
+              }}
+              className={`${isMobile ? 'w-6 h-6' : 'px-2 lg:px-3 py-1 lg:py-1.5'} flex items-center justify-center gap-1 font-semibold rounded md:rounded-lg transition-all bg-teal-50 text-teal-700 hover:bg-teal-100`}
+              title="코드악보 / 연주 모드"
+            >
+              <span className={`material-symbols-outlined ${isMobile ? 'text-sm' : 'text-base lg:text-lg'}`}>queue_music</span>
+              {!isMobile && <span className="text-xs lg:text-sm">코드악보</span>}
+            </button>
+          )}
 
           <div className={`h-8 w-px mx-0.5 lg:mx-1 hidden md:block ${'bg-slate-200'}`} />
 

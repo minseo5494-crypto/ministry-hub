@@ -1904,6 +1904,9 @@ export default function MainPage() {
           fileUrl={editingSong.file_url}
           fileType={editingSong.file_type === 'pdf' ? 'pdf' : 'image'}
           songName={editingSong.song_name}
+          songId={(editingSong as SongWithNote).isNoteItem ? undefined : editingSong.id}
+          bpm={editingSong.bpm}
+          timeSignature={editingSong.time_signature}
           songForms={(editingSong as SongWithNote).noteSongForms || songForms[editingSong.id]}
           initialAnnotations={(editingSong as SongWithNote).noteAnnotations || []}
           initialMode={noteEditorMode}

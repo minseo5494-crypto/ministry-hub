@@ -108,6 +108,10 @@ export interface EditorProps {
   fileType: 'pdf' | 'image'
   songName: string
   artistName?: string
+  // 코드악보 탭용 (단일 곡 컨텍스트에서만 전달)
+  songId?: string
+  bpm?: number
+  timeSignature?: string
   initialAnnotations?: PageAnnotation[]
   onSave?: (annotations: PageAnnotation[], extra?: {
     songFormEnabled: boolean
