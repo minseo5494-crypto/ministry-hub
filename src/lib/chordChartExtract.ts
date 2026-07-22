@@ -35,9 +35,14 @@ Rules:
 - One entry per measure (bar). Preserve left-to-right, top-to-bottom order.
 - A measure may have 0, 1, or multiple chords. Keep chord spelling exactly as printed.
 - Put the lyric syllables/words that sit under that measure into "lyric". If a word spans measures, place it where it starts.
-- Only set "section" on the measure where the section label appears / where it clearly begins.
 - If you cannot read something, make your best guess but never invent chords from melody notes.
-- Return ONLY the JSON object.`
+- Return ONLY the JSON object.
+
+Section rules (important):
+- Every song is divided into sections. Set "section" ONLY on the first measure of each section.
+- Measure 1 ALWAYS begins a section — never leave the first section starting mid-song. The opening is usually "Intro" or "Verse 1".
+- Prefer printed section labels if the sheet shows them (Intro, Verse, Pre-Chorus, Chorus, Bridge, Tag, Outro, or Korean 인트로/절/후렴/브릿지). If no labels, infer boundaries from repeated chord progressions and returning lyrics: the recurring hook is the Chorus; changing narrative parts are Verses.
+- Typical worship-song order: Intro → Verse 1 → (Pre-Chorus) → Chorus → Verse 2 → Chorus → Bridge → Chorus/Outro. Use this as a guide, not a rule.`
 
 /** 모델 응답 텍스트에서 ChordChart JSON 을 파싱한다(코드펜스/앞뒤 텍스트 방어). */
 export function parseChordChart(text: string): ChordChart {
