@@ -22,6 +22,8 @@ interface ChordChartPlayerProps {
 export default function ChordChartPlayer({ chart, form, bpm: bpmProp, timeSignature }: ChordChartPlayerProps) {
   const [bpm, setBpm] = useState<number>(bpmProp && bpmProp > 0 ? bpmProp : 90)
   const [voiceCue, setVoiceCue] = useState(true)
+  const [subdivision, setSubdivision] = useState<1 | 2>(1)
+  const [accentBeats, setAccentBeats] = useState<number[]>([1])
 
   const beatsPerBar = useMemo(
     () => parseBeatsPerBar(timeSignature || chart.time_signature),
@@ -29,7 +31,18 @@ export default function ChordChartPlayer({ chart, form, bpm: bpmProp, timeSignat
   )
   const plan = useMemo(() => buildPlayPlan(form, chart), [form, chart])
 
-  const { state, play, stop } = useClickTrack({ bpm, beatsPerBar, sections: plan.sections, voiceCue })
+  const validAccents = useMemo(() => accentBeats.filter((b) => b <= beatsPerBar), [accentBeats, beatsPerBar])
+  const toggleAccent = (beat: number) =>
+    setAccentBeats((prev) => (prev.includes(beat) ? prev.filter((b) => b !== beat) : [...prev, beat].sort((a, b) => a - b)))
+
+  const { state, play, stop } = useClickTrack({
+    bpm,
+    beatsPerBar,
+    sections: plan.sections,
+    voiceCue,
+    subdivision,
+    accentBeats: validAccents,
+  })
 
   // 현재 재생 마디 → 코드악보 마디 인덱스
   const gbar =
@@ -105,6 +118,50 @@ export default function ChordChartPlayer({ chart, form, bpm: bpmProp, timeSignat
           ) : (
             <span className="truncate max-w-[16rem] inline-block align-bottom">{arrangement}</span>
           )}
+        </div>
+      </div>
+
+      {/* 세분 / 강세 */}
+      <div className="flex flex-wrap items-center gap-4 mb-4 text-sm">
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-500">클릭</span>
+          <div className="inline-flex p-0.5 bg-gray-100 rounded-lg font-medium">
+            {([1, 2] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSubdivision(s)}
+                disabled={disabled}
+                className={`px-2.5 py-1 rounded-md ${
+                  subdivision === s ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                } disabled:opacity-50`}
+              >
+                {s === 1 ? '♩ 4분' : '♪ 8분'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-500">강세</span>
+          <div className="flex gap-1">
+            {Array.from({ length: beatsPerBar }).map((_, i) => {
+              const beat = i + 1
+              const on = validAccents.includes(beat)
+              return (
+                <button
+                  key={beat}
+                  onClick={() => toggleAccent(beat)}
+                  disabled={disabled}
+                  className={`w-7 h-7 rounded-md text-xs font-bold ${
+                    on ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-500'
+                  } disabled:opacity-50`}
+                  title={`${beat}박 강세`}
+                >
+                  {beat}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 

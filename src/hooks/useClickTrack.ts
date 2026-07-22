@@ -31,7 +31,13 @@ export interface UseClickTrackOptions {
   voiceCue: boolean
   /** 음성 큐 언어 (기본 en-US) */
   lang?: string
+  /** 한 박 세분: 1=4분음표, 2=8분음표(박 사이 서브 클릭) (기본 1) */
+  subdivision?: number
+  /** 강세 줄 박(1-based). 기본 [1] (첫 박만 강세) */
+  accentBeats?: number[]
 }
+
+type ClickLevel = 'strong' | 'normal' | 'weak'
 
 export interface ClickTrackState {
   isPlaying: boolean
@@ -80,7 +86,7 @@ function speak(text: string, lang: string) {
 }
 
 export function useClickTrack(options: UseClickTrackOptions) {
-  const { bpm, beatsPerBar, sections, voiceCue, lang = 'en-US' } = options
+  const { bpm, beatsPerBar, sections, voiceCue, lang = 'en-US', subdivision = 1, accentBeats = [1] } = options
 
   const [state, setState] = useState<ClickTrackState>({
     isPlaying: false,
@@ -148,14 +154,16 @@ export function useClickTrack(options: UseClickTrackOptions) {
     }))
   }, [clearTimers])
 
-  const scheduleClick = useCallback((time: number, accent: boolean) => {
+  const scheduleClick = useCallback((time: number, level: ClickLevel) => {
     const ctx = audioCtxRef.current
     if (!ctx) return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
-    osc.frequency.value = accent ? 1600 : 1000
+    const freq = level === 'strong' ? 1600 : level === 'normal' ? 1000 : 800
+    const peak = level === 'strong' ? 0.9 : level === 'normal' ? 0.5 : 0.22
+    osc.frequency.value = freq
     gain.gain.setValueAtTime(0.0001, time)
-    gain.gain.exponentialRampToValueAtTime(accent ? 0.9 : 0.5, time + 0.001)
+    gain.gain.exponentialRampToValueAtTime(peak, time + 0.001)
     gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.05)
     osc.connect(gain)
     gain.connect(ctx.destination)
@@ -187,9 +195,13 @@ export function useClickTrack(options: UseClickTrackOptions) {
       const beatInBar = beatIndex % beatsPerBar
       const bar = plan[barIndex]
       const noteTime = nextNoteTimeRef.current
-      const accent = beatInBar === 0
+      const level: ClickLevel = accentBeats.includes(beatInBar + 1) ? 'strong' : 'normal'
 
-      scheduleClick(noteTime, accent)
+      scheduleClick(noteTime, level)
+      // 8분음표 세분: 박 사이(반 박)에 약한 서브 클릭
+      if (subdivision >= 2) {
+        scheduleClick(noteTime + secondsPerBeat / 2, 'weak')
+      }
 
       // UI 상태 업데이트
       const uiDelay = Math.max(0, (noteTime - ctx.currentTime) * 1000)
@@ -238,7 +250,7 @@ export function useClickTrack(options: UseClickTrackOptions) {
       nextNoteTimeRef.current += secondsPerBeat
       nextBeatIndexRef.current += 1
     }
-  }, [bpm, beatsPerBar, voiceCue, lang, scheduleClick, stop])
+  }, [bpm, beatsPerBar, voiceCue, lang, subdivision, accentBeats, scheduleClick, stop])
 
   const play = useCallback(
     (startIndex = 0) => {
