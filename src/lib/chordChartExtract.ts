@@ -38,11 +38,10 @@ Rules:
 - If you cannot read something, make your best guess but never invent chords from melody notes.
 - Return ONLY the JSON object.
 
-Section rules (important):
-- Every song is divided into sections. Set "section" ONLY on the first measure of each section.
-- Measure 1 ALWAYS begins a section — never leave the first section starting mid-song. The opening is usually "Intro" or "Verse 1".
-- Prefer printed section labels if the sheet shows them (Intro, Verse, Pre-Chorus, Chorus, Bridge, Tag, Outro, or Korean 인트로/절/후렴/브릿지). If no labels, infer boundaries from repeated chord progressions and returning lyrics: the recurring hook is the Chorus; changing narrative parts are Verses.
-- Typical worship-song order: Intro → Verse 1 → (Pre-Chorus) → Chorus → Verse 2 → Chorus → Bridge → Chorus/Outro. Use this as a guide, not a rule.`
+Section rules (strict — printed labels only):
+- Set "section" ONLY on a measure where a section label is actually PRINTED on the sheet — a visible text label or marker such as "Intro", "Verse", "Verse 1", "Pre-Chorus", "Chorus", "Bridge", "Tag", "Outro", "V1", "V2", "C", "B", or Korean 인트로/절/1절/2절/후렴/브릿지/간주/아웃트로. Put it on the measure where that printed label sits.
+- You MAY normalize the label to a clean form (e.g. "1절" → "Verse 1", "후렴" → "Chorus", "V1" → "Verse 1").
+- If the sheet does NOT print any section labels, leave "section" empty (omit the field) on EVERY measure. Do NOT infer, guess, or invent sections from musical structure, chord repetition, or lyrics. No printed label = no "section".`
 
 /** 모델 응답 텍스트에서 ChordChart JSON 을 파싱한다(코드펜스/앞뒤 텍스트 방어). */
 export function parseChordChart(text: string): ChordChart {

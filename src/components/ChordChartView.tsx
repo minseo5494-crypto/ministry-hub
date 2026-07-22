@@ -7,6 +7,7 @@
 // 선 아래에 가사를 "마디별 셀에 정렬". (섹션 라벨은 데이터엔 남지만 화면 미표시.)
 
 import type { ChordChart, ChordMeasure } from '@/types/chordChart'
+import { sectionStyle } from '@/lib/songSection'
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -42,8 +43,29 @@ function LineRow({ row, perLine }: { row: ChordMeasure[]; perLine: number }) {
   const cells: (ChordMeasure | null)[] = [...row]
   while (cells.length < perLine) cells.push(null)
 
+  // 이 줄에서 인쇄 섹션이 시작되는 마디가 있으면 라벨 행 표시
+  const hasSection = cells.some((m) => m?.section)
+
   return (
     <div>
+      {/* 섹션 라벨 행 (인쇄된 섹션이 시작되는 마디 위) */}
+      {hasSection && (
+        <div className="flex mb-0.5">
+          {cells.map((m, i) => (
+            <div key={i} className="flex-1 min-w-0 px-1.5">
+              {m?.section && (
+                <span
+                  className="inline-block text-[11px] font-bold px-1.5 py-0.5 rounded text-white truncate max-w-full"
+                  style={{ backgroundColor: sectionStyle(m.section).hex }}
+                >
+                  {m.section}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 코드 행 (아래 테두리 = 가로 선, 좌/우 끝 barline) */}
       <div className="flex border-b-2 border-gray-500 border-r-2">
         {cells.map((m, i) => {
