@@ -13,7 +13,7 @@ import { buildPlayPlan, globalBarIndex } from '@/lib/chordChartSections'
 import ChordChartView from '@/components/ChordChartView'
 
 interface ChordChartPlayerProps {
-  chart: ChordChart
+  chart: ChordChart | null
   form: string[]
   bpm?: number
   timeSignature?: string
@@ -26,8 +26,8 @@ export default function ChordChartPlayer({ chart, form, bpm: bpmProp, timeSignat
   const [accentBeats, setAccentBeats] = useState<number[]>([1])
 
   const beatsPerBar = useMemo(
-    () => parseBeatsPerBar(timeSignature || chart.time_signature),
-    [timeSignature, chart.time_signature]
+    () => parseBeatsPerBar(timeSignature || chart?.time_signature),
+    [timeSignature, chart?.time_signature]
   )
   const plan = useMemo(() => buildPlayPlan(form, chart), [form, chart])
 
@@ -171,8 +171,14 @@ export default function ChordChartPlayer({ chart, form, bpm: bpmProp, timeSignat
         </p>
       )}
 
-      {/* 코드악보 + 하이라이트 */}
-      <ChordChartView chart={chart} highlightPos={highlightPos >= 0 ? highlightPos : undefined} />
+      {/* 코드악보 + 하이라이트 (없으면 안내) */}
+      {chart ? (
+        <ChordChartView chart={chart} highlightPos={highlightPos >= 0 ? highlightPos : undefined} />
+      ) : (
+        <p className="text-sm text-gray-400 py-6 text-center">
+          코드악보 없이 클릭만 재생됩니다. 마디 하이라이트는 코드악보를 생성하면 표시됩니다.
+        </p>
+      )}
     </div>
   )
 }

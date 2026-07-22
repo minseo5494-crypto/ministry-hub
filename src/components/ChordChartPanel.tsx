@@ -150,44 +150,21 @@ export default function ChordChartPanel({
     )
   }
 
-  if (!chart) {
-    return (
-      <div className="text-center py-10">
-        <div className="text-4xl mb-3">🎼</div>
-        <p className="text-gray-600 mb-1 font-medium">악보를 코드악보로 변환합니다</p>
-        <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-          오선·음표를 걷어내고 마디별 코드와 가사만 남긴 간소화 악보를 AI가 생성합니다.
-          <br />
-          (수십 초 소요될 수 있습니다)
-        </p>
-        {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
-        {!song.file_url ? (
-          <p className="text-sm text-red-500">이 곡에는 변환할 악보 파일이 없습니다.</p>
-        ) : (
-          <button
-            onClick={extract}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl"
-            style={{ minHeight: 44 }}
-          >
-            <Sparkles className="w-5 h-5" /> 코드악보 생성
-          </button>
-        )}
-      </div>
-    )
-  }
+  // 차트 유무에 따라 탭 구성(차트 없으면 편집 제외, 연주는 클릭만)
+  const modes = chart ? (['chart', 'edit', 'play'] as const) : (['chart', 'play'] as const)
+  const effectiveMode = !chart && mode === 'edit' ? 'chart' : mode
 
-  // 결과
   return (
     <div>
-      {/* 액션 바: 코드악보/연주 토글 + 저장/다시생성 */}
+      {/* 액션 바: 탭 + 저장/다시생성 */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="inline-flex p-0.5 bg-gray-100 rounded-lg text-sm font-medium">
-          {(['chart', 'edit', 'play'] as const).map((m) => (
+          {modes.map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={`px-3 py-1.5 rounded-md ${
-                mode === m ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                effectiveMode === m ? 'bg-white shadow text-gray-900' : 'text-gray-500'
               }`}
             >
               {m === 'chart' ? '코드악보' : m === 'edit' ? '편집' : '▶ 연주 모드'}
@@ -195,38 +172,36 @@ export default function ChordChartPanel({
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
-          <button
-            onClick={save}
-            disabled={saving || saved}
-            className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold ${
-              saved ? 'bg-green-100 text-green-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            } disabled:opacity-70`}
-          >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : saved ? (
-              <Check className="w-4 h-4" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {saved ? '저장됨' : '저장'}
-          </button>
-          <button
-            onClick={extract}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-            title="다시 생성"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
-        </div>
+        {chart && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={save}
+              disabled={saving || saved}
+              className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold ${
+                saved ? 'bg-green-100 text-green-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              } disabled:opacity-70`}
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : saved ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {saved ? '저장됨' : '저장'}
+            </button>
+            <button onClick={extract} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600" title="다시 생성">
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
 
-      {mode === 'play' ? (
+      {effectiveMode === 'play' ? (
         <ChordChartPlayer chart={chart} form={form} bpm={song.bpm} timeSignature={song.time_signature} />
-      ) : mode === 'edit' ? (
+      ) : effectiveMode === 'edit' && chart ? (
         <ChordChartGridEditor
           key={chartVersion}
           chart={chart}
@@ -235,13 +210,37 @@ export default function ChordChartPanel({
             setSaved(false)
           }}
         />
-      ) : (
+      ) : chart ? (
         <ChordChartView chart={chart} />
+      ) : (
+        /* 코드악보 없음 → 생성 안내 */
+        <div className="text-center py-10">
+          <div className="text-4xl mb-3">🎼</div>
+          <p className="text-gray-600 mb-1 font-medium">악보를 코드악보로 변환합니다</p>
+          <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+            오선·음표를 걷어내고 마디별 코드와 가사만 남긴 간소화 악보를 AI가 생성합니다.
+            <br />
+            (수십 초 소요될 수 있습니다)
+          </p>
+          {!song.file_url ? (
+            <p className="text-sm text-red-500">이 곡에는 변환할 악보 파일이 없습니다.</p>
+          ) : (
+            <button
+              onClick={extract}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl"
+              style={{ minHeight: 44 }}
+            >
+              <Sparkles className="w-5 h-5" /> 코드악보 생성
+            </button>
+          )}
+        </div>
       )}
 
-      <p className="text-xs text-gray-400 mt-4 leading-relaxed">
-        ※ AI 추출 결과라 오류가 있을 수 있습니다. 저장하면 연주 모드(송폼 클릭)에서 재사용됩니다.
-      </p>
+      {chart && (
+        <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+          ※ AI 추출 결과라 오류가 있을 수 있습니다. 저장하면 연주 모드(송폼 클릭)에서 재사용됩니다.
+        </p>
+      )}
     </div>
   )
 }
