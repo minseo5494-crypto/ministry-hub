@@ -12,26 +12,32 @@ import { X, Sparkles, Loader2, RefreshCw, Save, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { ChordChart } from '@/types/chordChart'
 import ChordChartView from '@/components/ChordChartView'
+import ChordChartPlayer from '@/components/ChordChartPlayer'
 
 interface ChordChartSong {
   id: string
   song_name?: string
   file_url?: string
+  bpm?: number
+  time_signature?: string
 }
 
 interface ChordChartModalProps {
   isOpen: boolean
   onClose: () => void
   song: ChordChartSong
+  /** 선택된 송폼(진행 순서). 연주 모드에서 클릭 구성에 사용 */
+  form?: string[]
 }
 
-export default function ChordChartModal({ isOpen, onClose, song }: ChordChartModalProps) {
+export default function ChordChartModal({ isOpen, onClose, song, form = [] }: ChordChartModalProps) {
   const [loading, setLoading] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [chart, setChart] = useState<ChordChart | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'chart' | 'play'>('chart')
 
   // 열 때 저장된 코드악보 불러오기
   useEffect(() => {
@@ -248,7 +254,32 @@ export default function ChordChartModal({ isOpen, onClose, song }: ChordChartMod
           {/* 결과 */}
           {chart && !loading && (
             <>
-              <ChordChartView chart={chart} />
+              {/* 코드악보 / 연주 모드 토글 */}
+              <div className="inline-flex p-0.5 mb-3 bg-gray-100 rounded-lg text-sm font-medium">
+                {(['chart', 'play'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-3 py-1.5 rounded-md ${
+                      mode === m ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+                    }`}
+                  >
+                    {m === 'chart' ? '코드악보' : '▶ 연주 모드'}
+                  </button>
+                ))}
+              </div>
+
+              {mode === 'play' ? (
+                <ChordChartPlayer
+                  chart={chart}
+                  form={form}
+                  bpm={song.bpm}
+                  timeSignature={song.time_signature}
+                />
+              ) : (
+                <ChordChartView chart={chart} />
+              )}
+
               <p className="text-xs text-gray-400 mt-4 leading-relaxed">
                 ※ AI 추출 결과라 오류가 있을 수 있습니다. 저장하면 연주 모드(송폼 클릭)에서 재사용됩니다.
               </p>

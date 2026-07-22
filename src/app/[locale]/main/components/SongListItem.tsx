@@ -241,6 +241,7 @@ export default function SongListItem({
               isOpen={showChordChart}
               onClose={() => setShowChordChart(false)}
               song={song}
+              form={songForms[song.id] || []}
             />
           )}
 
