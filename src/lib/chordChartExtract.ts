@@ -33,8 +33,8 @@ interface ChordChart {
 
 Rules:
 - One entry per measure (bar). Preserve left-to-right, top-to-bottom order.
-- A measure may have 0, 1, or multiple chords. Keep chord spelling exactly as printed.
-- Put the lyric syllables/words that sit under that measure into "lyric". If a word spans measures, place it where it starts.
+- Capture EVERY chord symbol. A single measure often has MULTIPLE chords (chord changes on different beats) — include all of them in "chords", left-to-right in the order they appear within that measure. Do not collapse them to one. Keep chord spelling exactly as printed.
+- Put ONLY that measure's own lyric syllables into "lyric" — the words/syllables printed underneath that specific bar. Do not merge a whole phrase into one measure. Split the lyric across measures so each measure holds just the syllables sung during that bar (empty string if that bar has no lyric).
 - If you cannot read something, make your best guess but never invent chords from melody notes.
 - Return ONLY the JSON object.
 
