@@ -108,6 +108,8 @@ export default function SheetMusicEditor({
   const isViewMode = editorMode === 'view'
   // 코드악보 오버레이(단일 곡 컨텍스트에서만)
   const [showChordChart, setShowChordChart] = useState(false)
+  // 코드악보 집중 모드(탭 시 상단바 숨김)
+  const [chordFocus, setChordFocus] = useState(false)
   const prevToolRef = useRef<Tool>('pan')  // 모드 전환 시 이전 도구 저장
 
   // ===== 보기 모드 전용: 툴바 숨기기 =====
@@ -3517,7 +3519,8 @@ export default function SheetMusicEditor({
       {/* ===== 코드악보 / 연주 모드 오버레이 ===== */}
       {showChordChart && songId && (
         <div className="fixed inset-0 z-[60] bg-white flex flex-col">
-          <div className="h-14 border-b flex items-center gap-2 px-4 shrink-0">
+          {/* 상단바 (집중 모드에선 숨김) */}
+          <div className={`h-14 border-b flex items-center gap-2 px-4 shrink-0 ${chordFocus ? 'hidden' : ''}`}>
             <button
               onClick={() => setShowChordChart(false)}
               className="p-2 rounded-lg hover:bg-gray-100 flex items-center gap-1 text-gray-700"
@@ -3526,8 +3529,17 @@ export default function SheetMusicEditor({
               <span className="text-sm font-medium">악보</span>
             </button>
             <h3 className="font-bold text-gray-900 truncate">🎼 코드악보</h3>
+            <span className="ml-auto text-xs text-gray-400 hidden sm:inline">화면을 탭하면 집중 모드</span>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* 내용 — 빈 영역 탭 시 상단바 토글(버튼/입력 제외) */}
+          <div
+            className="flex-1 overflow-y-auto p-4"
+            onClick={(e) => {
+              const t = e.target as HTMLElement
+              if (t.closest('button, input, select, textarea, a, [role="button"]')) return
+              setChordFocus((f) => !f)
+            }}
+          >
             <ChordChartPanel
               song={{
                 id: songId,
@@ -3685,7 +3697,10 @@ export default function SheetMusicEditor({
           {/* 코드악보 탭 (단일 곡 컨텍스트) */}
           {songId && (
             <button
-              onClick={() => setShowChordChart(true)}
+              onClick={() => {
+                setChordFocus(false)
+                setShowChordChart(true)
+              }}
               className={`${isMobile ? 'w-6 h-6' : 'px-2 lg:px-3 py-1 lg:py-1.5'} flex items-center justify-center gap-1 font-semibold rounded md:rounded-lg transition-all bg-teal-50 text-teal-700 hover:bg-teal-100`}
               title="코드악보 / 연주 모드"
             >
