@@ -10,6 +10,7 @@
 import { useEffect, useRef } from 'react'
 import type { ChordChart, ChordMeasure } from '@/types/chordChart'
 import { sectionStyle } from '@/lib/songSection'
+import { parseBeatsPerBar } from '@/hooks/useClickTrack'
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -26,6 +27,7 @@ export default function ChordChartView({
 }) {
   const measures = chart.measures || []
   const perLine = Math.max(1, chart.bars_per_line || 4)
+  const beatsPerBar = parseBeatsPerBar(chart.time_signature)
   const rows = chunk(measures, perLine)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -47,7 +49,14 @@ export default function ChordChartView({
 
       <div className="space-y-4">
         {rows.map((row, r) => (
-          <LineRow key={r} row={row} perLine={perLine} baseIndex={r * perLine} highlightPos={highlightPos} />
+          <LineRow
+            key={r}
+            row={row}
+            perLine={perLine}
+            baseIndex={r * perLine}
+            highlightPos={highlightPos}
+            beatsPerBar={beatsPerBar}
+          />
         ))}
       </div>
     </div>
@@ -59,11 +68,13 @@ function LineRow({
   perLine,
   baseIndex,
   highlightPos,
+  beatsPerBar,
 }: {
   row: ChordMeasure[]
   perLine: number
   baseIndex: number
   highlightPos?: number
+  beatsPerBar: number
 }) {
   const cells: (ChordMeasure | null)[] = [...row]
   while (cells.length < perLine) cells.push(null)
@@ -104,20 +115,35 @@ function LineRow({
                 active ? 'bg-yellow-200' : ''
               }`}
             >
-              {chords.length > 0 && (
-                <div className="flex w-full items-end gap-1">
-                  {chords.map((c, j) => (
-                    <span
-                      key={j}
-                      className={`text-sm font-bold text-gray-900 truncate ${
-                        chords.length > 1 ? 'flex-1' : ''
-                      }`}
-                    >
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {chords.length > 0 &&
+                (m?.beats && m.beats.length === chords.length ? (
+                  // 박 위치로 표시
+                  <div className="relative w-full h-5">
+                    {chords.map((c, j) => (
+                      <span
+                        key={j}
+                        className="absolute bottom-0 text-sm font-bold text-gray-900 whitespace-nowrap"
+                        style={{ left: `${((Math.max(1, m.beats![j]) - 1) / beatsPerBar) * 100}%` }}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  // 박 정보 없으면 균등 분산
+                  <div className="flex w-full items-end gap-1">
+                    {chords.map((c, j) => (
+                      <span
+                        key={j}
+                        className={`text-sm font-bold text-gray-900 truncate ${
+                          chords.length > 1 ? 'flex-1' : ''
+                        }`}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                ))}
             </div>
           )
         })}

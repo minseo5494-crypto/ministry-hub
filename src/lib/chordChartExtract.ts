@@ -22,6 +22,8 @@ interface ChordChart {
   measures: {
     index: number;          // 1-based, in reading order (left→right, top→bottom).
     chords: string[];       // chord symbols in this measure, in order. [] if none.
+    beats?: number[];       // 1-based beat position of each chord within the measure,
+                            //   SAME length/order as chords (e.g. chords ["C","G"] beats [1,3]).
     lyric: string;          // lyrics under this measure, "" if none.
     section?: string;       // section name if a NEW section starts at this measure
                             //   (e.g. "Intro", "Verse 1", "Pre-Chorus", "Chorus", "Bridge", "Tag", "Outro").
@@ -34,6 +36,7 @@ interface ChordChart {
 Rules:
 - One entry per measure (bar). Preserve left-to-right, top-to-bottom order.
 - Capture EVERY chord symbol. A single measure often has MULTIPLE chords (chord changes on different beats) — include all of them in "chords", left-to-right in the order they appear within that measure. Do not collapse them to one. Keep chord spelling exactly as printed.
+- For each chord, also give its beat position within the measure in "beats" (1-based, same length and order as "chords"). Estimate the beat from where the chord sits horizontally over the bar: a chord at the start = beat 1; two chords splitting a 4/4 bar are usually beats 1 and 3. A single chord is beat 1.
 - Put ONLY that measure's own lyric syllables into "lyric" — the words/syllables printed underneath that specific bar. Do not merge a whole phrase into one measure. Split the lyric across measures so each measure holds just the syllables sung during that bar (empty string if that bar has no lyric).
 - If you cannot read something, make your best guess but never invent chords from melody notes.
 - Return ONLY the JSON object.
@@ -61,15 +64,23 @@ export function parseChordChart(text: string): ChordChart {
     throw new Error('ChordChart 형식이 아님(measures 없음)')
   }
   // 최소 정규화
-  const measures = parsed.measures.map((m: Record<string, unknown>, i: number) => ({
+  const measures = parsed.measures.map((m: Record<string, unknown>, i: number) => {
+    const chords = Array.isArray(m.chords) ? m.chords.map((c) => String(c)) : []
+    const beats =
+      Array.isArray(m.beats) && m.beats.length === chords.length
+        ? m.beats.map((b) => Number(b)).filter((b) => Number.isFinite(b))
+        : undefined
+    return {
     index: typeof m.index === 'number' ? m.index : i + 1,
-    chords: Array.isArray(m.chords) ? m.chords.map((c) => String(c)) : [],
+    chords,
+    ...(beats && beats.length === chords.length ? { beats } : {}),
     lyric: typeof m.lyric === 'string' ? m.lyric : '',
     ...(m.section ? { section: String(m.section) } : {}),
     ...(m.repeat_start ? { repeat_start: true } : {}),
     ...(m.repeat_end ? { repeat_end: true } : {}),
     ...(typeof m.ending === 'number' ? { ending: m.ending } : {}),
-  }))
+    }
+  })
   return {
     time_signature: typeof parsed.time_signature === 'string' ? parsed.time_signature : '4/4',
     ...(parsed.key ? { key: String(parsed.key) } : {}),
