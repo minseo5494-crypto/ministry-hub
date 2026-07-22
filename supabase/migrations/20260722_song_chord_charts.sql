@@ -11,7 +11,8 @@ create table if not exists public.song_chord_charts (
   generated_by text not null default 'ai' check (generated_by in ('ai', 'manual')),
   created_by uuid,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (song_id)  -- 곡당 코드악보 1개 (upsert on conflict song_id)
 );
 
 create index if not exists idx_song_chord_charts_song on public.song_chord_charts (song_id);
