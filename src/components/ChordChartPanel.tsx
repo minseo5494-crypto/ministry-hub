@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase'
 import type { ChordChart } from '@/types/chordChart'
 import ChordChartView from '@/components/ChordChartView'
 import ChordChartPlayer from '@/components/ChordChartPlayer'
-import ChordChartEditor from '@/components/ChordChartEditor'
+import ChordChartGridEditor from '@/components/ChordChartGridEditor'
 
 export interface ChordChartPanelSong {
   id: string
@@ -227,7 +227,7 @@ export default function ChordChartPanel({
       {mode === 'play' ? (
         <ChordChartPlayer chart={chart} form={form} bpm={song.bpm} timeSignature={song.time_signature} />
       ) : mode === 'edit' ? (
-        <ChordChartEditor
+        <ChordChartGridEditor
           key={chartVersion}
           chart={chart}
           onChange={(c) => {
