@@ -2,10 +2,9 @@
 
 import {
   Eye, EyeOff, Pencil, Youtube, Shield, UserPlus,
-  FileText, Presentation, Heart, NotebookPen, Users, Lock, ListMusic, Music
+  FileText, Presentation, Heart, NotebookPen, Users, Lock, Music
 } from 'lucide-react'
 import { useState } from 'react'
-import ChordChartModal from '@/components/ChordChartModal'
 import GuideTrackModal from '@/components/GuideTrackModal'
 import ResponsiveImage from '@/components/ResponsiveImage'
 import AnnotatedPreview from '@/components/AnnotatedPreview'
@@ -64,7 +63,6 @@ export default function SongListItem({
 }: SongListItemProps) {
   const t = useTranslations('main')
   const td = useTranslations('data')
-  const [showChordChart, setShowChordChart] = useState(false)
   const [showGuideTrack, setShowGuideTrack] = useState(false)
   const translateTempo = (name: string) => {
     const key = `tempo_${name}` as any
@@ -221,28 +219,6 @@ export default function SongListItem({
             >
               <Presentation size={18} />
             </button>
-          )}
-
-          {/* 코드악보 변환 */}
-          {song.file_url && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowChordChart(true)
-              }}
-              className="p-2 text-teal-600 hover:bg-teal-100 rounded-lg"
-              title="코드악보 변환"
-            >
-              <ListMusic size={18} />
-            </button>
-          )}
-          {showChordChart && (
-            <ChordChartModal
-              isOpen={showChordChart}
-              onClose={() => setShowChordChart(false)}
-              song={song}
-              form={songForms[song.id] || []}
-            />
           )}
 
           {/* 가사 보기 버튼 */}
