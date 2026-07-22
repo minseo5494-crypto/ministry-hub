@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import type { ChordChart } from '@/types/chordChart'
 import ChordChartView from '@/components/ChordChartView'
 import ChordChartPlayer from '@/components/ChordChartPlayer'
+import ChordChartEditor from '@/components/ChordChartEditor'
 
 export interface ChordChartPanelSong {
   id: string
@@ -33,7 +34,9 @@ export default function ChordChartPanel({
   const [saved, setSaved] = useState(false)
   const [chart, setChart] = useState<ChordChart | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'chart' | 'play'>('chart')
+  const [mode, setMode] = useState<'chart' | 'edit' | 'play'>('chart')
+  // 코드악보가 새로 로드/생성될 때 편집기 remount 용 버전(편집 중 커서 유지 위해 편집엔 안 바뀜)
+  const [chartVersion, setChartVersion] = useState(0)
 
   // 저장된 코드악보 불러오기
   useEffect(() => {
@@ -49,6 +52,7 @@ export default function ChordChartPanel({
         if (cancelled) return
         if (data?.data) {
           setChart(data.data as ChordChart)
+          setChartVersion((v) => v + 1)
           setSaved(true)
         } else {
           setChart(null)
@@ -85,6 +89,7 @@ export default function ChordChartPanel({
         return
       }
       setChart(json.chart as ChordChart)
+      setChartVersion((v) => v + 1)
     } catch {
       setError('변환 중 오류가 발생했습니다.')
     } finally {
@@ -177,7 +182,7 @@ export default function ChordChartPanel({
       {/* 액션 바: 코드악보/연주 토글 + 저장/다시생성 */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="inline-flex p-0.5 bg-gray-100 rounded-lg text-sm font-medium">
-          {(['chart', 'play'] as const).map((m) => (
+          {(['chart', 'edit', 'play'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -185,7 +190,7 @@ export default function ChordChartPanel({
                 mode === m ? 'bg-white shadow text-gray-900' : 'text-gray-500'
               }`}
             >
-              {m === 'chart' ? '코드악보' : '▶ 연주 모드'}
+              {m === 'chart' ? '코드악보' : m === 'edit' ? '편집' : '▶ 연주 모드'}
             </button>
           ))}
         </div>
@@ -221,6 +226,15 @@ export default function ChordChartPanel({
 
       {mode === 'play' ? (
         <ChordChartPlayer chart={chart} form={form} bpm={song.bpm} timeSignature={song.time_signature} />
+      ) : mode === 'edit' ? (
+        <ChordChartEditor
+          key={chartVersion}
+          chart={chart}
+          onChange={(c) => {
+            setChart(c)
+            setSaved(false)
+          }}
+        />
       ) : (
         <ChordChartView chart={chart} />
       )}
